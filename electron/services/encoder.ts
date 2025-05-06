@@ -201,6 +201,46 @@ export class Encoder {
     this.currentProfile = profile;
     log.info('Using profile:', { profileName, profile });
 
+    // Determine source video resolution to prevent upscaling
+    const sourceResolution = await this.getSourceVideoResolution(inputFile);
+    log.info(
+      `Source video resolution: ${sourceResolution.width}x${sourceResolution.height}`
+    );
+
+    // Create a copy of the profile to modify based on source resolution
+    const adjustedProfile = { ...profile };
+
+    // Prevent upscaling by filtering output resolutions
+    if (profile.multiResolution && profile.outputResolutions.length > 0) {
+      // Calculate source vertical resolution category (480p, 720p, 1080p, etc.)
+      const sourceVerticalRes = sourceResolution.height;
+      const allowedResolutions = profile.outputResolutions.filter(
+        (res) => res <= sourceVerticalRes
+      );
+
+      // If no allowed resolutions (all would be upscaling), use the original source resolution
+      if (allowedResolutions.length === 0) {
+        log.warn(
+          'All selected resolutions would result in upscaling. Using source resolution only.'
+        );
+
+        // Find the closest standard resolution that doesn't exceed the source
+        let closestRes = 480; // Default to lowest
+        if (sourceVerticalRes >= 1080) closestRes = 1080;
+        else if (sourceVerticalRes >= 720) closestRes = 720;
+        else if (sourceVerticalRes >= 480) closestRes = 480;
+
+        adjustedProfile.outputResolutions = [closestRes];
+      } else {
+        adjustedProfile.outputResolutions = allowedResolutions;
+        log.info(
+          `Adjusted output resolutions to prevent upscaling: ${adjustedProfile.outputResolutions.join(
+            ', '
+          )}`
+        );
+      }
+    }
+
     const outputFile = path.join(
       outputDir,
       `${path.parse(inputFile).name}.${profile.format}`
@@ -212,8 +252,8 @@ export class Encoder {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    // Prepare ffmpeg arguments
-    const args = this.buildFfmpegArgs(inputFile, outputFile, profile);
+    // Prepare ffmpeg arguments with adjusted profile
+    const args = this.buildFfmpegArgs(inputFile, outputFile, adjustedProfile);
     log.debug('FFmpeg command:', `${this.ffmpegBinaryPath} ${args.join(' ')}`);
 
     log.info(
@@ -224,7 +264,7 @@ export class Encoder {
     log.info(`Output file: ${outputFile}`);
     log.info(`FFmpeg path: ${this.ffmpegBinaryPath}`);
 
-    // Reset progress
+    // Reset progress and tracking variables
     this.progress = {
       percent: 0,
       currentFile: path.basename(inputFile),
@@ -232,6 +272,8 @@ export class Encoder {
       eta: 'Calculating...',
       completed: false,
     };
+    this.totalDuration = 0;
+    this.totalFrames = 0;
 
     return new Promise((resolve, reject) => {
       this.isEncoding = true;
@@ -247,8 +289,18 @@ export class Encoder {
           this.ffmpegBinaryPath = 'ffmpeg';
         }
 
+        // Add the -stats and -progress options to improve progress reporting
+        const progressArgs = ['-stats', '-progress', 'pipe:1'];
+
+        // Insert progress arguments at the beginning of the args array
+        const ffmpegArgs = [...progressArgs, ...args];
+
         log.debug('Spawning FFmpeg process using path:', this.ffmpegBinaryPath);
-        this.ffmpegProcess = spawn(this.ffmpegBinaryPath, args);
+        this.ffmpegProcess = spawn(this.ffmpegBinaryPath, ffmpegArgs, {
+          // Use pipe for both stdout and stderr
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+
         log.debug('FFmpeg process spawned', { pid: this.ffmpegProcess.pid });
       } catch (error) {
         this.isEncoding = false;
@@ -257,19 +309,22 @@ export class Encoder {
         return;
       }
 
-      // Handle stdout output
+      // Handle stdout output for progress parsing (from -progress pipe:1)
       this.ffmpegProcess.stdout?.on('data', (data) => {
         const output = data.toString().trim();
         if (output) {
-          log.debug(`FFmpeg stdout: ${output}`);
+          log.debug(`FFmpeg progress: ${output}`);
+          this.parseProgressData(output);
         }
       });
 
-      // Handle stderr output to parse progress
+      // Handle stderr output for messages and fallback progress parsing
       this.ffmpegProcess.stderr?.on('data', (data) => {
         const output = data.toString();
         log.debug(`FFmpeg stderr: ${output}`);
-        this.parseProgress(output);
+
+        // Still try to parse stderr for metadata like duration and frames
+        this.parseMetadata(output);
       });
 
       this.ffmpegProcess.on('close', (code) => {
@@ -319,7 +374,91 @@ export class Encoder {
     log.info('Batch encoding completed successfully');
   }
 
-  private parseProgress(output: string): void {
+  // Parse structured progress data from -progress pipe:1
+  private parseProgressData(output: string): void {
+    // Parse key=value pairs from progress output
+    const progressData: Record<string, string> = {};
+    output.split('\n').forEach((line) => {
+      const [key, value] = line.split('=');
+      if (key && value !== undefined) {
+        progressData[key.trim()] = value.trim();
+      }
+    });
+
+    // Get frame information
+    if (progressData.frame) {
+      const currentFrame = parseInt(progressData.frame, 10);
+
+      // Update total frames if not already set
+      if (!this.totalFrames && progressData.total_frames) {
+        this.totalFrames = parseInt(progressData.total_frames, 10);
+        log.info(`Total frames from progress data: ${this.totalFrames}`);
+      }
+
+      // Get fps for speed calculation
+      let fps = 0;
+      if (progressData.fps) {
+        fps = parseFloat(progressData.fps);
+        this.progress.speed = `${fps.toFixed(1)} fps`;
+      }
+
+      // Update progress percent if we have total frames or duration
+      if (this.totalFrames > 0) {
+        this.progress.percent = Math.min(
+          100,
+          (currentFrame / this.totalFrames) * 100
+        );
+      } else if (this.totalDuration > 0 && progressData.out_time) {
+        // Try to parse out_time in format HH:MM:SS.MS
+        const timeMatch = progressData.out_time.match(/(\d+):(\d+):(\d+\.\d+)/);
+        if (timeMatch) {
+          const hours = parseInt(timeMatch[1], 10);
+          const minutes = parseInt(timeMatch[2], 10);
+          const seconds = parseFloat(timeMatch[3]);
+          const currentTime = hours * 3600 + minutes * 60 + seconds;
+          this.progress.percent = Math.min(
+            100,
+            (currentTime / this.totalDuration) * 100
+          );
+
+          // Calculate ETA based on time
+          if (fps > 0 && this.totalDuration > 0) {
+            const remainingTime = Math.max(0, this.totalDuration - currentTime);
+            // Parse frame_rate_value to number before using in arithmetic
+            const frameRateValue = progressData.frame_rate_value
+              ? parseFloat(progressData.frame_rate_value)
+              : 1;
+            const etaSeconds = remainingTime / (fps / frameRateValue);
+            const etaMinutes = Math.floor(etaSeconds / 60);
+            const etaSecsRemaining = Math.floor(etaSeconds % 60);
+            this.progress.eta = `${etaMinutes}:${etaSecsRemaining
+              .toString()
+              .padStart(2, '0')}`;
+          }
+        }
+      }
+
+      // Handle speed information
+      if (progressData.speed) {
+        const speedValue = parseFloat(progressData.speed);
+        if (!isNaN(speedValue)) {
+          this.progress.speed = `${speedValue.toFixed(2)}x`;
+        }
+      }
+    }
+
+    // Handle "end" progress status
+    if (progressData.progress === 'end') {
+      this.progress.percent = 100;
+      this.progress.eta = '0:00';
+    }
+
+    // Ensure progress is valid
+    this.progress.percent = Math.max(0, Math.min(100, this.progress.percent));
+  }
+
+  // Parse metadata and extract information like duration and total frames
+  private parseMetadata(output: string): void {
     // Parse duration if we don't have it yet
     if (!this.totalDuration) {
       const durationMatch = output.match(
@@ -338,10 +477,6 @@ export class Encoder {
       }
     }
 
-    // Look for frame information when time is N/A
-    const frameMatch = output.match(/frame=\s*(\d+)/);
-    const fpsMatch = output.match(/fps=\s*(\d+)/);
-    
     // Check if we have total frames info in the output
     if (!this.totalFrames) {
       const totalFramesMatch = output.match(/NUMBER_OF_FRAMES-eng:\s*(\d+)/);
@@ -351,49 +486,16 @@ export class Encoder {
       }
     }
 
-    // Parse current progress based on frame count if time is not available
-    if (frameMatch && this.totalFrames && this.totalFrames > 0) {
-      const currentFrame = parseInt(frameMatch[1], 10);
-      this.progress.percent = (currentFrame / this.totalFrames) * 100;
-      
-      // Update speed based on fps
+    // Calculate frame rate if we have duration but not total frames
+    if (this.totalDuration > 0 && !this.totalFrames) {
+      const fpsMatch = output.match(/(\d+\.?\d*) fps/);
       if (fpsMatch) {
-        const fps = parseInt(fpsMatch[1], 10);
-        this.progress.speed = `${fps} fps`;
-        
-        // Calculate ETA based on frames and fps
-        if (fps > 0) {
-          const remainingFrames = this.totalFrames - currentFrame;
-          const remainingSeconds = remainingFrames / fps;
-          const etaMinutes = Math.floor(remainingSeconds / 60);
-          const etaSeconds = Math.floor(remainingSeconds % 60);
-          this.progress.eta = `${etaMinutes}:${etaSeconds.toString().padStart(2, '0')}`;
-        }
-      }
-    } else {
-      // If we don't have frame-based progress, try time-based progress
-      const timeMatch = output.match(/time=(\d{2}):(\d{2}):(\d{2}.\d{2})/);
-      if (timeMatch && this.totalDuration) {
-        const hours = parseInt(timeMatch[1], 10);
-        const minutes = parseInt(timeMatch[2], 10);
-        const seconds = parseFloat(timeMatch[3]);
-        const currentTime = hours * 3600 + minutes * 60 + seconds;
-        this.progress.percent = (currentTime / this.totalDuration) * 100;
-        
-        // Get speed info
-        const speedMatch = output.match(/speed=(\d+\.\d+)x/);
-        if (speedMatch) {
-          this.progress.speed = `${speedMatch[1]}x`;
-          
-          // Calculate ETA based on time and speed
-          const speedValue = parseFloat(speedMatch[1]);
-          if (speedValue > 0) {
-            const remainingSeconds = 
-              (this.totalDuration - currentTime) / speedValue;
-            const etaMinutes = Math.floor(remainingSeconds / 60);
-            const etaSeconds = Math.floor(remainingSeconds % 60);
-            this.progress.eta = `${etaMinutes}:${etaSeconds.toString().padStart(2, '0')}`;
-          }
+        const fps = parseFloat(fpsMatch[1]);
+        if (!isNaN(fps)) {
+          this.totalFrames = Math.round(this.totalDuration * fps);
+          log.info(
+            `Estimated total frames: ${this.totalFrames} (duration: ${this.totalDuration}s, fps: ${fps})`
+          );
         }
       }
     }
@@ -550,5 +652,58 @@ export class Encoder {
     args.push('-y', outputFile);
 
     return args;
+  }
+
+  // Helper method to get the source video resolution using FFmpeg
+  private async getSourceVideoResolution(
+    inputFile: string
+  ): Promise<{ width: number; height: number }> {
+    return new Promise((resolve, reject) => {
+      const args = [
+        '-i',
+        inputFile,
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-select_streams',
+        'v:0',
+        '-show_entries',
+        'stream=width,height',
+        '-of',
+        'csv=p=0',
+      ];
+
+      const ffprobe = spawn(
+        this.ffmpegBinaryPath.replace('ffmpeg', 'ffprobe'),
+        args
+      );
+      let output = '';
+
+      ffprobe.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+
+      ffprobe.on('close', (code) => {
+        if (code === 0) {
+          const [width, height] = output.trim().split(',').map(Number);
+          if (width && height) {
+            resolve({ width, height });
+          } else {
+            log.warn(
+              'Could not determine source resolution, using default 1920x1080'
+            );
+            resolve({ width: 1920, height: 1080 });
+          }
+        } else {
+          log.warn('Error getting video resolution, using default 1920x1080');
+          resolve({ width: 1920, height: 1080 });
+        }
+      });
+
+      ffprobe.on('error', (err) => {
+        log.error('Error running ffprobe:', err);
+        resolve({ width: 1920, height: 1080 });
+      });
+    });
   }
 }

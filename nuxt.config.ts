@@ -1,30 +1,13 @@
+import tailwindcss from '@tailwindcss/vite';
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   devtools: { enabled: true },
   css: ['~/assets/css/main.css'],
-  modules: ['nuxt-electron', '@nuxtjs/tailwindcss', '@nuxt/icon'],
-  icon: {
-    // Configure icon module
-    size: '24px',
-    class: 'icon',
-  },
-  electron: {
-    build: [
-      {
-        // Main-Process entry file of the Electron App.
-        entry: 'electron/main.ts',
-      },
-      {
-        entry: 'electron/preload.ts',
-        onstart(args: { reload: () => void }) {
-          // Notify the Renderer-Process to reload the page when the Preload-Scripts build is complete,
-          // instead of restarting the entire Electron App.
-          args.reload();
-        },
-      },
-    ],
-    // Polyfill the Electron and Node.js API for Renderer process.
-    renderer: {},
+  modules: ['nuxt-electron', '@nuxt/icon', 'shadcn-nuxt'],
+
+  vite: {
+    plugins: [tailwindcss()],
   },
   // Disable SSR for Electron app (recommended by nuxt-electron)
   ssr: false,
@@ -53,36 +36,58 @@ export default defineNuxtConfig({
     },
   },
 
-  // Add aliases for better module resolution
-  alias: {
-    '~': '.',
-    '@': '.',
-  },
-
-  // Configure build options
-  build: {
-    transpile: [],
-  },
-
-  // Ensure Vue compatibility
-  vue: {
-    compilerOptions: {
-      isCustomElement: (tag) => ['webview'].includes(tag),
+  icon: {
+    // Configure icon module for Electron environment
+    size: '24px',
+    class: 'icon',
+    // Use explicit client-side bundle for Electron
+    serverBundle: false,
+    clientBundle: {
+      // Include Tabler icons in the client bundle
+      includeCustomCollections: true,
+      // Scan all components for icon usage
+      scan: true,
+      // Explicitly include commonly used icons
+      icons: ['tabler:plus', 'tabler:check', 'tabler:x', 'tabler:search'],
+      // Allow larger icon bundle size for Electron
+      sizeLimitKb: 1024,
+    },
+    // Proper alias configuration
+    aliases: {
+      plus: 'tabler:plus',
+      check: 'tabler:check',
+      x: 'tabler:x',
     },
   },
 
-  // Explicitly activate pages module
-  pages: true,
-
-  // Improve HMR and error handling
-  vite: {
-    server: {
-      hmr: {
-        protocol: 'ws',
-        host: 'localhost',
-        port: 24678,
+  electron: {
+    build: [
+      {
+        // Main-Process entry file of the Electron App.
+        entry: 'electron/main.ts',
       },
-    },
-    clearScreen: false,
+      {
+        entry: 'electron/preload.ts',
+        onstart(args: { reload: () => void }) {
+          // Notify the Renderer-Process to reload the page when the Preload-Scripts build is complete,
+          // instead of restarting the entire Electron App.
+          args.reload();
+        },
+      },
+    ],
+    // Polyfill the Electron and Node.js API for Renderer process.
+    renderer: {},
+  },
+
+  shadcn: {
+    /**
+     * Prefix for all the imported component
+     */
+    prefix: '',
+    /**
+     * Directory that the component lives in.
+     * @default "./components/ui"
+     */
+    componentDir: './components/ui',
   },
 });

@@ -1,409 +1,375 @@
 <template>
-  <div class="w-full p-4 bg-white rounded-lg shadow">
-    <h2 class="text-xl font-bold text-blue-600 mb-4">Encoding Profiles</h2>
+  <Card class="w-full">
+    <CardHeader>
+      <CardTitle class="text-xl font-bold">Encoding Profiles</CardTitle>
+    </CardHeader>
 
-    <!-- Profile selection tabs -->
-    <div class="mb-4 border-b border-gray-200">
-      <ul class="flex flex-wrap -mb-px">
-        <li
-          v-for="profile in Object.keys(profiles)"
-          :key="profile"
-          class="mr-2"
+    <CardContent class="p-6">
+      <!-- Profile selection tabs -->
+      <div class="mb-4 border-b border-border">
+        <ul class="flex flex-wrap -mb-px">
+          <li
+            v-for="profile in Object.keys(profiles)"
+            :key="profile"
+            class="mr-2"
+          >
+            <Button
+              variant="ghost"
+              :class="
+                activeProfile === profile
+                  ? 'border-b-2 border-primary rounded-b-none'
+                  : 'text-muted-foreground'
+              "
+              @click="handleProfileChange(profile)"
+            >
+              {{ profile }}
+            </Button>
+          </li>
+          <li>
+            <Button variant="ghost" size="icon" @click="createNewProfile">
+              <Icon name="tabler:plus" class="h-5 w-5" />
+            </Button>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="flex flex-wrap gap-2 mb-6">
+        <Button @click="saveProfile" variant="default"> Save Changes </Button>
+        <Button @click="resetToDefault" variant="outline">
+          Reset to Default
+        </Button>
+        <Button
+          v-if="!isDefaultProfile(activeProfile)"
+          @click="deleteProfile"
+          variant="destructive"
         >
-          <button
-            @click="handleProfileChange(profile)"
-            class="inline-block py-2 px-4 rounded-t-lg"
-            :class="
-              activeProfile === profile
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            "
-          >
-            {{ profile }}
-          </button>
-        </li>
-        <li>
-          <button
-            @click="createNewProfile"
-            class="inline-block py-2 px-4 text-gray-500 hover:text-gray-700 rounded-t-lg"
-          >
-            <span class="text-xl">+</span>
-          </button>
-        </li>
-      </ul>
-    </div>
+          Delete Profile
+        </Button>
+      </div>
 
-    <!-- Action buttons -->
-    <div class="flex flex-wrap gap-2 mb-6">
-      <button
-        @click="saveProfile"
-        class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded"
-      >
-        Save Changes
-      </button>
-      <button
-        @click="resetToDefault"
-        class="bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 px-4 rounded"
-      >
-        Reset to Default
-      </button>
-      <button
-        v-if="!isDefaultProfile(activeProfile)"
-        @click="deleteProfile"
-        class="bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded"
-      >
-        Delete Profile
-      </button>
-    </div>
-
-    <!-- Profile settings -->
-    <div class="space-y-6">
-      <div>
-        <h3 class="text-lg font-medium text-gray-900 mb-3">Video Settings</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <!-- CRF (Quality) -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              CRF (Quality): {{ currentSettings.crf }}
-            </label>
-            <input
-              type="range"
-              v-model.number="currentSettings.crf"
-              min="0"
-              max="51"
-              step="1"
-              class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-            />
-            <div class="flex justify-between text-xs text-gray-500">
-              <span>0 (Lossless)</span>
-              <span>23 (Default)</span>
-              <span>51 (Worst)</span>
-            </div>
-          </div>
-
-          <!-- Resolution -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              Resolution
-            </label>
-            <select
-              v-model="currentSettings.resolution"
-              class="block w-full p-2 border border-gray-300 rounded-md"
-              :disabled="currentSettings.multiResolution"
-            >
-              <option :value="480">480p</option>
-              <option :value="720">720p</option>
-              <option :value="1080">1080p</option>
-            </select>
-            <span
-              v-if="currentSettings.multiResolution"
-              class="text-xs text-gray-500"
-            >
-              Single resolution disabled when multi-resolution is active
-            </span>
-          </div>
-
-          <!-- Multi-Resolution Encoding -->
-          <div class="col-span-1 md:col-span-2">
-            <div class="flex items-center mb-2">
-              <input
-                type="checkbox"
-                id="multiResolution"
-                v-model="currentSettings.multiResolution"
-                class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <label
-                for="multiResolution"
-                class="ml-2 block text-sm text-gray-700"
-              >
-                Enable Multi-Resolution Encoding
-              </label>
-            </div>
-
-            <div
-              v-if="currentSettings.multiResolution"
-              class="bg-gray-50 p-3 rounded border border-gray-200"
-            >
-              <p class="text-sm text-gray-600 mb-2">
-                Select output resolutions (upscaling will be prevented)
-              </p>
-
-              <div class="flex flex-wrap gap-3">
-                <div class="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="res480"
-                    v-model="resolutionSelections[480]"
-                    @change="updateOutputResolutions"
-                    class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <label for="res480" class="ml-2 block text-sm text-gray-700"
-                    >480p</label
-                  >
-                </div>
-
-                <div class="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="res720"
-                    v-model="resolutionSelections[720]"
-                    @change="updateOutputResolutions"
-                    class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <label for="res720" class="ml-2 block text-sm text-gray-700"
-                    >720p</label
-                  >
-                </div>
-
-                <div class="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="res1080"
-                    v-model="resolutionSelections[1080]"
-                    @change="updateOutputResolutions"
-                    class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <label for="res1080" class="ml-2 block text-sm text-gray-700"
-                    >1080p</label
-                  >
+      <!-- Profile settings -->
+      <div class="space-y-6">
+        <!-- Video Settings Card -->
+        <Card>
+          <CardHeader>
+            <CardTitle class="text-lg">Video Settings</CardTitle>
+          </CardHeader>
+          <CardContent class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- CRF (Quality) -->
+            <div class="col-span-full">
+              <div class="flex justify-between mb-2">
+                <Label for="crf-slider">CRF (Quality)</Label>
+                <Badge variant="outline">{{
+                  Number(currentSettings.crf)
+                }}</Badge>
+              </div>
+              <div class="flex flex-col space-y-2">
+                <Slider
+                  id="crf-slider"
+                  :modelValue="crfValue"
+                  @update:modelValue="(val) => (crfValue = val)"
+                  :min="0"
+                  :max="51"
+                  :step="1"
+                  class="w-full"
+                />
+                <div class="flex justify-between text-xs text-muted-foreground">
+                  <span>0 (Lossless)</span>
+                  <span>23 (Default)</span>
+                  <span>51 (Worst)</span>
                 </div>
               </div>
             </div>
-          </div>
 
-          <!-- Deblock -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              Deblock
-            </label>
-            <input
-              type="text"
-              v-model="currentSettings.deblock"
-              class="block w-full p-2 border border-gray-300 rounded-md"
-            />
-          </div>
+            <!-- Resolution Selection -->
+            <div class="col-span-full">
+              <Label class="mb-3 block">Output Resolutions</Label>
+              <div class="flex flex-wrap gap-4 bg-muted/20 p-4 rounded-md">
+                <div class="flex items-center space-x-2">
+                  <Checkbox
+                    id="res480"
+                    v-model:checked="resolutionSelections[480]"
+                    @change="updateOutputResolutions"
+                  />
+                  <Label for="res480">480p</Label>
+                </div>
 
-          <!-- AQ Strength -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              AQ Strength: {{ currentSettings.aq_strength }}
-            </label>
-            <input
-              type="range"
-              v-model.number="currentSettings.aq_strength"
-              min="0"
-              max="3"
-              step="0.1"
-              class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-            />
-          </div>
+                <div class="flex items-center space-x-2">
+                  <Checkbox
+                    id="res720"
+                    v-model:checked="resolutionSelections[720]"
+                    @change="updateOutputResolutions"
+                  />
+                  <Label for="res720">720p</Label>
+                </div>
 
-          <!-- Psy-RD -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              Psy-RD: {{ currentSettings.psy_rd }}
-            </label>
-            <input
-              type="range"
-              v-model.number="currentSettings.psy_rd"
-              min="0"
-              max="5"
-              step="0.1"
-              class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-            />
-          </div>
-
-          <!-- Psy-RDOQ -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              Psy-RDOQ: {{ currentSettings.psy_rdoq }}
-            </label>
-            <input
-              type="range"
-              v-model.number="currentSettings.psy_rdoq"
-              min="0"
-              max="5"
-              step="0.1"
-              class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-            />
-          </div>
-
-          <!-- Smart Blur -->
-          <div class="flex items-center">
-            <input
-              type="checkbox"
-              id="smartblur"
-              v-model="currentSettings.smartblur"
-              class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <label for="smartblur" class="ml-2 block text-sm text-gray-700">
-              Smart Blur
-            </label>
-          </div>
-
-          <!-- Deinterlace -->
-          <div class="flex items-center">
-            <input
-              type="checkbox"
-              id="deinterlace"
-              v-model="currentSettings.deinterlace"
-              class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <label for="deinterlace" class="ml-2 block text-sm text-gray-700">
-              Deinterlace
-            </label>
-          </div>
-
-          <!-- Hard Subtitles -->
-          <div class="flex items-center">
-            <input
-              type="checkbox"
-              id="hardsubs"
-              v-model="currentSettings.hardsubs"
-              :disabled="isProfileTypeProtected('hardsubs')"
-              class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <label for="hardsubs" class="ml-2 block text-sm text-gray-700">
-              Hard Subtitles
-              <span
-                v-if="isProfileTypeProtected('hardsubs')"
-                class="text-xs text-gray-500"
-              >
-                (Fixed by profile type)
+                <div class="flex items-center space-x-2">
+                  <Checkbox
+                    id="res1080"
+                    v-model:checked="resolutionSelections[1080]"
+                    @change="updateOutputResolutions"
+                  />
+                  <Label for="res1080">1080p</Label>
+                </div>
+              </div>
+              <span class="text-xs text-muted-foreground mt-1 block">
+                Upscaling is automatically disabled
               </span>
-            </label>
-          </div>
+            </div>
 
-          <!-- Format -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              Format
-            </label>
-            <select
-              v-model="currentSettings.format"
-              :disabled="isProfileTypeProtected('format')"
-              class="block w-full p-2 border border-gray-300 rounded-md"
-            >
-              <option value="mkv">MKV</option>
-              <option value="mp4">MP4</option>
-            </select>
-            <span
-              v-if="isProfileTypeProtected('format')"
-              class="text-xs text-gray-500"
-            >
-              Format is fixed by profile type
-            </span>
-          </div>
-        </div>
+            <!-- Deblock -->
+            <div>
+              <Label for="deblock">Deblock</Label>
+              <Input
+                id="deblock"
+                v-model="currentSettings.deblock"
+                class="mt-1"
+              />
+            </div>
+
+            <!-- AQ Strength -->
+            <div>
+              <div class="flex justify-between mb-2">
+                <Label for="aq-slider">AQ Strength</Label>
+                <Badge variant="outline">{{
+                  Number(currentSettings.aq_strength).toFixed(1)
+                }}</Badge>
+              </div>
+              <div class="flex flex-col space-y-2">
+                <Slider
+                  id="aq-slider"
+                  :modelValue="aqStrengthValue"
+                  @update:modelValue="(val) => (aqStrengthValue = val)"
+                  :min="0"
+                  :max="3"
+                  :step="0.1"
+                  class="w-full"
+                />
+                <div class="flex justify-between text-xs text-muted-foreground">
+                  <span>0 (Off)</span>
+                  <span>1.0 (Default)</span>
+                  <span>3.0 (Max)</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Psy-RD -->
+            <div>
+              <div class="flex justify-between mb-2">
+                <Label for="psy-rd-slider">Psy-RD</Label>
+                <Badge variant="outline">{{
+                  Number(currentSettings.psy_rd).toFixed(1)
+                }}</Badge>
+              </div>
+              <div class="flex flex-col space-y-2">
+                <Slider
+                  id="psy-rd-slider"
+                  :modelValue="psyRdValue"
+                  @update:modelValue="(val) => (psyRdValue = val)"
+                  :min="0"
+                  :max="5"
+                  :step="0.1"
+                  class="w-full"
+                />
+                <div class="flex justify-between text-xs text-muted-foreground">
+                  <span>0 (Off)</span>
+                  <span>1.0 (Default)</span>
+                  <span>5.0 (Max)</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Psy-RDOQ -->
+            <div>
+              <div class="flex justify-between mb-2">
+                <Label for="psy-rdoq-slider">Psy-RDOQ</Label>
+                <Badge variant="outline">{{
+                  Number(currentSettings.psy_rdoq).toFixed(1)
+                }}</Badge>
+              </div>
+              <div class="flex flex-col space-y-2">
+                <Slider
+                  id="psy-rdoq-slider"
+                  :modelValue="psyRdoqValue"
+                  @update:modelValue="(val) => (psyRdoqValue = val)"
+                  :min="0"
+                  :max="5"
+                  :step="0.1"
+                  class="w-full"
+                />
+                <div class="flex justify-between text-xs text-muted-foreground">
+                  <span>0 (Off)</span>
+                  <span>1.0 (Default)</span>
+                  <span>5.0 (Max)</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Checkboxes Group -->
+            <div class="space-y-3">
+              <!-- Smart Blur -->
+              <div class="flex items-center space-x-2">
+                <Checkbox
+                  id="smartblur"
+                  v-model:checked="currentSettings.smartblur"
+                />
+                <Label for="smartblur">Smart Blur</Label>
+              </div>
+
+              <!-- Deinterlace -->
+              <div class="flex items-center space-x-2">
+                <Checkbox
+                  id="deinterlace"
+                  v-model:checked="currentSettings.deinterlace"
+                />
+                <Label for="deinterlace">Deinterlace</Label>
+              </div>
+
+              <!-- Hard Subtitles -->
+              <div class="flex items-center space-x-2">
+                <Checkbox
+                  id="hardsubs"
+                  v-model:checked="currentSettings.hardsubs"
+                  :disabled="isProfileTypeProtected('hardsubs')"
+                />
+                <Label for="hardsubs" class="flex items-center gap-1">
+                  Hard Subtitles
+                  <span
+                    v-if="isProfileTypeProtected('hardsubs')"
+                    class="text-xs text-muted-foreground"
+                  >
+                    (Fixed by profile type)
+                  </span>
+                </Label>
+              </div>
+            </div>
+
+            <!-- Format -->
+            <div>
+              <Label for="format-select">Format</Label>
+              <Select
+                id="format-select"
+                v-model="currentSettings.format"
+                :disabled="isProfileTypeProtected('format')"
+                class="mt-1"
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select format" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mkv">MKV</SelectItem>
+                  <SelectItem value="mp4">MP4</SelectItem>
+                </SelectContent>
+              </Select>
+              <span
+                v-if="isProfileTypeProtected('format')"
+                class="text-xs text-muted-foreground mt-1 block"
+              >
+                Format is fixed by profile type
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Separator class="my-6" />
+
+        <!-- Advanced Settings -->
+        <Card>
+          <CardHeader>
+            <CardTitle class="text-lg">Advanced Settings</CardTitle>
+          </CardHeader>
+          <CardContent class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <Label for="me">Motion Estimation</Label>
+              <Input
+                id="me"
+                type="number"
+                v-model.number="currentSettings.me"
+                class="mt-1"
+              />
+            </div>
+            <div>
+              <Label for="rd">Rate Distortion</Label>
+              <Input
+                id="rd"
+                type="number"
+                v-model.number="currentSettings.rd"
+                class="mt-1"
+              />
+            </div>
+            <div>
+              <Label for="subme">Subpixel ME</Label>
+              <Input
+                id="subme"
+                type="number"
+                v-model.number="currentSettings.subme"
+                class="mt-1"
+              />
+            </div>
+            <div>
+              <Label for="aq_mode">AQ Mode</Label>
+              <Input
+                id="aq_mode"
+                type="number"
+                v-model.number="currentSettings.aq_mode"
+                class="mt-1"
+              />
+            </div>
+            <div>
+              <Label for="merange">ME Range</Label>
+              <Input
+                id="merange"
+                type="number"
+                v-model.number="currentSettings.merange"
+                class="mt-1"
+              />
+            </div>
+            <div>
+              <Label for="bframes">B-Frames</Label>
+              <Input
+                id="bframes"
+                type="number"
+                v-model.number="currentSettings.bframes"
+                class="mt-1"
+              />
+            </div>
+            <div>
+              <Label for="b_adapt">B-Adapt</Label>
+              <Input
+                id="b_adapt"
+                type="number"
+                v-model.number="currentSettings.b_adapt"
+                class="mt-1"
+              />
+            </div>
+            <div>
+              <Label for="frame_threads">Frame Threads</Label>
+              <Input
+                id="frame_threads"
+                type="number"
+                v-model.number="currentSettings.frame_threads"
+                class="mt-1"
+              />
+            </div>
+            <div>
+              <div class="flex items-center space-x-2 h-full">
+                <Checkbox
+                  id="limit_sao"
+                  v-model:checked="currentSettings.limit_sao"
+                />
+                <Label for="limit_sao">Limit SAO</Label>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
-
-      <hr class="my-6" />
-
-      <!-- Advanced Settings -->
-      <div>
-        <h3 class="text-lg font-medium text-gray-900 mb-3">
-          Advanced Settings
-        </h3>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              Motion Estimation
-            </label>
-            <input
-              type="number"
-              v-model.number="currentSettings.me"
-              class="block w-full p-2 border border-gray-300 rounded-md"
-            />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              Rate Distortion
-            </label>
-            <input
-              type="number"
-              v-model.number="currentSettings.rd"
-              class="block w-full p-2 border border-gray-300 rounded-md"
-            />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              Subpixel ME
-            </label>
-            <input
-              type="number"
-              v-model.number="currentSettings.subme"
-              class="block w-full p-2 border border-gray-300 rounded-md"
-            />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              AQ Mode
-            </label>
-            <input
-              type="number"
-              v-model.number="currentSettings.aq_mode"
-              class="block w-full p-2 border border-gray-300 rounded-md"
-            />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              ME Range
-            </label>
-            <input
-              type="number"
-              v-model.number="currentSettings.merange"
-              class="block w-full p-2 border border-gray-300 rounded-md"
-            />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              B-Frames
-            </label>
-            <input
-              type="number"
-              v-model.number="currentSettings.bframes"
-              class="block w-full p-2 border border-gray-300 rounded-md"
-            />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              B-Adapt
-            </label>
-            <input
-              type="number"
-              v-model.number="currentSettings.b_adapt"
-              class="block w-full p-2 border border-gray-300 rounded-md"
-            />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              Frame Threads
-            </label>
-            <input
-              type="number"
-              v-model.number="currentSettings.frame_threads"
-              class="block w-full p-2 border border-gray-300 rounded-md"
-            />
-          </div>
-          <div class="flex items-center">
-            <input
-              type="checkbox"
-              id="limit_sao"
-              v-model="currentSettings.limit_sao"
-              class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <label for="limit_sao" class="ml-2 block text-sm text-gray-700">
-              Limit SAO
-            </label>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+    </CardContent>
+  </Card>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue';
+import { ref, reactive, onMounted, watch, computed } from 'vue';
 
 const emit = defineEmits(['profile-changed']);
 
@@ -421,7 +387,7 @@ const currentSettings = reactive({
   hardsubs: false,
 
   // Multi-resolution encoding
-  multiResolution: false,
+  multiResolution: true, // Set to true by default
   outputResolutions: [720],
 
   // Advanced x265 params
@@ -437,6 +403,35 @@ const currentSettings = reactive({
 
   // Output format
   format: 'mkv',
+});
+
+// Computed properties to convert between single values and arrays for sliders
+const crfValue = computed({
+  get: () => [currentSettings.crf],
+  set: (val) => {
+    currentSettings.crf = val[0];
+  },
+});
+
+const aqStrengthValue = computed({
+  get: () => [currentSettings.aq_strength],
+  set: (val) => {
+    currentSettings.aq_strength = val[0];
+  },
+});
+
+const psyRdValue = computed({
+  get: () => [currentSettings.psy_rd],
+  set: (val) => {
+    currentSettings.psy_rd = val[0];
+  },
+});
+
+const psyRdoqValue = computed({
+  get: () => [currentSettings.psy_rdoq],
+  set: (val) => {
+    currentSettings.psy_rdoq = val[0];
+  },
 });
 
 const resolutionSelections = reactive({
@@ -483,14 +478,16 @@ const profiles = reactive({
     ...currentSettings,
     hardsubs: false,
     format: 'mkv',
-    multiResolution: false,
+    // Make multi-resolution the default
+    multiResolution: true,
     outputResolutions: [720],
   },
   'SSAnime MP4': {
     ...currentSettings,
     hardsubs: true,
     format: 'mp4',
-    multiResolution: false,
+    // Make multi-resolution the default
+    multiResolution: true,
     outputResolutions: [720],
   },
 });
@@ -549,6 +546,13 @@ watch(activeProfile, (newProfile) => {
 const handleProfileChange = (profile) => {
   activeProfile.value = profile;
   Object.assign(currentSettings, profiles[profile]);
+
+  // Force a reactivity update on the computed slider values
+  // This ensures the sliders update when changing profiles
+  crfValue.value = [currentSettings.crf];
+  aqStrengthValue.value = [currentSettings.aq_strength];
+  psyRdValue.value = [currentSettings.psy_rd];
+  psyRdoqValue.value = [currentSettings.psy_rdoq];
 };
 
 const saveProfile = async () => {
@@ -626,6 +630,12 @@ const resetToDefault = () => {
 
     Object.assign(currentSettings, baseSettings);
   }
+
+  // Refresh computed slider values
+  crfValue.value = [currentSettings.crf];
+  aqStrengthValue.value = [currentSettings.aq_strength];
+  psyRdValue.value = [currentSettings.psy_rd];
+  psyRdoqValue.value = [currentSettings.psy_rdoq];
 };
 
 const deleteProfile = async () => {

@@ -1,5 +1,5 @@
 {
-  "name": "nuxt-electron-quick-start",
+  "name": "ssanime-gui",
   "version": "0.0.0",
   "private": true,
   "author": "",
@@ -11,13 +11,14 @@
     "start": "nuxi dev --no-fork"
   },
   "devDependencies": {
+    "@iconify-json/tabler": "^1.2.17",
     "@nuxt/devtools": "^2.4.0",
-    "@nuxt/icon": "1.12.0",
-    "@nuxtjs/tailwindcss": "^6.14.0",
     "electron": "^29.4.6",
     "electron-builder": "^24.13.3",
     "nuxt": "3.6.5",
     "nuxt-electron": "^0.7.0",
+    "tailwindcss-animate": "^1.0.7",
+    "typescript": "^5.8.3",
     "vite-plugin-electron": "^0.28.8",
     "vite-plugin-electron-renderer": "^0.14.6",
     "vue": "^3.4.21",
@@ -25,7 +26,19 @@
   },
   "packageManager": "pnpm@10.10.0",
   "dependencies": {
+    "@nuxt/icon": "1.12.0",
+    "@radix-icons/vue": "^1.0.0",
+    "@tailwindcss/vite": "^4.1.5",
+    "@vueuse/core": "^13.1.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "electron-store": "^10.0.1",
-    "ffmpeg-static": "^5.2.0"
+    "ffmpeg-static": "^5.2.0",
+    "lucide-vue-next": "^0.507.0",
+    "reka-ui": "^2.2.1",
+    "shadcn-nuxt": "2.1.0",
+    "tailwind-merge": "^3.2.0",
+    "tailwindcss": "^4.1.5",
+    "tw-animate-css": "^1.2.9"
   }
 }

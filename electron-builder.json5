@@ -8,7 +8,9 @@
   },
   "files": [
     ".output/**/*",
-    "dist-electron"
+    ".nuxt/dist/client/**/*", 
+    "dist-electron",
+    "public/**/*"
   ],
   "mac": {
     "artifactName": "${productName}_${version}.${ext}",

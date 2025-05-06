@@ -1,9 +1,9 @@
 <template>
-  <div class="min-h-screen bg-gray-100">
-    <header class="bg-white shadow p-4">
+  <div class="min-h-screen bg-background text-foreground">
+    <header class="bg-card shadow-sm border-b border-border p-4">
       <div class="container mx-auto">
-        <h1 class="text-2xl font-bold text-blue-600">SSAnime GUI</h1>
-        <p class="text-gray-600">Anime Encoding Tool</p>
+        <h1 class="text-2xl font-bold text-primary">SSAnime GUI</h1>
+        <p class="text-muted-foreground">Anime Encoding Tool</p>
       </div>
     </header>
 
@@ -11,8 +11,8 @@
       <NuxtPage />
     </main>
 
-    <footer class="bg-white shadow-inner p-4 mt-8">
-      <div class="container mx-auto text-center text-sm text-gray-600">
+    <footer class="bg-card shadow-inner border-t border-border p-4 mt-8">
+      <div class="container mx-auto text-center text-sm text-muted-foreground">
         <p>App started at: {{ startTime }}</p>
       </div>
     </footer>
@@ -21,6 +21,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import { Icon } from '#components';
 
 const startTime = ref('Loading...');
 
@@ -35,3 +36,9 @@ onMounted(async () => {
   }
 });
 </script>
+
+<style>
+.nuxt-icon svg {
+  display: inline-block;
+}
+</style>

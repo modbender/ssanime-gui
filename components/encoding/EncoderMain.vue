@@ -1,151 +1,171 @@
 <template>
-  <div class="p-4">
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+  <div class="p-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
       <!-- File Input Section -->
-      <div class="bg-white rounded-lg shadow p-4">
-        <h2 class="text-xl font-bold text-blue-600 mb-4">Input Files</h2>
-
-        <div class="mb-4">
-          <button
-            @click="selectFiles"
-            :disabled="isEncoding"
-            class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded flex items-center gap-2"
-          >
-            <Icon name="material-symbols:file-copy" />
-            Select Files
-          </button>
-        </div>
-
-        <div v-if="selectedFiles.length > 0">
-          <h3 class="font-medium mb-2">
-            Selected Files: {{ selectedFiles.length }}
-          </h3>
-          <div
-            class="max-h-60 overflow-y-auto p-2 border border-gray-200 rounded"
-          >
-            <div
-              v-for="(file, index) in selectedFiles"
-              :key="index"
-              class="mb-1 text-sm"
+      <Card>
+        <CardHeader>
+          <CardTitle>Input Files</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div class="mb-4">
+            <Button
+              @click="selectFiles"
+              :disabled="isEncoding"
+              variant="default"
+              class="flex items-center gap-2"
             >
-              {{ getFileName(file) }}
-            </div>
+              <Icon name="tabler:file" class="h-4 w-4" />
+              Select Files
+            </Button>
           </div>
-        </div>
-        <div v-else>
-          <p class="text-gray-500">No files selected</p>
-        </div>
-      </div>
+
+          <div v-if="selectedFiles.length > 0">
+            <p class="text-sm font-medium mb-2">
+              Selected Files: {{ selectedFiles.length }}
+            </p>
+            <ScrollArea
+              class="h-[200px] w-full border rounded-md border-border p-2"
+            >
+              <div
+                v-for="(file, index) in selectedFiles"
+                :key="index"
+                class="mb-1 text-sm"
+              >
+                {{ getFileName(file) }}
+              </div>
+            </ScrollArea>
+          </div>
+          <div v-else>
+            <p class="text-sm text-muted-foreground">No files selected</p>
+          </div>
+        </CardContent>
+      </Card>
 
       <!-- Output Directory Section -->
-      <div class="bg-white rounded-lg shadow p-4">
-        <h2 class="text-xl font-bold text-blue-600 mb-4">Output Settings</h2>
+      <Card>
+        <CardHeader>
+          <CardTitle>Output Settings</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div class="mb-6">
+            <Label class="mb-2 block">Output Directory</Label>
+            <div class="flex">
+              <div class="relative flex-1">
+                <Input
+                  type="text"
+                  v-model="outputDirectory"
+                  @click="showOutputPathDropdown = !showOutputPathDropdown"
+                  @blur="closeDropdownDelayed"
+                  class="pr-8 cursor-pointer"
+                  placeholder="Select output directory"
+                  readonly
+                />
 
-        <div class="mb-4 relative">
-          <label class="block text-sm font-medium text-gray-700 mb-1">
-            Output Directory
-          </label>
-          <div class="flex">
-            <div class="relative flex-1">
-              <input
-                type="text"
-                v-model="outputDirectory"
-                @click="showOutputPathDropdown = !showOutputPathDropdown"
-                @blur="closeDropdownDelayed"
-                class="block w-full p-2 border border-gray-300 rounded-l-md cursor-pointer"
-                placeholder="Select output directory"
-                readonly
-              />
-
-              <!-- Dropdown for recent paths -->
-              <div
-                v-if="showOutputPathDropdown && recentOutputPaths.length > 0"
-                class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto"
-              >
+                <!-- Dropdown for recent paths -->
                 <div
-                  v-for="(pathEntry, index) in recentOutputPaths"
-                  :key="index"
-                  @mousedown="selectExistingOutputPath(pathEntry.path)"
-                  class="p-2 hover:bg-gray-100 cursor-pointer flex flex-col"
+                  v-if="showOutputPathDropdown && recentOutputPaths.length > 0"
+                  class="absolute z-10 w-full mt-1 bg-popover border border-border rounded-md shadow-lg max-h-60 overflow-y-auto"
                 >
-                  <span class="text-sm font-medium">{{
-                    pathEntry.label || getDirectoryName(pathEntry.path)
-                  }}</span>
-                  <span class="text-xs text-gray-500 truncate">{{
-                    pathEntry.path
-                  }}</span>
-                  <span class="text-xs text-gray-400">{{
-                    formatDate(pathEntry.lastUsed)
-                  }}</span>
-                </div>
-                <div class="border-t border-gray-200">
+                  <div
+                    v-for="(pathEntry, index) in recentOutputPaths"
+                    :key="index"
+                    @mousedown="selectExistingOutputPath(pathEntry.path)"
+                    class="p-2 hover:bg-accent hover:text-accent-foreground cursor-pointer flex flex-col"
+                  >
+                    <span class="text-sm font-medium">{{
+                      pathEntry.label || getDirectoryName(pathEntry.path)
+                    }}</span>
+                    <span class="text-xs text-muted-foreground truncate">{{
+                      pathEntry.path
+                    }}</span>
+                    <span class="text-xs text-muted-foreground">{{
+                      formatDate(pathEntry.lastUsed)
+                    }}</span>
+                  </div>
+                  <Separator />
                   <div
                     @mousedown="clearPathHistory"
-                    class="p-2 hover:bg-gray-100 cursor-pointer text-sm text-red-600"
+                    class="p-2 hover:bg-accent hover:text-accent-foreground cursor-pointer text-sm text-destructive"
                   >
                     Clear History
                   </div>
                 </div>
               </div>
+              <Button
+                @click="selectOutputDirectory"
+                :disabled="isEncoding"
+                variant="outline"
+                class="ml-2"
+              >
+                <Icon name="tabler:folder" class="h-4 w-4" />
+              </Button>
             </div>
-            <button
-              @click="selectOutputDirectory"
-              :disabled="isEncoding"
-              class="bg-gray-200 hover:bg-gray-300 px-3 py-2 rounded-r-md flex items-center"
-            >
-              <Icon name="material-symbols:folder" />
-            </button>
           </div>
-        </div>
 
-        <div class="mt-6">
-          <h3 class="font-medium mb-2">Active Profile:</h3>
-          <div class="p-2 bg-gray-100 rounded">
-            {{ activeProfile }}
+          <div>
+            <p class="text-sm font-medium mb-2">Active Profile:</p>
+            <Badge variant="secondary" class="text-base px-3 py-1">
+              {{ activeProfile }}
+            </Badge>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       <!-- Controls -->
-      <div class="bg-white rounded-lg shadow p-4">
-        <h2 class="text-xl font-bold text-blue-600 mb-4">Encoder Controls</h2>
+      <Card>
+        <CardHeader>
+          <CardTitle>Encoder Controls</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div class="flex flex-col gap-4">
+            <Button
+              v-if="!isEncoding"
+              @click="startEncoding"
+              :disabled="!canStartEncoding"
+              variant="default"
+              class="w-full flex items-center justify-center gap-2"
+            >
+              <Icon name="tabler:player-play" class="h-4 w-4" />
+              Start Encoding
+            </Button>
 
-        <div class="flex flex-col gap-4">
-          <button
-            v-if="!isEncoding"
-            @click="startEncoding"
-            :disabled="!canStartEncoding"
-            class="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded flex items-center justify-center gap-2"
-          >
-            <Icon name="material-symbols:play-arrow" />
-            Start Encoding
-          </button>
-
-          <button
-            v-else
-            @click="stopEncoding"
-            class="bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded flex items-center justify-center gap-2"
-          >
-            <Icon name="material-symbols:stop" />
-            Stop Encoding
-          </button>
-        </div>
-
-        <div class="mt-6">
-          <h3 class="font-medium mb-2">Status:</h3>
-          <div class="p-2 rounded" :class="statusClass">
-            {{ statusText }}
+            <Button
+              v-else
+              @click="stopEncoding"
+              variant="destructive"
+              class="w-full flex items-center justify-center gap-2"
+            >
+              <Icon name="tabler:square" class="h-4 w-4" />
+              Stop Encoding
+            </Button>
           </div>
-        </div>
 
-        <div v-if="errorMessage" class="error-message">
-          {{ errorMessage }}
-        </div>
-      </div>
+          <div class="mt-6">
+            <p class="text-sm font-medium mb-2">Status:</p>
+            <div
+              class="p-2 rounded-md text-sm"
+              :class="[
+                isEncoding
+                  ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300'
+                  : canStartEncoding
+                  ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                  : 'bg-muted text-muted-foreground',
+              ]"
+            >
+              {{ statusText }}
+            </div>
+          </div>
+
+          <Alert v-if="errorMessage" variant="destructive" class="mt-4">
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{{ errorMessage }}</AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
     </div>
 
     <!-- Encoding Profiles -->
-    <div class="mt-6">
+    <div class="mt-8">
       <EncodingProfiles @profile-changed="updateActiveProfile" />
     </div>
 
@@ -156,43 +176,52 @@
       :current-file="encodingProgress.currentFile"
       :speed="encodingProgress.speed"
       :eta="encodingProgress.eta"
+      :on-cancel="stopEncoding"
     />
 
     <!-- Log File Information -->
-    <div class="mt-6 bg-white rounded-lg shadow p-4">
-      <h2 class="text-xl font-bold text-blue-600 mb-2">Debug Information</h2>
-      <div class="flex flex-col">
-        <div class="mb-2">
-          <h3 class="font-medium">Log File:</h3>
-          <div class="flex items-center mt-1">
-            <input
-              type="text"
-              v-model="logFilePath"
-              readonly
-              class="block w-full p-2 text-sm bg-gray-50 border border-gray-300 rounded-md"
-            />
-            <button
-              @click="copyLogPathToClipboard"
-              class="ml-2 bg-gray-200 hover:bg-gray-300 px-3 py-2 rounded-md flex items-center"
-              title="Copy path to clipboard"
-            >
-              <Icon name="material-symbols:content-copy" />
-            </button>
-            <button
-              @click="openLogFileLocation"
-              class="ml-2 bg-gray-200 hover:bg-gray-300 px-3 py-2 rounded-md flex items-center"
-              title="Open containing folder"
-            >
-              <Icon name="material-symbols:folder-open" />
-            </button>
+    <Card class="mt-8">
+      <CardHeader>
+        <CardTitle>Debug Information</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div class="flex flex-col">
+          <div>
+            <p class="text-sm font-medium mb-2">Log File:</p>
+            <div class="flex items-center">
+              <Input
+                type="text"
+                v-model="logFilePath"
+                readonly
+                class="text-sm bg-muted/50"
+              />
+              <Button
+                @click="copyLogPathToClipboard"
+                variant="outline"
+                size="icon"
+                class="ml-2"
+                title="Copy path to clipboard"
+              >
+                <Icon name="tabler:copy" class="h-4 w-4" />
+              </Button>
+              <Button
+                @click="openLogFileLocation"
+                variant="outline"
+                size="icon"
+                class="ml-2"
+                title="Open containing folder"
+              >
+                <Icon name="tabler:folder-open" class="h-4 w-4" />
+              </Button>
+            </div>
+            <p class="text-xs text-muted-foreground mt-1">
+              This log file can help with troubleshooting if you encounter any
+              issues.
+            </p>
           </div>
-          <p class="text-xs text-gray-500 mt-1">
-            This log file can help with troubleshooting if you encounter any
-            issues.
-          </p>
         </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   </div>
 </template>
 
@@ -236,16 +265,6 @@ const statusText = computed(() => {
     return 'Select output directory';
   } else {
     return 'Ready to encode';
-  }
-});
-
-const statusClass = computed(() => {
-  if (isEncoding.value) {
-    return 'bg-yellow-100 text-yellow-800';
-  } else if (canStartEncoding.value) {
-    return 'bg-green-100 text-green-800';
-  } else {
-    return 'bg-gray-100 text-gray-800';
   }
 });
 
