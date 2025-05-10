@@ -85,9 +85,6 @@ function createWindow() {
     height: 800,
     webPreferences: {
       preload: path.join(MAIN_DIST, 'preload.js'),
-      webSecurity: true,
-      allowRunningInsecureContent: false,
-      contextIsolation: true,
     },
     // Remove window rounding by using square corners
     frame: true,
@@ -98,18 +95,6 @@ function createWindow() {
 
   // Remove the application menu completely
   win.setMenu(null);
-  
-  // Add CSP headers to allow SVG content and icons
-  win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
-          "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'; connect-src 'self'; object-src 'none'"
-        ]
-      }
-    });
-  });
 
   if (process.env.VITE_DEV_SERVER_URL) {
     log.info(

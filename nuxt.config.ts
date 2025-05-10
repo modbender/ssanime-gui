@@ -40,24 +40,7 @@ export default defineNuxtConfig({
     // Configure icon module for Electron environment
     size: '24px',
     class: 'icon',
-    // Use explicit client-side bundle for Electron
-    serverBundle: false,
-    clientBundle: {
-      // Include Tabler icons in the client bundle
-      includeCustomCollections: true,
-      // Scan all components for icon usage
-      scan: true,
-      // Explicitly include commonly used icons
-      icons: ['tabler:plus', 'tabler:check', 'tabler:x', 'tabler:search'],
-      // Allow larger icon bundle size for Electron
-      sizeLimitKb: 1024,
-    },
-    // Proper alias configuration
-    aliases: {
-      plus: 'tabler:plus',
-      check: 'tabler:check',
-      x: 'tabler:x',
-    },
+    mode: 'svg',
   },
 
   electron: {
