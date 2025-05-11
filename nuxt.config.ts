@@ -3,14 +3,27 @@ import tailwindcss from '@tailwindcss/vite';
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   devtools: { enabled: true },
-  css: ['~/assets/css/main.css'],
-  modules: ['nuxt-electron', '@nuxt/icon', 'shadcn-nuxt'],
+  css: ['~/assets/css/main.css', '~/assets/scss/tailwind.scss'],
+
+  modules: [
+    'nuxt-electron',
+    '@nuxt/icon',
+    'shadcn-nuxt',
+    '@pinia/nuxt',
+    '@nuxtjs/color-mode',
+  ],
 
   vite: {
     plugins: [tailwindcss()],
   },
+
   // Disable SSR for Electron app (recommended by nuxt-electron)
   ssr: false,
+
+  colorMode: {
+    storage: 'cookie',
+    classSuffix: '',
+  },
 
   // Add baseURL config as recommended in nuxt-electron documentation
   app: {
@@ -73,4 +86,6 @@ export default defineNuxtConfig({
      */
     componentDir: './components/ui',
   },
+
+  compatibilityDate: '2025-05-11',
 });
