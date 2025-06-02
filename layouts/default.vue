@@ -1,16 +1,18 @@
 <template>
-  <div class="min-h-screen bg-background text-foreground flex flex-col">
-    <Header />
-    <main class="container mx-auto py-6 flex-grow">
-      <slot />
-    </main>
-    <Footer />
+  <div class="native-layout">
+    <!-- Native desktop layout - content only -->
+    <slot />
   </div>
 </template>
 
-<script lang="ts" setup>
-import Header from '~/components/Header.vue';
-import Footer from '~/components/Footer.vue';
+<script setup>
+// No header/footer needed for native desktop layout
 </script>
 
-<style></style>
+<style scoped>
+.native-layout {
+  height: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+</style>

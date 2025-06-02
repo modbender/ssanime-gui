@@ -1,379 +1,216 @@
 <template>
-  <Card class="w-full">
-    <CardHeader>
-      <CardTitle class="text-xl font-bold">Encoding Profiles</CardTitle>
-    </CardHeader>
-
-    <CardContent class="p-6">
-      <!-- Profile selection tabs -->
-      <div class="mb-4 border-b border-border">
-        <ul class="flex flex-wrap -mb-px">
-          <li
-            v-for="profile in Object.keys(profiles)"
-            :key="profile"
-            class="mr-2"
-          >
+  <Card class="profiles-card">
+    <template #content>
+      <div class="profiles-content">
+        <div class="profiles-header">
+          <h3 class="profiles-title">Encoding Profiles</h3>
+          <div class="profiles-actions">
             <Button
-              variant="ghost"
-              :class="
-                activeProfile === profile
-                  ? 'border-b-2 border-primary rounded-b-none'
-                  : 'text-muted-foreground'
-              "
-              @click="handleProfileChange(profile)"
-            >
-              {{ profile }}
-            </Button>
-          </li>
-          <li>
-            <Button variant="ghost" size="icon" @click="createNewProfile">
-              <Icon name="tabler:plus" class="h-5 w-5" />
-            </Button>
-          </li>
-        </ul>
-      </div>
-
-      <!-- Action buttons -->
-      <div class="flex flex-wrap gap-2 mb-6">
-        <Button @click="saveProfile" variant="default"> Save Changes </Button>
-        <Button @click="resetToDefault" variant="outline">
-          Reset to Default
-        </Button>
-        <Button
-          v-if="!isDefaultProfile(activeProfile)"
-          @click="deleteProfile"
-          variant="destructive"
-        >
-          Delete Profile
-        </Button>
-      </div>
-
-      <!-- Profile settings -->
-      <div class="space-y-6">
-        <!-- Video Settings Card -->
-        <Card>
-          <CardHeader>
-            <CardTitle class="text-lg">Video Settings</CardTitle>
-          </CardHeader>
-          <CardContent class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- CRF (Quality) -->
-            <div class="col-span-full">
-              <div class="flex justify-between mb-2">
-                <Label for="crf-slider">CRF (Quality)</Label>
-                <Badge variant="outline">{{
-                  Number(currentSettings.crf)
-                }}</Badge>
-              </div>
-              <div class="flex flex-col space-y-2">
-                <Slider
-                  id="crf-slider"
-                  :modelValue="crfValue"
-                  @update:modelValue="(val) => (crfValue = val)"
-                  :min="0"
-                  :max="51"
-                  :step="1"
-                  class="w-full"
-                />
-                <div class="flex justify-between text-xs text-muted-foreground">
-                  <span>0 (Lossless)</span>
-                  <span>23 (Default)</span>
-                  <span>51 (Worst)</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Resolution Selection -->
-            <div class="col-span-full">
-              <Label class="mb-3 block">Output Resolutions</Label>
-              <div class="flex flex-wrap gap-4 bg-muted/20 p-4 rounded-md">
-                <div class="flex items-center space-x-2">
-                  <Checkbox
-                    id="res480"
-                    v-model:checked="resolutionSelections[480]"
-                    @change="updateOutputResolutions"
-                  />
-                  <Label for="res480">480p</Label>
-                </div>
-
-                <div class="flex items-center space-x-2">
-                  <Checkbox
-                    id="res720"
-                    v-model:checked="resolutionSelections[720]"
-                    @change="updateOutputResolutions"
-                  />
-                  <Label for="res720">720p</Label>
-                </div>
-
-                <div class="flex items-center space-x-2">
-                  <Checkbox
-                    id="res1080"
-                    v-model:checked="resolutionSelections[1080]"
-                    @change="updateOutputResolutions"
-                  />
-                  <Label for="res1080">1080p</Label>
-                </div>
-              </div>
-              <span class="text-xs text-muted-foreground mt-1 block">
-                Upscaling is automatically disabled
-              </span>
-            </div>
-
-            <!-- Deblock -->
+              label="Save Changes"
+              icon="pi pi-save"
+              @click="saveProfile"
+              severity="success"
+            />
+            <Button
+              label="Reset to Default"
+              icon="pi pi-refresh"
+              severity="info"
+              @click="resetToDefault"
+            />
+            <Button
+              v-if="!isDefaultProfile(activeProfile)"
+              label="Delete Profile"
+              icon="pi pi-trash"
+              severity="danger"
+              @click="deleteProfile"
+            />
+          </div>
+        </div>
+        <Divider />
+        <div class="profiles-select">
+          <Select
+            v-model="activeProfile"
+            :options="Object.keys(profiles)"
+            placeholder="Select Profile"
+            @change="handleProfileChange"
+            class="profile-dropdown"
+          />
+          <Button
+            icon="pi pi-plus"
+            @click="createNewProfile"
+            severity="info"
+            class="add-profile-btn"
+          />
+        </div>
+        <Divider />
+        <div class="settings-section">
+          <h4 class="section-title">Video Settings</h4>
+          <div class="p-fluid grid formgrid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label for="deblock">Deblock</Label>
-              <Input
-                id="deblock"
-                v-model="currentSettings.deblock"
-                class="mt-1"
-              />
+              <label>CRF (Quality)</label>
+              <Slider v-model="currentSettings.crf" :min="0" :max="51" />
             </div>
-
-            <!-- AQ Strength -->
             <div>
-              <div class="flex justify-between mb-2">
-                <Label for="aq-slider">AQ Strength</Label>
-                <Badge variant="outline">{{
-                  Number(currentSettings.aq_strength).toFixed(1)
-                }}</Badge>
-              </div>
-              <div class="flex flex-col space-y-2">
-                <Slider
-                  id="aq-slider"
-                  :modelValue="aqStrengthValue"
-                  @update:modelValue="(val) => (aqStrengthValue = val)"
-                  :min="0"
-                  :max="3"
-                  :step="0.1"
-                  class="w-full"
-                />
-                <div class="flex justify-between text-xs text-muted-foreground">
-                  <span>0 (Off)</span>
-                  <span>1.0 (Default)</span>
-                  <span>3.0 (Max)</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Psy-RD -->
-            <div>
-              <div class="flex justify-between mb-2">
-                <Label for="psy-rd-slider">Psy-RD</Label>
-                <Badge variant="outline">{{
-                  Number(currentSettings.psy_rd).toFixed(1)
-                }}</Badge>
-              </div>
-              <div class="flex flex-col space-y-2">
-                <Slider
-                  id="psy-rd-slider"
-                  :modelValue="psyRdValue"
-                  @update:modelValue="(val) => (psyRdValue = val)"
-                  :min="0"
-                  :max="5"
-                  :step="0.1"
-                  class="w-full"
-                />
-                <div class="flex justify-between text-xs text-muted-foreground">
-                  <span>0 (Off)</span>
-                  <span>1.0 (Default)</span>
-                  <span>5.0 (Max)</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Psy-RDOQ -->
-            <div>
-              <div class="flex justify-between mb-2">
-                <Label for="psy-rdoq-slider">Psy-RDOQ</Label>
-                <Badge variant="outline">{{
-                  Number(currentSettings.psy_rdoq).toFixed(1)
-                }}</Badge>
-              </div>
-              <div class="flex flex-col space-y-2">
-                <Slider
-                  id="psy-rdoq-slider"
-                  :modelValue="psyRdoqValue"
-                  @update:modelValue="(val) => (psyRdoqValue = val)"
-                  :min="0"
-                  :max="5"
-                  :step="0.1"
-                  class="w-full"
-                />
-                <div class="flex justify-between text-xs text-muted-foreground">
-                  <span>0 (Off)</span>
-                  <span>1.0 (Default)</span>
-                  <span>5.0 (Max)</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Checkboxes Group -->
-            <div class="space-y-3">
-              <!-- Smart Blur -->
-              <div class="flex items-center space-x-2">
-                <Checkbox
-                  id="smartblur"
-                  v-model:checked="currentSettings.smartblur"
-                />
-                <Label for="smartblur">Smart Blur</Label>
-              </div>
-
-              <!-- Deinterlace -->
-              <div class="flex items-center space-x-2">
-                <Checkbox
-                  id="deinterlace"
-                  v-model:checked="currentSettings.deinterlace"
-                />
-                <Label for="deinterlace">Deinterlace</Label>
-              </div>
-
-              <!-- Hard Subtitles -->
-              <div class="flex items-center space-x-2">
-                <Checkbox
-                  id="hardsubs"
-                  v-model:checked="currentSettings.hardsubs"
-                  :disabled="isProfileTypeProtected('hardsubs')"
-                />
-                <Label for="hardsubs" class="flex items-center gap-1">
-                  Hard Subtitles
-                  <span
-                    v-if="isProfileTypeProtected('hardsubs')"
-                    class="text-xs text-muted-foreground"
-                  >
-                    (Fixed by profile type)
-                  </span>
-                </Label>
-              </div>
-            </div>
-
-            <!-- Format -->
-            <div>
-              <Label for="format-select">Format</Label>
+              <label>Resolution</label>
               <Select
-                id="format-select"
+                v-model="currentSettings.resolution"
+                :options="[480, 720, 1080]"
+              />
+            </div>
+            <div>
+              <label>Format</label>
+              <Select
                 v-model="currentSettings.format"
-                :disabled="isProfileTypeProtected('format')"
-                class="mt-1"
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select format" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="mkv">MKV</SelectItem>
-                  <SelectItem value="mp4">MP4</SelectItem>
-                </SelectContent>
-              </Select>
-              <span
-                v-if="isProfileTypeProtected('format')"
-                class="text-xs text-muted-foreground mt-1 block"
-              >
-                Format is fixed by profile type
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Separator class="my-6" />
-
-        <!-- Advanced Settings -->
-        <Card>
-          <CardHeader>
-            <CardTitle class="text-lg">Advanced Settings</CardTitle>
-          </CardHeader>
-          <CardContent class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-              <Label for="me">Motion Estimation</Label>
-              <Input
-                id="me"
-                type="number"
-                v-model.number="currentSettings.me"
-                class="mt-1"
+                :options="['mkv', 'mp4']"
               />
             </div>
             <div>
-              <Label for="rd">Rate Distortion</Label>
-              <Input
-                id="rd"
-                type="number"
-                v-model.number="currentSettings.rd"
-                class="mt-1"
+              <label>Deblock</label>
+              <InputText v-model="currentSettings.deblock" />
+            </div>
+            <div>
+              <label>Smart Blur</label>
+              <Checkbox v-model="currentSettings.smartblur" />
+            </div>
+            <div>
+              <label>Deinterlace</label>
+              <Checkbox v-model="currentSettings.deinterlace" />
+            </div>
+            <div>
+              <label>Hard Subs</label>
+              <Checkbox v-model="currentSettings.hardsubs" />
+            </div>
+          </div>
+        </div>
+        <Divider />
+        <div class="settings-section">
+          <h4 class="section-title">Advanced Settings</h4>
+          <div class="p-fluid grid formgrid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label>Psy-RD</label>
+              <Slider
+                v-model="currentSettings.psy_rd"
+                :min="0"
+                :max="5"
+                :step="0.1"
               />
             </div>
             <div>
-              <Label for="subme">Subpixel ME</Label>
-              <Input
-                id="subme"
-                type="number"
-                v-model.number="currentSettings.subme"
-                class="mt-1"
+              <label>Psy-RDOQ</label>
+              <Slider
+                v-model="currentSettings.psy_rdoq"
+                :min="0"
+                :max="5"
+                :step="0.1"
               />
             </div>
             <div>
-              <Label for="aq_mode">AQ Mode</Label>
-              <Input
-                id="aq_mode"
-                type="number"
-                v-model.number="currentSettings.aq_mode"
-                class="mt-1"
+              <label>AQ Strength</label>
+              <Slider
+                v-model="currentSettings.aq_strength"
+                :min="0"
+                :max="3"
+                :step="0.1"
               />
             </div>
             <div>
-              <Label for="merange">ME Range</Label>
-              <Input
-                id="merange"
-                type="number"
-                v-model.number="currentSettings.merange"
-                class="mt-1"
-              />
+              <label>AQ Mode</label>
+              <InputText v-model="currentSettings.aq_mode" />
             </div>
             <div>
-              <Label for="bframes">B-Frames</Label>
-              <Input
-                id="bframes"
-                type="number"
-                v-model.number="currentSettings.bframes"
-                class="mt-1"
-              />
+              <label>ME</label>
+              <InputText v-model="currentSettings.me" />
             </div>
             <div>
-              <Label for="b_adapt">B-Adapt</Label>
-              <Input
-                id="b_adapt"
-                type="number"
-                v-model.number="currentSettings.b_adapt"
-                class="mt-1"
-              />
+              <label>RD</label>
+              <InputText v-model="currentSettings.rd" />
             </div>
             <div>
-              <Label for="frame_threads">Frame Threads</Label>
-              <Input
-                id="frame_threads"
-                type="number"
-                v-model.number="currentSettings.frame_threads"
-                class="mt-1"
-              />
+              <label>SubME</label>
+              <InputText v-model="currentSettings.subme" />
             </div>
             <div>
-              <div class="flex items-center space-x-2 h-full">
-                <Checkbox
-                  id="limit_sao"
-                  v-model:checked="currentSettings.limit_sao"
-                />
-                <Label for="limit_sao">Limit SAO</Label>
-              </div>
+              <label>ME Range</label>
+              <InputText v-model="currentSettings.merange" />
             </div>
-          </CardContent>
-        </Card>
+            <div>
+              <label>B-Frames</label>
+              <InputText v-model="currentSettings.bframes" />
+            </div>
+            <div>
+              <label>B-Adapt</label>
+              <InputText v-model="currentSettings.b_adapt" />
+            </div>
+            <div>
+              <label>Limit SAO</label>
+              <Checkbox v-model="currentSettings.limit_sao" />
+            </div>
+            <div>
+              <label>Frame Threads</label>
+              <InputText v-model="currentSettings.frame_threads" />
+            </div>
+          </div>
+        </div>
       </div>
-    </CardContent>
+    </template>
   </Card>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch, computed } from 'vue';
-
 const emit = defineEmits(['profile-changed']);
 
-const activeProfile = ref('SSAnime MKV');
+// Declare 'profiles' only once
+const profiles = reactive({
+  'SSAnime MKV': {
+    // Video settings
+    crf: 23,
+    deblock: '0:0',
+    smartblur: false,
+    deinterlace: false,
+    resolution: 720,
+    psy_rd: 1.0,
+    psy_rdoq: 1.0,
+    aq_strength: 1.0,
+    hardsubs: false,
+    multiResolution: true,
+    outputResolutions: [720],
+    me: 2,
+    rd: 4,
+    subme: 7,
+    aq_mode: 3,
+    merange: 57,
+    bframes: 8,
+    b_adapt: 2,
+    limit_sao: true,
+    frame_threads: 3,
+    format: 'mkv',
+  },
+  'SSAnime MP4': {
+    crf: 23,
+    deblock: '0:0',
+    smartblur: false,
+    deinterlace: false,
+    resolution: 720,
+    psy_rd: 1.0,
+    psy_rdoq: 1.0,
+    aq_strength: 1.0,
+    hardsubs: true,
+    multiResolution: true,
+    outputResolutions: [720],
+    me: 2,
+    rd: 4,
+    subme: 7,
+    aq_mode: 3,
+    merange: 57,
+    bframes: 8,
+    b_adapt: 2,
+    limit_sao: true,
+    frame_threads: 3,
+    format: 'mp4',
+  },
+});
+
+const activeProfile = ref('');
 const currentSettings = reactive({
   // Video settings
   crf: 23,
@@ -385,8 +222,6 @@ const currentSettings = reactive({
   psy_rdoq: 1.0,
   aq_strength: 1.0,
   hardsubs: false,
-
-  // Multi-resolution encoding
   multiResolution: true, // Set to true by default
   outputResolutions: [720],
 
@@ -471,26 +306,6 @@ watch(
     }
   }
 );
-
-// Profile templates
-const profiles = reactive({
-  'SSAnime MKV': {
-    ...currentSettings,
-    hardsubs: false,
-    format: 'mkv',
-    // Make multi-resolution the default
-    multiResolution: true,
-    outputResolutions: [720],
-  },
-  'SSAnime MP4': {
-    ...currentSettings,
-    hardsubs: true,
-    format: 'mp4',
-    // Make multi-resolution the default
-    multiResolution: true,
-    outputResolutions: [720],
-  },
-});
 
 // Check if profile is one of the default profiles
 const isDefaultProfile = (profileName) => {
@@ -652,3 +467,52 @@ const deleteProfile = async () => {
   }
 };
 </script>
+
+<style scoped>
+.profiles-card {
+  background: #23272f;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  margin-bottom: 24px;
+}
+.profiles-content {
+  padding: 24px 16px 16px 16px;
+}
+.profiles-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.profiles-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #fff;
+}
+.profiles-actions {
+  display: flex;
+  gap: 8px;
+}
+.profiles-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.profile-dropdown {
+  min-width: 180px;
+}
+.add-profile-btn {
+  min-width: 40px;
+}
+.settings-section {
+  margin-bottom: 16px;
+}
+.section-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #b0b6c3;
+  margin-bottom: 8px;
+}
+</style>

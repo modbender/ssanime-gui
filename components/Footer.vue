@@ -1,27 +1,30 @@
 <template>
-  <Card
-    is="footer"
-    class="bg-card shadow-inner border-t border-border p-4 mt-8"
-  >
-    <div class="container mx-auto text-center text-sm text-muted-foreground">
-      <p>App started at: {{ startTime }}</p>
-    </div>
-  </Card>
+  <div class="footer">
+    <span>App started at: {{ startTime }}</span>
+  </div>
 </template>
 
 <script setup>
+// No manual imports needed - Nuxt 3 auto-imports Vue and composables
+
 const startTime = ref('Loading...');
 
 onMounted(async () => {
   try {
     const time = await window.ipcRenderer.invoke('app-start-time');
-    console.log('App start time:', time);
     startTime.value = time;
   } catch (error) {
-    console.error('Failed to get app start time:', error);
     startTime.value = 'Error loading time';
   }
 });
 </script>
 
-<style></style>
+<style scoped>
+.footer {
+  text-align: center;
+  color: #b0b6c3;
+  font-size: 0.95rem;
+  padding: 12px 0 0 0;
+  margin-top: 12px;
+}
+</style>

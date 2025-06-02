@@ -1,21 +1,17 @@
-import tailwindcss from '@tailwindcss/vite';
+import Aura from '@primeuix/themes/aura';
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   devtools: { enabled: true },
-  css: ['~/assets/css/main.css', '~/assets/scss/tailwind.scss'],
+  css: ['~/assets/scss/main.scss'],
 
   modules: [
     'nuxt-electron',
     '@nuxt/icon',
-    'shadcn-nuxt',
     '@pinia/nuxt',
     '@nuxtjs/color-mode',
+    '@primevue/nuxt-module',
   ],
-
-  vite: {
-    plugins: [tailwindcss()],
-  },
 
   // Disable SSR for Electron app (recommended by nuxt-electron)
   ssr: false,
@@ -75,16 +71,12 @@ export default defineNuxtConfig({
     renderer: {},
   },
 
-  shadcn: {
-    /**
-     * Prefix for all the imported component
-     */
-    prefix: '',
-    /**
-     * Directory that the component lives in.
-     * @default "./components/ui"
-     */
-    componentDir: './components/ui',
+  primevue: {
+    options: {
+      theme: {
+        preset: Aura,
+      },
+    },
   },
 
   compatibilityDate: '2025-05-11',

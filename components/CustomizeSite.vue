@@ -1,99 +1,54 @@
 <template>
-  <Dialog>
-    <DialogTrigger as-child>
-      <Button variant="ghost" size="icon">
-        <Icon name="tabler:brush" />
-      </Button>
-    </DialogTrigger>
-    <DialogContent class="sm:max-w-lg">
-      <DialogHeader>
-        <DialogTitle>Customize Interface</DialogTitle>
-        <DialogDescription>
-          Change the theme and appearance of the application.
-        </DialogDescription>
-      </DialogHeader>
-
-      <Separator />
-
-      <div>
-        <Label class="block mb-3">Color</Label>
-        <ToggleGroup
-          type="single"
-          class="flex-wrap"
-          :modelValue="color"
-          @update:modelValue="handleColorChange"
-        >
-          <ToggleGroupItem
-            v-for="colorName in colorList"
-            :value="colorName"
-            :key="colorName"
-          >
-            <div class="mr-2" :class="colorName">
-              <div class="w-3 h-3 bg-primary"></div>
-            </div>
-            {{ useCapitalize(colorName) }}
-          </ToggleGroupItem>
-        </ToggleGroup>
+  <Dialog v-model:visible="visible" modal header="Customize Interface">
+    <div>
+      <Divider />
+      <div class="mb-3">
+        <label>Color</label>
+        <Select
+          v-model="color"
+          :options="colorList"
+          placeholder="Select color"
+        />
       </div>
-
-      <Separator />
-
-      <div>
-        <Label class="block mb-3">Border Radius</Label>
-        <ToggleGroup
-          type="single"
-          class="flex-wrap"
-          :modelValue="radius"
-          @update:modelValue="handleRadiusChange"
-        >
-          <ToggleGroupItem
-            v-for="radiusItem in radiusList"
-            :value="radiusItem.value"
-            :key="radiusItem.value"
-          >
-            {{ radiusItem.name }}
-          </ToggleGroupItem>
-        </ToggleGroup>
+      <Divider />
+      <div class="mb-3">
+        <label>Border Radius</label>
+        <Select
+          v-model="radius"
+          :options="radiusList.map((r) => r.value)"
+          placeholder="Select radius"
+        />
       </div>
-
-      <Separator />
-
-      <div>
-        <Label class="block mb-3">Theme</Label>
-        <ToggleGroup
-          type="single"
-          class="flex-wrap"
-          :modelValue="$colorMode.preference"
-          @update:modelValue="handleThemeChange"
-        >
-          <ToggleGroupItem
-            v-for="themeItem in themeList"
-            :value="themeItem.value"
-            :key="themeItem.value"
-            class="gap-2 items-center"
-          >
-            <Icon :name="themeItem.icon" />
-            {{ useCapitalize(themeItem.value) }}
-          </ToggleGroupItem>
-        </ToggleGroup>
+      <Divider />
+      <div class="mb-3">
+        <label>Theme</label>
+        <Select
+          v-model="theme"
+          :options="themeList.map((t) => t.value)"
+          placeholder="Select theme"
+        />
       </div>
-    </DialogContent>
+    </div>
+    <template #footer>
+      <Button label="Close" icon="pi pi-times" @click="visible = false" />
+    </template>
   </Dialog>
+  <Button
+    icon="pi pi-brush"
+    @click="visible = true"
+    text
+    rounded
+    aria-label="Customize"
+  />
 </template>
 
 <script setup>
-import { storeToRefs } from 'pinia';
-import { useThemeStore } from '~/stores/theme';
-import { useColorMode } from '#imports';
-import { useCapitalize } from '~/composables/capitalize';
+// No manual imports needed - Nuxt 3 auto-imports Vue and composables
 
-const colorMode = useColorMode();
-const themeStore = useThemeStore();
-
-const { setColor, setRadius } = themeStore;
-
-const { color, radius } = storeToRefs(themeStore);
-
+const visible = ref(false);
+const color = ref('zinc');
+const radius = ref('radius-md');
+const theme = ref('system');
 const colorList = [
   'zinc',
   'rose',
@@ -108,7 +63,6 @@ const colorList = [
   'yellow',
   'violet',
 ];
-
 const radiusList = [
   {
     name: '0',
@@ -131,48 +85,18 @@ const radiusList = [
     value: 'radius-xl',
   },
 ];
-
 const themeList = [
   {
     value: 'system',
-    icon: 'tabler:devices',
+    icon: 'pi pi-desktop',
   },
   {
     value: 'light',
-    icon: 'tabler:sun',
+    icon: 'pi pi-sun',
   },
   {
     value: 'dark',
-    icon: 'tabler:moon',
+    icon: 'pi pi-moon',
   },
 ];
-
-const handleColorChange = (value) => {
-  if (!value) {
-    value = colorList[0];
-  }
-  setColor(value);
-};
-
-const handleRadiusChange = (value) => {
-  if (!value) {
-    value = radiusList[2].value;
-  }
-  setRadius(value);
-};
-
-const handleThemeChange = (value) => {
-  if (!value) {
-    value = themeList[0].value;
-  }
-
-  colorMode.preference = value;
-};
 </script>
-
-<style scoped>
-button[data-state='on'] {
-  border-width: 2px;
-  border-color: hsl(var(--primary));
-}
-</style>
