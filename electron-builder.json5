@@ -1,38 +1,82 @@
 // @see - https://www.electron.build/configuration/configuration
 {
-  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "your.app.id",
-  "asar": false,
-  "directories": {
-    "output": "release/${version}"
+  $schema: 'https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json',
+  appId: 'com.ssanime.gui',
+  productName: 'SSAnime GUI',
+  asar: false,
+  directories: {
+    output: 'dist',
   },
-  "files": [
-    ".output/**/*",
-    ".nuxt/dist/client/**/*", 
-    "dist-electron",
-    "public/**/*"
+  files: [
+    '.output/**/*',
+    '.nuxt/dist/client/**/*',
+    'dist-electron',
+    'public/**/*',
   ],
-  "mac": {
-    "artifactName": "${productName}_${version}.${ext}",
-    "target": [
-      "dmg"
-    ]
-  },
-  "win": {
-    "target": [
+  mac: {
+    artifactName: '${productName}_${version}_${arch}.${ext}',
+    target: [
       {
-        "target": "nsis",
-        "arch": [
-          "x64"
-        ]
-      }
+        target: 'dmg',
+        arch: ['x64', 'arm64'],
+      },
+      {
+        target: 'zip',
+        arch: ['x64', 'arm64'],
+      },
     ],
-    "artifactName": "${productName}_${version}.${ext}"
+    category: 'public.app-category.video',
   },
-  "nsis": {
-    "oneClick": false,
-    "perMachine": false,
-    "allowToChangeInstallationDirectory": true,
-    "deleteAppDataOnUninstall": false
-  }
+  win: {
+    target: [
+      {
+        target: 'nsis',
+        arch: ['x64', 'ia32'],
+      },
+      {
+        target: 'zip',
+        arch: ['x64', 'ia32'],
+      },
+      {
+        target: 'msi',
+        arch: ['x64'],
+      },
+    ],
+    artifactName: '${productName}_${version}_${arch}.${ext}',
+  },
+  linux: {
+    target: [
+      {
+        target: 'AppImage',
+        arch: ['x64', 'arm64'],
+      },
+      {
+        target: 'tar.gz',
+        arch: ['x64', 'arm64'],
+      },
+      {
+        target: 'deb',
+        arch: ['x64', 'arm64'],
+      },
+      {
+        target: 'rpm',
+        arch: ['x64', 'arm64'],
+      },
+    ],
+    artifactName: '${productName}_${version}_${arch}.${ext}',
+    category: 'AudioVideo',
+  },
+  nsis: {
+    oneClick: false,
+    perMachine: false,
+    allowToChangeInstallationDirectory: true,
+    deleteAppDataOnUninstall: false,
+    createDesktopShortcut: true,
+    createStartMenuShortcut: true,
+  },
+  publish: {
+    provider: 'github',
+    owner: 'your-github-username',
+    repo: 'ssanime-gui',
+  },
 }

@@ -1,8 +1,92 @@
-# nuxt-electron-quick-start
+# SSAnime GUI
 
 <p align="center">
   <img width="140" src="public/logo.svg" >
 </p>
+
+A modern video encoding GUI built with Nuxt 3 and Electron, designed for efficient anime video processing.
+
+## Features
+
+- 🎬 Multi-format video encoding (MP4, MKV, AVI, MOV)
+- ⚙️ Customizable encoding profiles
+- 🔄 Batch processing with queue management
+- 🎨 Modern dark/light theme interface
+- 📊 Real-time encoding progress tracking
+- 💾 Profile management with custom settings
+
+## Development
+
+### Prerequisites
+
+- Node.js 18+
+- pnpm (recommended package manager)
+
+### Setup
+
+```bash
+# Install dependencies
+pnpm install
+
+# Start development server
+pnpm dev
+```
+
+### Building
+
+```bash
+# Build for production
+pnpm build
+
+# Build only Nuxt app
+pnpm build:nuxt
+
+# Build only Electron app
+pnpm build:electron
+```
+
+## Releases
+
+This project uses GitHub Actions to automatically build multiarch executables when you push a version tag.
+
+### Supported Platforms & Architectures
+
+**Windows:**
+
+- x64 (64-bit Intel/AMD)
+- ia32 (32-bit Intel/AMD)
+
+**macOS:**
+
+- Universal Binary (Intel + Apple Silicon)
+
+**Linux:**
+
+- x64 (64-bit Intel/AMD)
+- arm64 (ARM64/AArch64)
+
+### Package Formats
+
+- **Windows**: `.exe` (NSIS installer), `.msi` (Windows Installer), `.zip` (portable)
+- **macOS**: `.dmg` (disk image), `.zip` (portable)
+- **Linux**: `.AppImage` (portable), `.deb` (Debian/Ubuntu), `.rpm` (RHEL/SUSE), `.tar.gz` (archive)
+
+### Creating a Release
+
+1. Update the version in `package.json`
+2. Create and push a version tag:
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+3. The GitHub Actions workflow will automatically:
+   - Build for all supported platforms and architectures in parallel
+   - Create a GitHub release with generated release notes
+   - Attach all built executables as downloadable assets
+
+### Manual Testing
+
+You can manually trigger test builds without creating a release using the "Test Build" workflow in the GitHub Actions tab.
 
 ## Template
 

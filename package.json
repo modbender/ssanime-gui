@@ -8,6 +8,8 @@
   "scripts": {
     "dev": "nuxi dev --no-fork",
     "build": "nuxi build --prerender && electron-builder",
+    "build:nuxt": "nuxi build --prerender",
+    "build:electron": "electron-builder",
     "start": "nuxi dev --no-fork"
   },
   "devDependencies": {
