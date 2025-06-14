@@ -1,6 +1,7 @@
 {
   "name": "ssanime-gui",
   "version": "0.0.0",
+  "type": "module",
   "private": true,
   "author": "",
   "license": "MIT",
@@ -10,19 +11,31 @@
     "build": "nuxi build --prerender && electron-builder",
     "build:nuxt": "nuxi build --prerender",
     "build:electron": "electron-builder",
-    "start": "nuxi dev --no-fork"
+    "start": "nuxi dev --no-fork",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "type-check": "nuxi typecheck",
+    "test": "pnpm lint && pnpm format:check && pnpm type-check",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@iconify-json/tabler": "^1.2.17",
     "@nuxt/devtools": "^2.4.0",
+    "@nuxt/eslint-config": "^1.4.1",
     "@nuxtjs/color-mode": "^3.5.2",
     "@pinia/nuxt": "^0.11.0",
     "@primevue/nuxt-module": "^4.3.4",
     "autoprefixer": "^10.4.21",
     "electron": "^29.4.6",
     "electron-builder": "^24.13.3",
+    "eslint": "^9.29.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.1",
     "nuxt": "3.16.1",
     "nuxt-electron": "^0.7.0",
+    "prettier": "^3.5.3",
     "sass": "^1.88.0",
     "typescript": "^5.8.3",
     "vite-plugin-electron": "^0.28.8",
@@ -40,5 +53,17 @@
     "ffmpeg-static": "^5.2.0",
     "primeicons": "^7.0.0",
     "primevue": "^4.3.4"
+  },
+  "lint-staged": {
+    "*.{js,ts,vue}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ],
+    "*.{css,scss}": [
+      "prettier --write"
+    ]
   }
 }

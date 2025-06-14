@@ -1,0 +1,27 @@
+# Build outputs
+dist/
+dist-electron/
+.output/
+.nuxt/
+release/
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+logs/
+
+# Cache
+.cache/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Git
+.git/

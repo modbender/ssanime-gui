@@ -1,0 +1,20 @@
+# Check commit message format
+# This enforces conventional commit format: type(scope): description
+# Examples: feat: add new feature, fix(ui): resolve button styling, docs: update README
+
+commit_regex='^(feat|fix|docs|style|refactor|test|chore|perf|ci|build)(\(.+\))?: .{1,50}'
+
+if ! grep -qE "$commit_regex" "$1"; then
+    echo "❌ Invalid commit message format!"
+    echo ""
+    echo "Commit message should follow conventional commits format:"
+    echo "type(scope): description"
+    echo ""
+    echo "Types: feat, fix, docs, style, refactor, test, chore, perf, ci, build"
+    echo "Examples:"
+    echo "  feat: add video encoding feature"
+    echo "  fix(ui): resolve slider alignment issue"
+    echo "  docs: update README with build instructions"
+    echo ""
+    exit 1
+fi
