@@ -1,0 +1,25 @@
+{
+  "types": [
+    { "type": "feat", "section": "✨ Features" },
+    { "type": "fix", "section": "🐛 Bug Fixes" },
+    { "type": "chore", "section": "🔧 Maintenance", "hidden": false },
+    { "type": "docs", "section": "📝 Documentation", "hidden": false },
+    { "type": "style", "section": "💄 Styling", "hidden": false },
+    { "type": "refactor", "section": "♻️ Code Refactoring", "hidden": false },
+    {
+      "type": "perf",
+      "section": "⚡ Performance Improvements",
+      "hidden": false
+    },
+    { "type": "test", "section": "✅ Tests", "hidden": false }
+  ],
+  "commitUrlFormat": "https://github.com/modbender/ssanime-gui/commit/{{hash}}",
+  "compareUrlFormat": "https://github.com/modbender/ssanime-gui/compare/{{previousTag}}...{{currentTag}}",
+  "issueUrlFormat": "https://github.com/modbender/ssanime-gui/issues/{{id}}",
+  "userUrlFormat": "https://github.com/{{user}}",
+  "releaseCommitMessageFormat": "chore(release): {{currentTag}}",
+  "tagPrefix": "v",
+  "scripts": {
+    "postchangelog": "git add CHANGELOG.md"
+  }
+}
