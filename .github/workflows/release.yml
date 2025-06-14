@@ -42,6 +42,8 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
+        with:
+          version: 10.10.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -63,7 +65,7 @@ jobs:
       - name: Install dependencies
         run: |
           # Try frozen lockfile first, fall back to regular install if needed
-          pnpm install --frozen-lockfile || pnpm install
+          pnpm install --frozen-lockfile || pnpm install --no-frozen-lockfile
 
       - name: Cache Nuxt build
         uses: actions/cache@v4
