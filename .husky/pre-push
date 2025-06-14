@@ -1,24 +1,8 @@
 echo "🚀 Running pre-push checks..."
-pnpm test
 
-# Run full linting
-echo "🎨 Running full project lint..."
-if ! pnpm lint; then
-    echo "❌ Linting failed!"
-    exit 1
-fi
-
-# Run type checking
-echo "🔍 Running TypeScript type check..."
-if ! pnpm type-check; then
-    echo "❌ Type check failed!"
-    exit 1
-fi
-
-# Run full build test
-echo "🏗️ Running full build test..."
-if ! pnpm build:nuxt; then
-    echo "❌ Build failed!"
+# Run all tests (includes lint, format check, and type check)
+if ! pnpm test; then
+    echo "❌ Pre-push checks failed!"
     exit 1
 fi
 

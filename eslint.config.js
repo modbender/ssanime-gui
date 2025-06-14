@@ -5,14 +5,24 @@ export default createConfigForNuxt({
     typescript: true,
     vue: true,
   },
-}).append({
-  rules: {
-    // Custom rules for your project
-    'no-console': 'warn',
-    'prefer-const': 'error',
-    'no-unused-vars': 'warn',
-    '@typescript-eslint/no-unused-vars': 'warn',
-    'vue/multi-word-component-names': 'off',
-    'vue/no-multiple-template-root': 'off',
-  },
-});
+})
+  .append({
+    rules: {
+      // Custom rules for your project
+      'no-console': 'warn',
+      'prefer-const': 'error',
+      'no-unused-vars': 'warn',
+      '@typescript-eslint/no-unused-vars': 'warn',
+      'vue/multi-word-component-names': 'off',
+      'vue/no-multiple-template-root': 'off',
+    },
+  })
+  .append({
+    // Configuration for JSON files
+    files: ['**/*.json'],
+    rules: {
+      // Disable rules that don't apply to JSON
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+    },
+  });
