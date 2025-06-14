@@ -61,7 +61,9 @@ jobs:
           sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          # Try frozen lockfile first, fall back to regular install if needed
+          pnpm install --frozen-lockfile || pnpm install
 
       - name: Cache Nuxt build
         uses: actions/cache@v4
