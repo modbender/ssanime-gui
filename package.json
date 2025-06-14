@@ -1,6 +1,6 @@
 {
   "name": "ssanime-gui",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "private": true,
   "author": "",
@@ -18,7 +18,18 @@
     "format:check": "prettier --check .",
     "type-check": "nuxi typecheck",
     "test": "pnpm lint && pnpm format:check && pnpm type-check",
-    "prepare": "husky"
+    "prepare": "husky",
+    "release": "commit-and-tag-version",
+    "release:major": "commit-and-tag-version --release-as major",
+    "release:minor": "commit-and-tag-version --release-as minor",
+    "release:patch": "commit-and-tag-version --release-as patch",
+    "release:dry": "commit-and-tag-version --dry-run",
+    "release:alpha": "commit-and-tag-version --prerelease alpha",
+    "release:beta": "commit-and-tag-version --prerelease beta",
+    "version:bump": "node scripts/version-bump.js",
+    "version:patch": "pnpm run version:bump patch",
+    "version:minor": "pnpm run version:bump minor",
+    "version:major": "pnpm run version:bump major"
   },
   "devDependencies": {
     "@iconify-json/tabler": "^1.2.17",
@@ -28,6 +39,7 @@
     "@pinia/nuxt": "^0.11.0",
     "@primevue/nuxt-module": "^4.3.4",
     "autoprefixer": "^10.4.21",
+    "commit-and-tag-version": "^12.5.1",
     "electron": "^29.4.6",
     "electron-builder": "^24.13.3",
     "eslint": "^9.29.0",
