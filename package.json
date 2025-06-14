@@ -1,6 +1,7 @@
 {
   "name": "ssanime-gui",
   "version": "0.0.1",
+  "description": "A modern GUI for anime encoding and processing",
   "type": "module",
   "private": true,
   "author": "",

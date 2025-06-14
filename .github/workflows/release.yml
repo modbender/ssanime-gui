@@ -18,11 +18,16 @@ jobs:
             platform: win32
             arch: x64
             target: win
-          # macOS builds (both Intel and Apple Silicon)
+          # macOS Intel build
           - os: macos-latest
             platform: darwin
-            arch: universal
-            target: mac
+            arch: x64
+            target: mac-x64
+          # macOS Apple Silicon build
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+            target: mac-arm64
           # Linux x64 build
           - os: ubuntu-latest
             platform: linux
@@ -80,33 +85,90 @@ jobs:
       - name: Build Nuxt app
         run: pnpm build:nuxt
 
+      - name: Verify build output
+        run: |
+          echo "Contents of .output directory:"
+          ls -la .output/ || echo "No .output directory found"
+          echo "Contents of dist-electron directory:"
+          ls -la dist-electron/ || echo "No dist-electron directory found"
+
+      - name: Ensure required directories exist
+        run: |
+          mkdir -p dist
+          if [ ! -d ".output" ]; then
+            echo "Error: .output directory not found"
+            exit 1
+          fi
+          if [ ! -d "dist-electron" ]; then
+            echo "Error: dist-electron directory not found"
+            exit 1
+          fi
+
       - name: Build Electron app (Windows)
         if: matrix.platform == 'win32'
-        run: pnpm build:electron --win --x64 --ia32 --publish=never
+        run: |
+          # Clean any previous builds
+          rm -rf dist
+          # Build electron app
+          pnpm build:electron --win --x64 --ia32 --publish=never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEBUG: electron-builder
 
-      - name: Build Electron app (macOS Universal)
-        if: matrix.platform == 'darwin'
-        run: pnpm build:electron --mac --x64 --arm64 --publish=never
+      - name: Build Electron app (macOS x64)
+        if: matrix.platform == 'darwin' && matrix.arch == 'x64'
+        run: |
+          # Clean any previous builds
+          rm -rf dist
+          # Build electron app for x64
+          pnpm build:electron --mac --x64 --publish=never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEBUG: electron-builder
+
+      - name: Build Electron app (macOS ARM64)
+        if: matrix.platform == 'darwin' && matrix.arch == 'arm64'
+        run: |
+          # Clean any previous builds
+          rm -rf dist
+          # Build electron app for arm64
+          pnpm build:electron --mac --arm64 --publish=never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEBUG: electron-builder
 
       - name: Build Electron app (Linux x64)
         if: matrix.platform == 'linux' && matrix.arch == 'x64'
-        run: pnpm build:electron --linux --x64 --publish=never
+        run: |
+          # Clean any previous builds
+          rm -rf dist
+          # Build electron app
+          pnpm build:electron --linux --x64 --publish=never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEBUG: electron-builder
 
       - name: Build Electron app (Linux ARM64)
         if: matrix.platform == 'linux' && matrix.arch == 'arm64'
-        run: pnpm build:electron --linux --arm64 --publish=never
+        run: |
+          # Clean any previous builds
+          rm -rf dist
+          # Build electron app
+          pnpm build:electron --linux --arm64 --publish=never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEBUG: electron-builder
           CC: aarch64-linux-gnu-gcc
           CXX: aarch64-linux-gnu-g++
           AR: aarch64-linux-gnu-ar
           STRIP: aarch64-linux-gnu-strip
+
+      - name: List build artifacts
+        run: |
+          echo "Contents of dist directory:"
+          ls -la dist/ || echo "No dist directory found"
+          echo "Contents of current directory:"
+          ls -la
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
