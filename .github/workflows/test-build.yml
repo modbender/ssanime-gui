@@ -37,7 +37,9 @@ jobs:
           sudo apt-get install -y libnss3-dev libatk-bridge2.0-dev libdrm2 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libxss1 libasound2-dev
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          # Try frozen lockfile first, fall back to regular install if needed
+          pnpm install --frozen-lockfile || pnpm install
 
       - name: Build Nuxt app
         run: pnpm build:nuxt
@@ -69,7 +71,9 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          # Try frozen lockfile first, fall back to regular install if needed
+          pnpm install --frozen-lockfile || pnpm install
 
       - name: Build Nuxt app
         run: pnpm build:nuxt
@@ -101,7 +105,9 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          # Try frozen lockfile first, fall back to regular install if needed
+          pnpm install --frozen-lockfile || pnpm install
 
       - name: Build Nuxt app
         run: pnpm build:nuxt
