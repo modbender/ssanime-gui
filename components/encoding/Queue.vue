@@ -120,33 +120,8 @@
 <script setup>
 // No manual imports needed - Nuxt 3 auto-imports Vue and composables
 
-// Sample queue data
-const queueItems = ref([
-  {
-    id: 1,
-    fileName: 'Sample Video 1.mp4',
-    profile: 'High Quality',
-    size: 1024 * 1024 * 500, // 500MB
-    status: 'processing',
-    progress: 65,
-  },
-  {
-    id: 2,
-    fileName: 'Sample Video 2.mkv',
-    profile: 'Medium Quality',
-    size: 1024 * 1024 * 300, // 300MB
-    status: 'completed',
-    progress: 100,
-  },
-  {
-    id: 3,
-    fileName: 'Sample Video 3.avi',
-    profile: 'Low Quality',
-    size: 1024 * 1024 * 150, // 150MB
-    status: 'pending',
-    progress: 0,
-  },
-]);
+// Queue items will be managed by the encoding service
+const queueItems = ref([]);
 
 // Computed properties
 const processingCount = computed(

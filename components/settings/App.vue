@@ -290,12 +290,12 @@ const priorityOptions = [
 
 // Methods
 const selectOutputDirectory = () => {
-  // In a real app, this would open a directory dialog
+  // TODO: Implement directory selection dialog using Electron
   console.log('Select output directory');
 };
 
 const selectFFmpegPath = () => {
-  // In a real app, this would open a file dialog
+  // TODO: Implement file selection dialog using Electron
   console.log('Select FFmpeg path');
 };
 
@@ -315,15 +315,16 @@ const resetSettings = () => {
     debugLogging: false,
     logRetention: 7,
   });
+  console.log('Settings reset to defaults');
 };
 
 const exportSettings = () => {
-  // Export settings to JSON file
+  // TODO: Export settings to JSON file
   console.log('Export settings');
 };
 
 const saveSettings = () => {
-  // Save settings to configuration file
+  // TODO: Save settings to configuration file
   console.log('Save settings');
 };
 </script>

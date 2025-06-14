@@ -88,44 +88,8 @@ const logLevels = [
 
 const selectedLevel = ref(null);
 
-// Sample log data
-const logs = ref([
-  {
-    id: 1,
-    timestamp: new Date(Date.now() - 1000 * 60 * 5),
-    level: 'info',
-    message: 'Application started successfully',
-    source: 'Main Process',
-  },
-  {
-    id: 2,
-    timestamp: new Date(Date.now() - 1000 * 60 * 3),
-    level: 'info',
-    message: 'FFmpeg encoder initialized',
-    source: 'Encoder Service',
-  },
-  {
-    id: 3,
-    timestamp: new Date(Date.now() - 1000 * 60 * 2),
-    level: 'warning',
-    message: 'Output directory not found, creating new directory',
-    source: 'File System',
-  },
-  {
-    id: 4,
-    timestamp: new Date(Date.now() - 1000 * 60 * 1),
-    level: 'error',
-    message: 'Failed to load encoding profile: profile.json not found',
-    source: 'Profile Manager',
-  },
-  {
-    id: 5,
-    timestamp: new Date(),
-    level: 'debug',
-    message: 'Memory usage: 245MB, CPU usage: 15%',
-    source: 'System Monitor',
-  },
-]);
+// Log data will be populated from the logger service
+const logs = ref([]);
 
 // Computed properties
 const filteredLogs = computed(() => {
@@ -156,15 +120,8 @@ const getLogSeverity = (level) => {
 };
 
 const refreshLogs = () => {
-  // Simulate loading new logs
-  const newLog = {
-    id: logs.value.length + 1,
-    timestamp: new Date(),
-    level: 'info',
-    message: 'Logs refreshed',
-    source: 'Log Viewer',
-  };
-  logs.value.unshift(newLog);
+  // TODO: Load logs from logger service
+  console.log('Refreshing logs...');
 };
 
 const clearLogs = () => {

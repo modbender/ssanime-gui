@@ -113,7 +113,14 @@
           </div>
         </div>
         <div class="content-body">
-          <component :is="getCurrentComponent()" />
+          <EncodingMain
+            v-if="currentView === 'encoder'"
+            @navigate-to-profiles="setActiveView('profiles')"
+          />
+          <EncodingProfiles v-if="currentView === 'profiles'" />
+          <EncodingQueue v-if="currentView === 'queue'" />
+          <SystemLogs v-if="currentView === 'logs'" />
+          <SettingsApp v-if="currentView === 'settings'" />
         </div>
       </div>
     </div>
@@ -188,8 +195,6 @@ const views = {
 // Computed properties
 const getViewTitle = () => views[currentView.value]?.title || 'Unknown View';
 const getViewSubtitle = () => views[currentView.value]?.subtitle || '';
-const getCurrentComponent = () =>
-  views[currentView.value]?.component || 'EncoderMain';
 
 // Theme functions
 const toggleTheme = () => {
@@ -209,20 +214,20 @@ const toggleTheme = () => {
 
 // Window controls (for Electron)
 const minimizeWindow = () => {
-  if (window.electronAPI) {
-    window.electronAPI.minimizeWindow();
+  if (window.ipcRenderer) {
+    window.ipcRenderer.invoke('window-minimize');
   }
 };
 
 const maximizeWindow = () => {
-  if (window.electronAPI) {
-    window.electronAPI.maximizeWindow();
+  if (window.ipcRenderer) {
+    window.ipcRenderer.invoke('window-maximize');
   }
 };
 
 const closeWindow = () => {
-  if (window.electronAPI) {
-    window.electronAPI.closeWindow();
+  if (window.ipcRenderer) {
+    window.ipcRenderer.invoke('window-close');
   }
 };
 

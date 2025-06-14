@@ -1,5 +1,8 @@
 /* Main SCSS File - Native Desktop Electron Application */
 
+/* Import PrimeIcons */
+@import 'primeicons/primeicons.css';
+
 /* CSS Variables for Native Desktop Theme System */
 :root {
   /* Primary Brand Colors */
@@ -803,6 +806,55 @@ textarea:focus {
   padding: 1.5rem 2rem;
   text-align: center;
   color: var(--text-muted);
+}
+
+/* PrimeVue Slider Component Fixes */
+.p-slider {
+  background: var(--border-color) !important;
+  border: none !important;
+  height: 6px !important;
+  border-radius: 3px !important;
+  position: relative !important;
+}
+
+.p-slider .p-slider-range {
+  background: var(--primary-color) !important;
+  height: 100% !important;
+  border-radius: 3px !important;
+}
+
+.p-slider .p-slider-handle {
+  background: var(--primary-color) !important;
+  border: 2px solid #ffffff !important;
+  width: 18px !important;
+  height: 18px !important;
+  margin-top: -6px !important;
+  margin-left: -9px !important;
+  border-radius: 50% !important;
+  box-shadow: var(--shadow-sm) !important;
+  transition: all var(--transition-normal) ease !important;
+  position: absolute !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}
+
+.p-slider .p-slider-handle:hover {
+  transform: translateY(-50%) scale(1.1) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+.p-slider .p-slider-handle:focus {
+  outline: none !important;
+  box-shadow: 0 0 0 2px var(--primary-color) !important;
+}
+
+/* Dark theme slider adjustments */
+[data-theme='dark'] .p-slider {
+  background: #4a4a4a !important;
+}
+
+[data-theme='dark'] .p-slider .p-slider-handle {
+  border-color: #2a2a2a !important;
 }
 
 /* Responsive Design */

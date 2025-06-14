@@ -17,6 +17,9 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
       'get-most-recent-output-path',
       'clear-path-history',
       'get-log-file-path',
+      'window-minimize',
+      'window-maximize',
+      'window-close',
     ];
 
     if (validChannels.includes(channel)) {

@@ -86,11 +86,13 @@ function createWindow() {
     webPreferences: {
       preload: path.join(MAIN_DIST, 'preload.js'),
     },
-    // Remove window rounding by using square corners
-    frame: true,
-    roundedCorners: false,
+    // Use frameless window for custom titlebar
+    frame: false,
     // Remove application menu bar
     autoHideMenuBar: true,
+    // Set minimum window size
+    minWidth: 800,
+    minHeight: 600,
   });
 
   // Remove the application menu completely
@@ -451,6 +453,33 @@ function initIpc() {
       }
     }
   );
+
+  // Window control handlers
+  ipcMain.handle('window-minimize', () => {
+    if (win) {
+      win.minimize();
+      log.debug('Window minimized');
+    }
+  });
+
+  ipcMain.handle('window-maximize', () => {
+    if (win) {
+      if (win.isMaximized()) {
+        win.unmaximize();
+        log.debug('Window unmaximized');
+      } else {
+        win.maximize();
+        log.debug('Window maximized');
+      }
+    }
+  });
+
+  ipcMain.handle('window-close', () => {
+    if (win) {
+      win.close();
+      log.debug('Window close requested');
+    }
+  });
 
   log.info('IPC handlers initialized');
 }
