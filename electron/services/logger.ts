@@ -150,7 +150,7 @@ export class Logger {
       const logDir = this.options.logDirectory;
       const logFiles = fs
         .readdirSync(logDir)
-        .filter((file) => file.startsWith('ssanime-') && file.endsWith('.log'))
+        .filter(file => file.startsWith('ssanime-') && file.endsWith('.log'))
         .sort((a, b) => {
           // Sort by creation time, newest first
           const timeA = fs.statSync(path.join(logDir, a)).mtime.getTime();
@@ -196,7 +196,7 @@ export class Logger {
         formattedMessage +=
           ' ' +
           args
-            .map((arg) => {
+            .map(arg => {
               if (typeof arg === 'object') {
                 return JSON.stringify(arg);
               }

@@ -1,6 +1,6 @@
 <template>
   <div v-if="visible">
-    <ProgressBar :value="progress" :showValue="true" style="height: 1.5rem" />
+    <ProgressBar :value="progress" :show-value="true" style="height: 1.5rem" />
     <div class="mt-2">
       <p>Current File: {{ currentFile }}</p>
       <p>Speed: {{ speed }} | ETA: {{ eta }}</p>

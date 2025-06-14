@@ -13,9 +13,9 @@
           <Button
             label="Save Changes"
             icon="pi pi-save"
-            @click="saveProfile"
             severity="success"
             size="small"
+            @click="saveProfile"
           />
           <Button
             label="Reset to Default"
@@ -46,18 +46,18 @@
               id="profile-select"
               v-model="activeProfile"
               :options="profileOptions"
-              optionLabel="label"
-              optionValue="value"
+              option-label="label"
+              option-value="value"
               placeholder="Select encoding profile..."
-              @change="handleProfileChange"
               style="flex: 1"
+              @change="handleProfileChange"
             />
             <Button
+              v-tooltip="'Create New Profile'"
               icon="pi pi-plus"
-              @click="createNewProfile"
               severity="info"
               outlined
-              v-tooltip="'Create New Profile'"
+              @click="createNewProfile"
             />
           </div>
         </div>
@@ -68,7 +68,7 @@
         <!-- Video Settings -->
         <div class="settings-section">
           <div class="section-header">
-            <i class="pi pi-video"></i>
+            <i class="pi pi-video" />
             <h4>Video Settings</h4>
           </div>
           <div class="settings-grid">
@@ -95,8 +95,8 @@
                 id="resolution-select"
                 v-model="currentSettings.resolution"
                 :options="resolutionOptions"
-                optionLabel="label"
-                optionValue="value"
+                option-label="label"
+                option-value="value"
                 placeholder="Select resolution..."
               />
             </div>
@@ -107,8 +107,8 @@
                 id="format-select"
                 v-model="currentSettings.format"
                 :options="formatOptions"
-                optionLabel="label"
-                optionValue="value"
+                option-label="label"
+                option-value="value"
                 placeholder="Select format..."
               />
             </div>
@@ -158,7 +158,7 @@
         <!-- Advanced Settings -->
         <div class="settings-section">
           <div class="section-header">
-            <i class="pi pi-cog"></i>
+            <i class="pi pi-cog" />
             <h4>Advanced Settings</h4>
           </div>
           <div class="settings-grid">
@@ -200,8 +200,8 @@
                 id="aq-mode-select"
                 v-model="currentSettings.aq_mode"
                 :options="aqModeOptions"
-                optionLabel="label"
-                optionValue="value"
+                option-label="label"
+                option-value="value"
                 placeholder="Select AQ mode..."
               />
             </div>
@@ -345,7 +345,7 @@ onMounted(async () => {
 
 // Options for dropdowns
 const profileOptions = computed(() => {
-  const options = Object.keys(profiles.value).map((key) => ({
+  const options = Object.keys(profiles.value).map(key => ({
     label: key,
     value: key,
   }));
@@ -394,7 +394,7 @@ const handleProfileChange = () => {
 const checkForChanges = () => {
   if (defaultProfiles.includes(activeProfile.value)) {
     const hasChanges = Object.keys(currentSettings).some(
-      (key) => currentSettings[key] !== originalSettings.value[key]
+      key => currentSettings[key] !== originalSettings.value[key]
     );
 
     if (hasChanges && !isCustomProfile.value) {
@@ -482,7 +482,7 @@ const createNewProfile = () => {
   }
 };
 
-const isDefaultProfile = (profileName) => {
+const isDefaultProfile = profileName => {
   return defaultProfiles.includes(profileName);
 };
 

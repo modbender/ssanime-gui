@@ -15,7 +15,7 @@
         <label>Border Radius</label>
         <Select
           v-model="radius"
-          :options="radiusList.map((r) => r.value)"
+          :options="radiusList.map(r => r.value)"
           placeholder="Select radius"
         />
       </div>
@@ -24,7 +24,7 @@
         <label>Theme</label>
         <Select
           v-model="theme"
-          :options="themeList.map((t) => t.value)"
+          :options="themeList.map(t => t.value)"
           placeholder="Select theme"
         />
       </div>
@@ -35,10 +35,10 @@
   </Dialog>
   <Button
     icon="pi pi-brush"
-    @click="visible = true"
     text
     rounded
     aria-label="Customize"
+    @click="visible = true"
   />
 </template>
 

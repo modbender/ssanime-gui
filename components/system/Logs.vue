@@ -11,8 +11,8 @@
           <Dropdown
             v-model="selectedLevel"
             :options="logLevels"
-            optionLabel="label"
-            optionValue="value"
+            option-label="label"
+            option-value="value"
             placeholder="Filter by level"
             style="width: 150px"
           />
@@ -60,12 +60,12 @@
               />
             </div>
             <div class="log-message">{{ log.message }}</div>
-            <div class="log-source" v-if="log.source">{{ log.source }}</div>
+            <div v-if="log.source" class="log-source">{{ log.source }}</div>
           </div>
         </div>
 
         <div v-if="filteredLogs.length === 0" class="empty-logs">
-          <i class="pi pi-file-edit empty-icon"></i>
+          <i class="pi pi-file-edit empty-icon" />
           <h3>No logs found</h3>
           <p>No log entries match the current filter</p>
         </div>
@@ -96,15 +96,15 @@ const filteredLogs = computed(() => {
   if (!selectedLevel.value) {
     return logs.value;
   }
-  return logs.value.filter((log) => log.level === selectedLevel.value);
+  return logs.value.filter(log => log.level === selectedLevel.value);
 });
 
 // Methods
-const formatTimestamp = (timestamp) => {
+const formatTimestamp = timestamp => {
   return timestamp.toLocaleTimeString() + ' ' + timestamp.toLocaleDateString();
 };
 
-const getLogSeverity = (level) => {
+const getLogSeverity = level => {
   switch (level) {
     case 'error':
       return 'danger';

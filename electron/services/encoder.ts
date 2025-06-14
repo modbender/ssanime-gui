@@ -11,7 +11,7 @@ const log = createLogger('Encoder');
 // Improved function to find FFmpeg binary
 function findFFmpegPath(): string {
   // First try using ffmpeg-static
-  let ffmpegPath = ffmpegStatic as unknown as string;
+  const ffmpegPath = ffmpegStatic as unknown as string;
   log.debug(`FFmpeg path from ffmpeg-static: ${ffmpegPath}`);
 
   // Check if it exists
@@ -215,7 +215,7 @@ export class Encoder {
       // Calculate source vertical resolution category (480p, 720p, 1080p, etc.)
       const sourceVerticalRes = sourceResolution.height;
       const allowedResolutions = profile.outputResolutions.filter(
-        (res) => res <= sourceVerticalRes
+        res => res <= sourceVerticalRes
       );
 
       // If no allowed resolutions (all would be upscaling), use the original source resolution
@@ -310,7 +310,7 @@ export class Encoder {
       }
 
       // Handle stdout output for progress parsing (from -progress pipe:1)
-      this.ffmpegProcess.stdout?.on('data', (data) => {
+      this.ffmpegProcess.stdout?.on('data', data => {
         const output = data.toString().trim();
         if (output) {
           log.debug(`FFmpeg progress: ${output}`);
@@ -319,7 +319,7 @@ export class Encoder {
       });
 
       // Handle stderr output for messages and fallback progress parsing
-      this.ffmpegProcess.stderr?.on('data', (data) => {
+      this.ffmpegProcess.stderr?.on('data', data => {
         const output = data.toString();
         log.debug(`FFmpeg stderr: ${output}`);
 
@@ -327,7 +327,7 @@ export class Encoder {
         this.parseMetadata(output);
       });
 
-      this.ffmpegProcess.on('close', (code) => {
+      this.ffmpegProcess.on('close', code => {
         this.isEncoding = false;
         this.ffmpegProcess = null;
 
@@ -342,7 +342,7 @@ export class Encoder {
         }
       });
 
-      this.ffmpegProcess.on('error', (err) => {
+      this.ffmpegProcess.on('error', err => {
         this.isEncoding = false;
         this.ffmpegProcess = null;
         log.error('FFmpeg process error:', err);
@@ -359,7 +359,7 @@ export class Encoder {
     log.info(`Starting batch encoding of ${files.length} files`, {
       outputDir,
       profileName,
-      files: files.map((f) => path.basename(f)),
+      files: files.map(f => path.basename(f)),
     });
 
     for (const file of files) {
@@ -378,7 +378,7 @@ export class Encoder {
   private parseProgressData(output: string): void {
     // Parse key=value pairs from progress output
     const progressData: Record<string, string> = {};
-    output.split('\n').forEach((line) => {
+    output.split('\n').forEach(line => {
       const [key, value] = line.split('=');
       if (key && value !== undefined) {
         progressData[key.trim()] = value.trim();
@@ -511,7 +511,7 @@ export class Encoder {
     const vfFilters = [];
     let audioBitrate: string;
     let audioQuality: number;
-    let actualCrf = profile.crf;
+    const actualCrf = profile.crf;
 
     // Add resolution scaling with proper syntax for FFmpeg CLI
     switch (profile.resolution) {
@@ -679,11 +679,11 @@ export class Encoder {
       );
       let output = '';
 
-      ffprobe.stdout.on('data', (data) => {
+      ffprobe.stdout.on('data', data => {
         output += data.toString();
       });
 
-      ffprobe.on('close', (code) => {
+      ffprobe.on('close', code => {
         if (code === 0) {
           const [width, height] = output.trim().split(',').map(Number);
           if (width && height) {
@@ -700,7 +700,7 @@ export class Encoder {
         }
       });
 
-      ffprobe.on('error', (err) => {
+      ffprobe.on('error', err => {
         log.error('Error running ffprobe:', err);
         resolve({ width: 1920, height: 1080 });
       });

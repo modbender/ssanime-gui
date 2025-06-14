@@ -4,7 +4,7 @@
       <!-- File Selection Section -->
       <div class="encoder-section">
         <div class="section-header">
-          <i class="pi pi-file-video"></i>
+          <i class="pi pi-file-video" />
           <h3>Input Files</h3>
         </div>
         <div class="section-content">
@@ -12,10 +12,10 @@
             <Button
               label="Select Files"
               icon="pi pi-folder-open"
-              @click="selectFiles"
               :loading="isLoadingFiles"
               severity="info"
               size="small"
+              @click="selectFiles"
             />
             <div v-if="selectedFiles.length > 0" class="selected-files">
               <div class="files-header">
@@ -28,17 +28,17 @@
                   :icon="
                     isFilesExpanded ? 'pi pi-chevron-up' : 'pi pi-chevron-down'
                   "
-                  @click="isFilesExpanded = !isFilesExpanded"
                   text
                   size="small"
+                  @click="isFilesExpanded = !isFilesExpanded"
                 />
                 <Button
                   label="Clear All"
                   icon="pi pi-trash"
-                  @click="clearAllFiles"
                   severity="danger"
                   text
                   size="small"
+                  @click="clearAllFiles"
                 />
               </div>
 
@@ -48,15 +48,15 @@
                   :key="index"
                   class="file-item"
                 >
-                  <i class="pi pi-file"></i>
+                  <i class="pi pi-file" />
                   <span class="file-name">{{ getFileName(file) }}</span>
                   <Button
                     icon="pi pi-times"
-                    @click="removeFile(index)"
                     severity="danger"
                     text
                     size="small"
                     class="remove-btn"
+                    @click="removeFile(index)"
                   />
                 </div>
               </div>
@@ -67,7 +67,7 @@
                   :key="index"
                   class="file-item"
                 >
-                  <i class="pi pi-file"></i>
+                  <i class="pi pi-file" />
                   <span>{{ getFileName(file) }}</span>
                 </div>
                 <div v-if="selectedFiles.length > 3" class="more-files">
@@ -82,7 +82,7 @@
       <!-- Output Directory Section -->
       <div class="encoder-section">
         <div class="section-header">
-          <i class="pi pi-folder"></i>
+          <i class="pi pi-folder" />
           <h3>Output Directory</h3>
         </div>
         <div class="section-content">
@@ -96,9 +96,9 @@
               />
               <Button
                 icon="pi pi-folder-open"
-                @click="selectOutputDirectory"
                 severity="secondary"
                 outlined
+                @click="selectOutputDirectory"
               />
             </div>
           </div>
@@ -108,7 +108,7 @@
       <!-- Encoding Profile Section -->
       <div class="encoder-section">
         <div class="section-header">
-          <i class="pi pi-cog"></i>
+          <i class="pi pi-cog" />
           <h3>Encoding Profile</h3>
         </div>
         <div class="section-content">
@@ -116,8 +116,8 @@
             <Dropdown
               v-model="selectedProfile"
               :options="encodingProfiles"
-              optionLabel="name"
-              optionValue="id"
+              option-label="name"
+              option-value="id"
               placeholder="Select encoding profile..."
               style="width: 100%; max-width: 300px"
             />
@@ -136,7 +136,7 @@
       <!-- Quick Settings Section -->
       <div class="encoder-section">
         <div class="section-header">
-          <i class="pi pi-sliders-h"></i>
+          <i class="pi pi-sliders-h" />
           <h3>Quick Settings</h3>
         </div>
         <div class="section-content">
@@ -157,8 +157,8 @@
               <Dropdown
                 v-model="quickSettings.resolution"
                 :options="resolutionOptions"
-                optionLabel="label"
-                optionValue="value"
+                option-label="label"
+                option-value="value"
                 placeholder="Original"
               />
             </div>
@@ -168,8 +168,8 @@
               <Dropdown
                 v-model="quickSettings.format"
                 :options="formatOptions"
-                optionLabel="label"
-                optionValue="value"
+                option-label="label"
+                option-value="value"
                 placeholder="MP4"
               />
             </div>
@@ -182,16 +182,16 @@
         <Button
           label="Add to Queue"
           icon="pi pi-plus"
-          @click="addToQueue"
           :disabled="!canEncode"
           severity="success"
+          @click="addToQueue"
         />
         <Button
           label="Start Encoding"
           icon="pi pi-play"
-          @click="startEncoding"
           :disabled="!canEncode"
           severity="info"
+          @click="startEncoding"
         />
       </div>
     </div>
@@ -226,7 +226,7 @@ onMounted(async () => {
   try {
     const profiles = await window.ipcRenderer.invoke('get-encoding-profiles');
     if (profiles && typeof profiles === 'object') {
-      encodingProfiles.value = Object.keys(profiles).map((key) => ({
+      encodingProfiles.value = Object.keys(profiles).map(key => ({
         id: key,
         name: profiles[key].name || key,
       }));
@@ -298,11 +298,11 @@ const selectOutputDirectory = async () => {
   }
 };
 
-const getFileName = (filePath) => {
+const getFileName = filePath => {
   return filePath.split('/').pop() || filePath.split('\\').pop() || filePath;
 };
 
-const removeFile = (index) => {
+const removeFile = index => {
   selectedFiles.value.splice(index, 1);
   // If no files left, collapse the list
   if (selectedFiles.value.length === 0) {

@@ -12,7 +12,7 @@
             :class="{ active: activeSection === section.key }"
             @click="activeSection = section.key"
           >
-            <i :class="section.icon"></i>
+            <i :class="section.icon" />
             <span>{{ section.label }}</span>
           </button>
         </div>
@@ -30,8 +30,8 @@
               <SelectButton
                 v-model="settings.theme"
                 :options="themeOptions"
-                optionLabel="label"
-                optionValue="value"
+                option-label="label"
+                option-value="value"
               />
             </div>
           </div>
@@ -42,8 +42,8 @@
               <Dropdown
                 v-model="settings.language"
                 :options="languageOptions"
-                optionLabel="label"
-                optionValue="value"
+                option-label="label"
+                option-value="value"
                 style="width: 200px"
               />
             </div>
@@ -121,8 +121,8 @@
               <Dropdown
                 v-model="settings.hardwareAcceleration"
                 :options="hwAccelOptions"
-                optionLabel="label"
-                optionValue="value"
+                option-label="label"
+                option-value="value"
                 style="width: 200px"
               />
             </div>
@@ -134,8 +134,8 @@
               <Dropdown
                 v-model="settings.cpuPriority"
                 :options="priorityOptions"
-                optionLabel="label"
-                optionValue="value"
+                option-label="label"
+                option-value="value"
                 style="width: 150px"
               />
             </div>

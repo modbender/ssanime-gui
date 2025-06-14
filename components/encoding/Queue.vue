@@ -45,7 +45,7 @@
       <!-- Queue List -->
       <div class="queue-list">
         <div v-if="queueItems.length === 0" class="empty-state">
-          <i class="pi pi-inbox empty-icon"></i>
+          <i class="pi pi-inbox empty-icon" />
           <h3>No items in queue</h3>
           <p>Add files to the encoder to see them here</p>
         </div>
@@ -80,33 +80,33 @@
                 v-else-if="item.status === 'completed'"
                 class="status-completed"
               >
-                <i class="pi pi-check"></i>
+                <i class="pi pi-check" />
                 <span>Completed</span>
               </div>
               <div v-else-if="item.status === 'error'" class="status-error">
-                <i class="pi pi-exclamation-triangle"></i>
+                <i class="pi pi-exclamation-triangle" />
                 <span>Error</span>
               </div>
               <div v-else class="status-pending">
-                <i class="pi pi-clock"></i>
+                <i class="pi pi-clock" />
                 <span>Pending</span>
               </div>
             </div>
 
             <div class="item-actions">
               <Button
+                v-tooltip="'View Details'"
                 icon="pi pi-eye"
                 severity="secondary"
                 size="small"
                 outlined
-                v-tooltip="'View Details'"
               />
               <Button
+                v-tooltip="'Remove'"
                 icon="pi pi-times"
                 severity="danger"
                 size="small"
                 outlined
-                v-tooltip="'Remove'"
                 @click="removeItem(item.id)"
               />
             </div>
@@ -125,15 +125,15 @@ const queueItems = ref([]);
 
 // Computed properties
 const processingCount = computed(
-  () => queueItems.value.filter((item) => item.status === 'processing').length
+  () => queueItems.value.filter(item => item.status === 'processing').length
 );
 
 const completedCount = computed(
-  () => queueItems.value.filter((item) => item.status === 'completed').length
+  () => queueItems.value.filter(item => item.status === 'completed').length
 );
 
 // Methods
-const formatFileSize = (bytes) => {
+const formatFileSize = bytes => {
   if (bytes === 0) return '0 Bytes';
   const k = 1024;
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
@@ -145,8 +145,8 @@ const clearQueue = () => {
   queueItems.value = [];
 };
 
-const removeItem = (id) => {
-  queueItems.value = queueItems.value.filter((item) => item.id !== id);
+const removeItem = id => {
+  queueItems.value = queueItems.value.filter(item => item.id !== id);
 };
 </script>
 

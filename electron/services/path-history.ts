@@ -44,7 +44,7 @@ export class PathHistoryService {
     let paths = this.getOutputPaths();
 
     // Check if path already exists
-    const existingIndex = paths.findIndex((p) => p.path === normalizedPath);
+    const existingIndex = paths.findIndex(p => p.path === normalizedPath);
 
     if (existingIndex >= 0) {
       // Path exists, update the timestamp
@@ -85,7 +85,7 @@ export class PathHistoryService {
     let paths = this.getInputPaths();
 
     // Check if path already exists
-    const existingIndex = paths.findIndex((p) => p.path === normalizedPath);
+    const existingIndex = paths.findIndex(p => p.path === normalizedPath);
 
     if (existingIndex >= 0) {
       // Path exists, update the timestamp

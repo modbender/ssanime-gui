@@ -236,7 +236,7 @@ function initIpc() {
       log.debug('File selection dialog result:', {
         canceled: result.canceled,
         fileCount: result.filePaths.length,
-        files: result.filePaths.map((p) => path.basename(p)),
+        files: result.filePaths.map(p => path.basename(p)),
       });
 
       // If files were selected, store the parent directory path
@@ -348,7 +348,7 @@ function initIpc() {
             log.debug('Sent encoding-completed event to renderer');
           }
         })
-        .catch((error) => {
+        .catch(error => {
           log.error('Encoding process failed:', error);
           if (win) {
             win.webContents.send('encoding-error', error.message);
@@ -513,7 +513,7 @@ app.whenReady().then(() => {
 });
 
 // Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', error => {
   log.error('Uncaught exception in main process:', error);
 });
 

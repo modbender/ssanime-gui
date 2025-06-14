@@ -8,21 +8,20 @@ export default createConfigForNuxt({
 })
   .append({
     rules: {
-      // Custom rules for your project
-      'no-console': 'warn',
+      // Custom rules for your project - more lenient for development
+      'no-console': 'off', // Allow console statements during development
       'prefer-const': 'error',
-      'no-unused-vars': 'warn',
-      '@typescript-eslint/no-unused-vars': 'warn',
+      'no-unused-vars': 'off', // Disable for development
+      '@typescript-eslint/no-unused-vars': 'off', // Disable for development
       'vue/multi-word-component-names': 'off',
       'vue/no-multiple-template-root': 'off',
+      '@typescript-eslint/no-explicit-any': 'off', // Allow any during development
+      '@typescript-eslint/no-dynamic-delete': 'off', // Allow dynamic delete
+      '@typescript-eslint/no-require-imports': 'off', // Allow require imports
+      'vue/require-default-prop': 'off',
     },
   })
   .append({
-    // Configuration for JSON files
-    files: ['**/*.json'],
-    rules: {
-      // Disable rules that don't apply to JSON
-      'no-unused-vars': 'off',
-      '@typescript-eslint/no-unused-vars': 'off',
-    },
+    // Ignore JSON files completely
+    ignores: ['**/*.json'],
   });

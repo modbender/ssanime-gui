@@ -11,32 +11,32 @@
         </div>
         <div class="titlebar-right">
           <button
+            v-tooltip.bottom="isDark ? 'Light Theme' : 'Dark Theme'"
             class="titlebar-button"
             @click="toggleTheme"
-            v-tooltip.bottom="isDark ? 'Light Theme' : 'Dark Theme'"
           >
-            <i :class="isDark ? 'pi pi-sun' : 'pi pi-moon'"></i>
+            <i :class="isDark ? 'pi pi-sun' : 'pi pi-moon'" />
           </button>
           <button
+            v-tooltip.bottom="'Minimize'"
             class="titlebar-button minimize-btn"
             @click="minimizeWindow"
-            v-tooltip.bottom="'Minimize'"
           >
-            <i class="pi pi-minus"></i>
+            <i class="pi pi-minus" />
           </button>
           <button
+            v-tooltip.bottom="'Maximize'"
             class="titlebar-button maximize-btn"
             @click="maximizeWindow"
-            v-tooltip.bottom="'Maximize'"
           >
-            <i class="pi pi-window-maximize"></i>
+            <i class="pi pi-window-maximize" />
           </button>
           <button
+            v-tooltip.bottom="'Close'"
             class="titlebar-button close-btn"
             @click="closeWindow"
-            v-tooltip.bottom="'Close'"
           >
-            <i class="pi pi-times"></i>
+            <i class="pi pi-times" />
           </button>
         </div>
       </div>
@@ -50,51 +50,51 @@
           <div class="nav-section">
             <h3 class="nav-heading">Encoding</h3>
             <button
+              v-tooltip.right="'Video Encoder'"
               class="nav-item"
               :class="{ active: currentView === 'encoder' }"
               @click="setActiveView('encoder')"
-              v-tooltip.right="'Video Encoder'"
             >
-              <i class="pi pi-play-circle"></i>
+              <i class="pi pi-play-circle" />
               <span>Encoder</span>
             </button>
             <button
+              v-tooltip.right="'Encoding Profiles'"
               class="nav-item"
               :class="{ active: currentView === 'profiles' }"
               @click="setActiveView('profiles')"
-              v-tooltip.right="'Encoding Profiles'"
             >
-              <i class="pi pi-cog"></i>
+              <i class="pi pi-cog" />
               <span>Profiles</span>
             </button>
             <button
+              v-tooltip.right="'Encoding Queue'"
               class="nav-item"
               :class="{ active: currentView === 'queue' }"
               @click="setActiveView('queue')"
-              v-tooltip.right="'Encoding Queue'"
             >
-              <i class="pi pi-list"></i>
+              <i class="pi pi-list" />
               <span>Queue</span>
             </button>
           </div>
           <div class="nav-section">
             <h3 class="nav-heading">Tools</h3>
             <button
+              v-tooltip.right="'System Logs'"
               class="nav-item"
               :class="{ active: currentView === 'logs' }"
               @click="setActiveView('logs')"
-              v-tooltip.right="'System Logs'"
             >
-              <i class="pi pi-file-edit"></i>
+              <i class="pi pi-file-edit" />
               <span>Logs</span>
             </button>
             <button
+              v-tooltip.right="'Application Settings'"
               class="nav-item"
               :class="{ active: currentView === 'settings' }"
               @click="setActiveView('settings')"
-              v-tooltip.right="'Application Settings'"
             >
-              <i class="pi pi-sliders-h"></i>
+              <i class="pi pi-sliders-h" />
               <span>Settings</span>
             </button>
           </div>
@@ -132,15 +132,15 @@
           <i
             class="pi pi-circle-fill"
             :class="{ 'text-success': !isEncoding, 'text-warning': isEncoding }"
-          ></i>
+          />
           {{ isEncoding ? 'Encoding in progress' : 'Ready' }}
         </span>
       </div>
       <div class="statusbar-right">
-        <span class="status-item" v-if="selectedFiles.length > 0">
+        <span v-if="selectedFiles.length > 0" class="status-item">
           {{ selectedFiles.length }} files selected
         </span>
-        <span class="status-item" v-if="activeProfile">
+        <span v-if="activeProfile" class="status-item">
           Profile: {{ activeProfile }}
         </span>
       </div>
@@ -232,7 +232,7 @@ const closeWindow = () => {
 };
 
 // Navigation functions
-const setActiveView = (view) => {
+const setActiveView = view => {
   currentView.value = view;
   toast.add({
     severity: 'info',
@@ -269,8 +269,8 @@ onMounted(() => {
   width: 100vw;
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
-    sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   overflow: hidden;
   user-select: none;
 }
