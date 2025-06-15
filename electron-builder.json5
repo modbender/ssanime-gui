@@ -27,7 +27,7 @@
     '!docs',
   ],
   mac: {
-    artifactName: '${productName}_${version}_${arch}.${ext}',
+    artifactName: 'SSAnime_macOS_${arch}_${version}.${ext}',
     target: [
       {
         target: 'dmg',
@@ -57,7 +57,7 @@
         arch: ['x64', 'ia32'],
       },
     ],
-    artifactName: '${productName}_${version}_${arch}.${ext}',
+    artifactName: 'SSAnime_Windows_${arch}_${version}.${ext}',
   },
   linux: {
     target: [
@@ -78,7 +78,7 @@
         arch: ['x64', 'arm64'],
       },
     ],
-    artifactName: '${productName}_${version}_${arch}.${ext}',
+    artifactName: 'SSAnime_Linux_${arch}_${version}.${ext}',
     category: 'AudioVideo',
     maintainer: 'SSAnime GUI Contributors <ssanime-gui@example.com>',
   },
