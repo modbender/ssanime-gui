@@ -175,11 +175,64 @@ jobs:
           echo "Contents of current directory:"
           node -e "console.log(require('fs').readdirSync('.'))"
 
+      - name: Filter build artifacts
+        run: |
+          echo "Filtering build artifacts..."
+          node -e "
+          const fs = require('fs');
+          const path = require('path');
+
+          if (!fs.existsSync('dist')) {
+            console.log('No dist directory found');
+            process.exit(1);
+          }
+
+          // Create filtered directory
+          if (!fs.existsSync('dist-filtered')) {
+            fs.mkdirSync('dist-filtered');
+          }
+
+          // Get all files in dist
+          function getAllFiles(dir, fileList = []) {
+            const files = fs.readdirSync(dir);
+            files.forEach(file => {
+              const filePath = path.join(dir, file);
+              if (fs.statSync(filePath).isDirectory()) {
+                getAllFiles(filePath, fileList);
+              } else {
+                fileList.push(filePath);
+              }
+            });
+            return fileList;
+          }
+
+          const allFiles = getAllFiles('dist');
+          const executableExtensions = ['.exe', '.msi', '.dmg', '.pkg', '.AppImage', '.deb', '.rpm', '.tar.gz', '.zip'];
+
+          // Filter for executable files only
+          const filteredFiles = allFiles.filter(file => {
+            const ext = path.extname(file).toLowerCase();
+            const basename = path.basename(file).toLowerCase();
+            return executableExtensions.some(execExt => 
+              ext === execExt || basename.endsWith(execExt)
+            );
+          });
+
+          console.log('Found executable files:');
+          filteredFiles.forEach(file => {
+            const destFile = path.join('dist-filtered', path.basename(file));
+            fs.copyFileSync(file, destFile);
+            console.log(' - ' + path.basename(file));
+          });
+
+          console.log('Filtered', filteredFiles.length, 'executable files');
+          "
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}-artifacts
-          path: dist/*
+          path: dist-filtered/*
           retention-days: 7
 
   release:
@@ -201,11 +254,40 @@ jobs:
       - name: Display downloaded files
         run: find artifacts -type f -name "*" | head -20
 
+      - name: Filter and organize release assets
+        run: |
+          mkdir -p release-assets
+          echo "Filtering executable files for release..."
+
+          # Find and copy main executable files (not internal Chromium files)
+          find artifacts -type f \( \
+            -name "*.exe" -o \
+            -name "*.msi" -o \
+            -name "*.dmg" -o \
+            -name "*.pkg" -o \
+            -name "*.AppImage" -o \
+            -name "*.deb" -o \
+            -name "*.rpm" -o \
+            -name "*.tar.gz" -o \
+            -name "*.zip" \
+          \) -exec cp {} release-assets/ \;
+
+          # List what we're actually releasing
+          echo "Files to be released:"
+          ls -la release-assets/
+
+          # Verify we have files to release
+          if [ -z "$(ls -A release-assets/)" ]; then
+            echo "❌ No executable files found for release!"
+            exit 1
+          else
+            echo "✅ Found $(ls -1 release-assets/ | wc -l) files for release"
+          fi
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            artifacts/**/*
+          files: release-assets/*
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
