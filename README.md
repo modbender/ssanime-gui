@@ -45,6 +45,16 @@ pnpm build:nuxt
 pnpm build:electron
 ```
 
+### Continuous Integration
+
+The project includes automated CI testing that runs on every commit to main and all pull requests:
+
+- **Linux Build**: Tests on Ubuntu with AppImage, Deb, and RPM packages
+- **Windows Build**: Tests on Windows with NSIS installer and portable builds
+- **macOS Build**: Tests on macOS with DMG and universal binary
+
+**Branch Protection**: All three platform builds are required to pass before any pull request can be merged into the main branch.
+
 ## Releases
 
 This project uses automated versioning and releases with `commit-and-tag-version`. See [Release Process Documentation](docs/release-process.md) for details.
