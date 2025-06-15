@@ -4,7 +4,10 @@
   "description": "A modern GUI for anime encoding and processing",
   "type": "module",
   "private": true,
-  "author": "",
+  "author": {
+    "name": "SSAnime GUI Contributors",
+    "email": "ssanime-gui@example.com"
+  },
   "license": "MIT",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -30,7 +33,10 @@
     "version:bump": "node scripts/version-bump.js",
     "version:patch": "pnpm run version:bump patch",
     "version:minor": "pnpm run version:bump minor",
-    "version:major": "pnpm run version:bump major"
+    "version:major": "pnpm run version:bump major",
+    "icons:create": "node scripts/create-icns.js && node scripts/create-ico.js",
+    "icons:icns": "node scripts/create-icns.js",
+    "icons:ico": "node scripts/create-ico.js"
   },
   "devDependencies": {
     "@iconify-json/tabler": "^1.2.17",

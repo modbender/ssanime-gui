@@ -46,8 +46,21 @@ jobs:
       - name: Build Nuxt app
         run: pnpm build:nuxt
 
+      - name: Verify build output
+        run: |
+          echo "Contents of .output directory:"
+          ls -la .output/ || echo "No .output directory found"
+          echo "Contents of dist-electron directory:"
+          ls -la dist-electron/ || echo "No dist-electron directory found"
+
       - name: Build Electron app
-        run: pnpm build:electron --publish=never
+        run: |
+          # Clean any previous builds
+          rm -rf dist
+          # Build electron app for Linux
+          pnpm build:electron --linux --publish=never
+        env:
+          DEBUG: electron-builder
 
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
@@ -82,8 +95,21 @@ jobs:
       - name: Build Nuxt app
         run: pnpm build:nuxt
 
+      - name: Verify build output
+        run: |
+          echo "Contents of .output directory:"
+          ls -la .output/ || echo "No .output directory found"
+          echo "Contents of dist-electron directory:"
+          ls -la dist-electron/ || echo "No dist-electron directory found"
+
       - name: Build Electron app
-        run: pnpm build:electron --publish=never
+        run: |
+          # Clean any previous builds
+          rm -rf dist
+          # Build electron app for Windows  
+          pnpm build:electron --win --publish=never
+        env:
+          DEBUG: electron-builder
 
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4
@@ -118,8 +144,21 @@ jobs:
       - name: Build Nuxt app
         run: pnpm build:nuxt
 
+      - name: Verify build output
+        run: |
+          echo "Contents of .output directory:"
+          ls -la .output/ || echo "No .output directory found"
+          echo "Contents of dist-electron directory:"
+          ls -la dist-electron/ || echo "No dist-electron directory found"
+
       - name: Build Electron app
-        run: pnpm build:electron --publish=never
+        run: |
+          # Clean any previous builds
+          rm -rf dist
+          # Build electron app for macOS
+          pnpm build:electron --mac --publish=never
+        env:
+          DEBUG: electron-builder
 
       - name: Upload test artifacts
         uses: actions/upload-artifact@v4

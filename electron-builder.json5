@@ -56,10 +56,6 @@
         target: 'zip',
         arch: ['x64', 'ia32'],
       },
-      {
-        target: 'msi',
-        arch: ['x64'],
-      },
     ],
     artifactName: '${productName}_${version}_${arch}.${ext}',
   },
@@ -84,6 +80,7 @@
     ],
     artifactName: '${productName}_${version}_${arch}.${ext}',
     category: 'AudioVideo',
+    maintainer: 'SSAnime GUI Contributors <ssanime-gui@example.com>',
   },
   nsis: {
     oneClick: false,
