@@ -1,0 +1,65 @@
+name: Retry Release
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to retry (e.g., v1.2.3)'
+        required: true
+        type: string
+      force:
+        description: 'Force recreate tag even if it exists'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  recreate-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for all branches and tags
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Check if tag exists
+        id: check-tag
+        run: |
+          if git rev-parse "${{ inputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag ${{ inputs.version }} already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Tag ${{ inputs.version }} does not exist"
+          fi
+
+      - name: Delete existing tag (if force is enabled)
+        if: steps.check-tag.outputs.exists == 'true' && inputs.force == true
+        run: |
+          echo "Force flag enabled, deleting existing tag..."
+          git tag -d "${{ inputs.version }}" || true
+          git push origin --delete "${{ inputs.version }}" || true
+          echo "Existing tag deleted"
+
+      - name: Create new tag on latest commit
+        if: steps.check-tag.outputs.exists == 'false' || inputs.force == true
+        run: |
+          echo "Creating tag ${{ inputs.version }} on latest commit..."
+          git tag -a "${{ inputs.version }}" -m "Release ${{ inputs.version }}"
+          git push origin "${{ inputs.version }}"
+          echo "Tag created and pushed successfully"
+
+      - name: Skip tag creation
+        if: steps.check-tag.outputs.exists == 'true' && inputs.force == false
+        run: |
+          echo "Tag ${{ inputs.version }} already exists and force flag is disabled"
+          echo "Enable the force flag if you want to recreate the tag"
+          exit 1

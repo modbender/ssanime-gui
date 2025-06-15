@@ -36,7 +36,8 @@
     "version:major": "pnpm run version:bump major",
     "icons:create": "node scripts/create-icns.js && node scripts/create-ico.js",
     "icons:icns": "node scripts/create-icns.js",
-    "icons:ico": "node scripts/create-ico.js"
+    "icons:ico": "node scripts/create-ico.js",
+    "retry-release": "node -e \"const args = process.argv.slice(2); if (!args[0]) { console.log('❌ Usage: pnpm retry-release <version> [force]'); process.exit(1); } const cmd = process.platform === 'win32' ? `scripts\\\\retry-release.bat ${args.join(' ')}` : `bash scripts/retry-release.sh ${args.join(' ')}`; require('child_process').execSync(cmd, {stdio: 'inherit'});\""
   },
   "devDependencies": {
     "@iconify-json/tabler": "^1.2.17",

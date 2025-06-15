@@ -84,6 +84,25 @@ When you push a version tag, GitHub Actions automatically:
 - Creates a GitHub release with downloadable assets
 - Generates changelog from conventional commits
 
+#### Retry Failed Releases
+
+If a release build fails, you can easily retry it on the latest commit:
+
+```bash
+# Retry release on latest commit (recreates tag)
+pnpm retry-release v1.2.3
+
+# Force retry even if tag exists
+pnpm retry-release v1.2.3 force
+```
+
+**Alternative methods:**
+
+- Use the "Retry Release" workflow in GitHub Actions (manual dispatch)
+- Use the "Build and Release" workflow with manual dispatch and specify a tag
+
+**Why retry?** When GitHub Actions reruns fail from the UI, it uses the old commit. This tool recreates the tag on the latest commit, ensuring you get the newest code in your release.
+
 This project uses GitHub Actions to automatically build multiarch executables when you push a version tag.
 
 ### Supported Platforms & Architectures

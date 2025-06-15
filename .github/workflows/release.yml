@@ -7,6 +7,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build release for (e.g., v1.2.3)'
+        required: true
+        type: string
 
 jobs:
   build:
@@ -44,6 +50,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # For manual dispatch, checkout the specified tag
+          # For tag push, checkout the pushed tag
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -178,6 +188,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # For manual dispatch, checkout the specified tag
+          # For tag push, checkout the pushed tag
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
