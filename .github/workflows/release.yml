@@ -208,11 +208,18 @@ jobs:
 
           const allFiles = getAllFiles('dist');
           const executableExtensions = ['.exe', '.msi', '.dmg', '.pkg', '.AppImage', '.deb', '.rpm', '.tar.gz', '.zip'];
+          const excludeFiles = ['elevate.exe', 'chrome_crashpad_handler.exe', 'chrome_crashpad_handler'];
 
-          // Filter for executable files only
+          // Filter for executable files only, excluding unwanted utilities
           const filteredFiles = allFiles.filter(file => {
             const ext = path.extname(file).toLowerCase();
             const basename = path.basename(file).toLowerCase();
+            
+            // Exclude unwanted utility files
+            if (excludeFiles.includes(basename)) {
+              return false;
+            }
+            
             return executableExtensions.some(execExt => 
               ext === execExt || basename.endsWith(execExt)
             );
@@ -259,7 +266,7 @@ jobs:
           mkdir -p release-assets
           echo "Filtering executable files for release..."
 
-          # Find and copy main executable files (not internal Chromium files)
+          # Find and copy main executable files (not internal Chromium files or utilities)
           find artifacts -type f \( \
             -name "*.exe" -o \
             -name "*.msi" -o \
@@ -270,7 +277,8 @@ jobs:
             -name "*.rpm" -o \
             -name "*.tar.gz" -o \
             -name "*.zip" \
-          \) -exec cp {} release-assets/ \;
+          \) ! -name "elevate.exe" ! -name "chrome_crashpad_handler.exe" ! -name "chrome_crashpad_handler" \
+          -exec cp {} release-assets/ \;
 
           # List what we're actually releasing
           echo "Files to be released:"
