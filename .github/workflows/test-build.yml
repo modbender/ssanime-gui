@@ -49,9 +49,9 @@ jobs:
       - name: Verify build output
         run: |
           echo "Contents of .output directory:"
-          ls -la .output/ || echo "No .output directory found"
+          node -e "try { console.log(require('fs').readdirSync('.output')); } catch(e) { console.log('No .output directory found'); }"
           echo "Contents of dist-electron directory:"
-          ls -la dist-electron/ || echo "No dist-electron directory found"
+          node -e "try { console.log(require('fs').readdirSync('dist-electron')); } catch(e) { console.log('No dist-electron directory found'); }"
 
       - name: Build Electron app
         run: |
@@ -98,16 +98,18 @@ jobs:
       - name: Verify build output
         run: |
           echo "Contents of .output directory:"
-          ls -la .output/ || echo "No .output directory found"
+          if (Test-Path .output) { Get-ChildItem .output } else { echo "No .output directory found" }
           echo "Contents of dist-electron directory:"
-          ls -la dist-electron/ || echo "No dist-electron directory found"
+          if (Test-Path dist-electron) { Get-ChildItem dist-electron } else { echo "No dist-electron directory found" }
+        shell: pwsh
 
       - name: Build Electron app
         run: |
           # Clean any previous builds
-          rm -rf dist
+          if (Test-Path dist) { Remove-Item -Recurse -Force dist }
           # Build electron app for Windows  
           pnpm build:electron --win --publish=never
+        shell: pwsh
         env:
           DEBUG: electron-builder
 
@@ -147,9 +149,9 @@ jobs:
       - name: Verify build output
         run: |
           echo "Contents of .output directory:"
-          ls -la .output/ || echo "No .output directory found"
+          node -e "try { console.log(require('fs').readdirSync('.output')); } catch(e) { console.log('No .output directory found'); }"
           echo "Contents of dist-electron directory:"
-          ls -la dist-electron/ || echo "No dist-electron directory found"
+          node -e "try { console.log(require('fs').readdirSync('dist-electron')); } catch(e) { console.log('No dist-electron directory found'); }"
 
       - name: Build Electron app
         run: |

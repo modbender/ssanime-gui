@@ -88,29 +88,24 @@ jobs:
       - name: Verify build output
         run: |
           echo "Contents of .output directory:"
-          ls -la .output/ || echo "No .output directory found"
+          node -e "try { console.log(require('fs').readdirSync('.output')); } catch(e) { console.log('No .output directory found'); }"
           echo "Contents of dist-electron directory:"
-          ls -la dist-electron/ || echo "No dist-electron directory found"
+          node -e "try { console.log(require('fs').readdirSync('dist-electron')); } catch(e) { console.log('No dist-electron directory found'); }"
 
       - name: Ensure required directories exist
         run: |
-          mkdir -p dist
-          if [ ! -d ".output" ]; then
-            echo "Error: .output directory not found"
-            exit 1
-          fi
-          if [ ! -d "dist-electron" ]; then
-            echo "Error: dist-electron directory not found"
-            exit 1
-          fi
+          node -e "const fs = require('fs'); if (!fs.existsSync('dist')) fs.mkdirSync('dist', {recursive: true});"
+          node -e "const fs = require('fs'); if (!fs.existsSync('.output')) { console.log('Error: .output directory not found'); process.exit(1); }"
+          node -e "const fs = require('fs'); if (!fs.existsSync('dist-electron')) { console.log('Error: dist-electron directory not found'); process.exit(1); }"
 
       - name: Build Electron app (Windows)
         if: matrix.platform == 'win32'
         run: |
           # Clean any previous builds
-          rm -rf dist
+          if (Test-Path dist) { Remove-Item -Recurse -Force dist }
           # Build electron app
           pnpm build:electron --win --x64 --ia32 --publish=never
+        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEBUG: electron-builder
@@ -166,9 +161,9 @@ jobs:
       - name: List build artifacts
         run: |
           echo "Contents of dist directory:"
-          ls -la dist/ || echo "No dist directory found"
+          node -e "try { console.log(require('fs').readdirSync('dist')); } catch(e) { console.log('No dist directory found'); }"
           echo "Contents of current directory:"
-          ls -la
+          node -e "console.log(require('fs').readdirSync('.'))"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
