@@ -25,3 +25,19 @@ Thumbs.db
 
 # Git
 .git/
+
+# Scripts and CI (focus only on main project files)
+scripts/
+.github/
+docs/
+build/
+testoutputs/
+
+# Config files that don't need strict formatting
+*.config.js
+*.config.ts
+eslint.config.js
+nuxt.config.ts
+electron-builder.json5
+pnpm-workspace.yaml
+pnpm-lock.yaml
