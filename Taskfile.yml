@@ -74,3 +74,18 @@ tasks:
     cmds:
       - bun install
       - bun run build
+
+  build-sidecar:
+    desc: "Build the Go sidecar and copy it into desktop/src-tauri/binaries/ (for Tauri bundling)"
+    cmds:
+      - go build -ldflags "-s -w" -o desktop/src-tauri/binaries/ssanime-x86_64-pc-windows-msvc.exe ./cmd/ssanime
+    env:
+      GOOS: windows
+      GOARCH: amd64
+
+  build-desktop:
+    desc: "Build the Tauri desktop app: Go sidecar → tauri build → NSIS installer under desktop/src-tauri/target/release/bundle/"
+    deps: [build-sidecar]
+    dir: desktop
+    cmds:
+      - bunx @tauri-apps/cli@latest build

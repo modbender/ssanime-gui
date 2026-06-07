@@ -63,6 +63,36 @@ go build -ldflags "-s -w" -o ssanime-darwin-amd64 ./cmd/ssanime
 task build-all
 ```
 
+### Desktop app (Tauri)
+
+The `desktop/` directory contains a Tauri v2 shell — like Seanime's "Denshi" — that wraps
+the Go daemon in a native window. It bundles `ssanime.exe` as a Tauri **sidecar**, spawns it
+on startup with `--no-open`, waits for the daemon to bind `127.0.0.1:4773`, then opens a
+`WebviewWindow` pointed at `http://127.0.0.1:4773/`. On exit the sidecar is killed.
+
+**Prerequisites:**
+
+- Rust 1.75+ with the `x86_64-pc-windows-msvc` target
+- [WebView2 runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
+  (pre-installed on Windows 11; the NSIS installer bundles a bootstrapper for older systems)
+- [Bun](https://bun.sh) (used to invoke the Tauri CLI via `bunx`)
+
+**Build:**
+
+```sh
+task build-desktop
+# Equivalent manual steps:
+#   go build -ldflags "-s -w" -o desktop/src-tauri/binaries/ssanime-x86_64-pc-windows-msvc.exe ./cmd/ssanime
+#   cd desktop && bunx @tauri-apps/cli@latest build
+```
+
+Artifacts land in `desktop/src-tauri/target/release/bundle/`:
+- `nsis/ssanime-gui_<version>_x64-setup.exe` — NSIS installer
+- `msi/ssanime-gui_<version>_x64_en-US.msi` — MSI installer (if WiX is available)
+
+**Both artifacts ship:** the headless `ssanime.exe` remains fully functional standalone
+(daemon + systray, browser as the UI). The Tauri `.exe` adds a native window on top.
+
 ## Running
 
 ```sh
