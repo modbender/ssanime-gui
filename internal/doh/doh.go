@@ -81,9 +81,21 @@ func (r *Resolver) HTTPClient(timeout time.Duration) *http.Client {
 	return &http.Client{Timeout: timeout, Transport: r.Transport()}
 }
 
+// GuardedHTTPClient returns a DoH client that additionally refuses to connect to
+// loopback, private, or link-local addresses. Use it for requests driven by
+// untrusted input — e.g. third-party JS extensions, whose fetch() must never be
+// able to reach the daemon's own localhost API or internal-network hosts (SSRF).
+// Because the check runs on the post-DoH dial IP, it also defeats DNS rebinding
+// and is re-applied on every redirect hop.
+func (r *Resolver) GuardedHTTPClient(timeout time.Duration) *http.Client {
+	return &http.Client{Timeout: timeout, Transport: r.transport(true)}
+}
+
 // Transport returns an http transport that resolves every dial through DoH and
 // connects to the resolved IP. TLS verification still uses the original host.
-func (r *Resolver) Transport() *http.Transport {
+func (r *Resolver) Transport() *http.Transport { return r.transport(false) }
+
+func (r *Resolver) transport(blockPrivate bool) *http.Transport {
 	return &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			host, port, err := net.SplitHostPort(addr)
@@ -94,8 +106,24 @@ func (r *Resolver) Transport() *http.Transport {
 			if err != nil {
 				return nil, fmt.Errorf("doh dial %s: %w", host, err)
 			}
+			if blockPrivate && isBlockedIP(ip) {
+				return nil, fmt.Errorf("doh: refusing non-public address %s (%s)", ip, host)
+			}
 			var d net.Dialer
 			return d.DialContext(ctx, network, net.JoinHostPort(ip, port))
 		},
 	}
+}
+
+// isBlockedIP reports whether an SSRF-guarded client must refuse to reach ipStr:
+// loopback (127/8, ::1), private (RFC1918 / RFC4193), link-local (incl. the
+// 169.254.169.254 cloud-metadata range), or the unspecified address. An
+// unparseable value is treated as blocked.
+func isBlockedIP(ipStr string) bool {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return true
+	}
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast() || ip.IsUnspecified()
 }

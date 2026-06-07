@@ -10,6 +10,17 @@ import (
 // filesystem path segment (Jellyfin/Plex sanitization).
 const illegalPathChars = `\/:*?"<>|`
 
+// reservedNames are Windows device names that can't be used as a path segment
+// (case-insensitive, with or without an extension). A matching segment is
+// prefixed with "_" so e.g. a series literally titled "CON" yields a valid path.
+var reservedNames = map[string]bool{
+	"CON": true, "PRN": true, "AUX": true, "NUL": true,
+	"COM1": true, "COM2": true, "COM3": true, "COM4": true, "COM5": true,
+	"COM6": true, "COM7": true, "COM8": true, "COM9": true,
+	"LPT1": true, "LPT2": true, "LPT3": true, "LPT4": true, "LPT5": true,
+	"LPT6": true, "LPT7": true, "LPT8": true, "LPT9": true,
+}
+
 // PathParams are the inputs to the Jellyfin/Plex library path builder.
 type PathParams struct {
 	EncodedRoot string // settings.encoded_root
@@ -95,7 +106,16 @@ func sanitizeSegment(s string) string {
 		return r
 	}, s)
 	s = strings.TrimRight(s, " .")
-	return strings.TrimSpace(s)
+	s = strings.TrimSpace(s)
+	// Windows reserved device names are checked on the base name (sans extension).
+	base := s
+	if dot := strings.IndexByte(s, '.'); dot > 0 {
+		base = s[:dot]
+	}
+	if reservedNames[strings.ToUpper(base)] {
+		s = "_" + s
+	}
+	return s
 }
 
 // pad2 zero-pads a non-negative int to at least two digits.

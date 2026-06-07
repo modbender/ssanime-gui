@@ -179,6 +179,10 @@ func (t Tools) Run(ctx context.Context, args []string, totalSeconds float64, onP
 func parseProgress(r interface{ Read([]byte) (int, error) }, totalSeconds float64, onProgress ProgressFunc) {
 	scanner := bufio.NewScanner(r)
 	var speed string
+	// ffmpeg emits out_time_us and out_time_ms (both microseconds) in the same
+	// progress block; prefer out_time_us and ignore out_time_ms once we've seen
+	// it, so each tick fires onProgress once rather than twice.
+	var sawMicros bool
 	for scanner.Scan() {
 		line := scanner.Text()
 		key, val, ok := strings.Cut(line, "=")
@@ -190,6 +194,11 @@ func parseProgress(r interface{ Read([]byte) (int, error) }, totalSeconds float6
 		case "speed":
 			speed = val
 		case "out_time_us", "out_time_ms":
+			if key == "out_time_us" {
+				sawMicros = true
+			} else if sawMicros {
+				continue // out_time_ms duplicate of the out_time_us we already used
+			}
 			if onProgress == nil || totalSeconds <= 0 {
 				continue
 			}

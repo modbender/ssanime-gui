@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dop251/goja"
@@ -80,7 +81,16 @@ func (v *VM) CallMethod(ctx context.Context, methodName string, args ...interfac
 	loop.Start()
 	defer loop.Terminate()
 
+	// Capture the loop's runtime so the timeout path can preempt a runaway
+	// synchronous loop (goja is not preemptible; Terminate alone can't stop a
+	// `while(true){}` that never yields back to the event loop).
+	var rtMu sync.Mutex
+	var activeRT *goja.Runtime
+
 	loop.RunOnLoop(func(rt *goja.Runtime) {
+		rtMu.Lock()
+		activeRT = rt
+		rtMu.Unlock()
 		// Inject host bindings before running the program.
 		v.bindConsole(rt)
 		v.bindFetch(loop, rt)
@@ -144,6 +154,14 @@ func (v *VM) CallMethod(ctx context.Context, methodName string, args ...interfac
 	case r := <-ch:
 		return r.val, r.err
 	case <-callCtx.Done():
+		// Interrupt any JS executing on the loop goroutine so a malicious or
+		// buggy extension stuck in a tight synchronous loop is actually torn
+		// down rather than leaking a goroutine that spins a CPU forever.
+		rtMu.Lock()
+		if activeRT != nil {
+			activeRT.Interrupt("extension call timed out")
+		}
+		rtMu.Unlock()
 		loop.Terminate()
 		return nil, fmt.Errorf("extension %s: %s: %w", v.extID, methodName, callCtx.Err())
 	}

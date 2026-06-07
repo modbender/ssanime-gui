@@ -131,6 +131,26 @@ func downloadToFile(ctx context.Context, url, destPath string, expectedSize int6
 	return nil
 }
 
+// resolveExpectedHash returns the expected SHA-256 hex digest for assetName.
+// When the spec declares a checksumAsset, the checksum file MUST be fetchable
+// and MUST contain an entry for the asset — both are hard errors, so an attacker
+// who blocks or strips the checksum can't downgrade the install to unverified.
+// A spec with no checksumAsset returns ("", nil): verification is opted out.
+func resolveExpectedHash(ctx context.Context, rel *githubRelease, spec binarySpec, assetName string) (string, error) {
+	if spec.checksumAsset == "" {
+		return "", nil
+	}
+	sums, err := checksumLines(ctx, rel, spec.checksumAsset)
+	if err != nil {
+		return "", fmt.Errorf("fetch %q: %w", spec.checksumAsset, err)
+	}
+	hash := parseChecksum(sums, assetName)
+	if hash == "" {
+		return "", fmt.Errorf("no entry for %q in %s", assetName, spec.checksumAsset)
+	}
+	return hash, nil
+}
+
 // checksumLines downloads the checksum file asset from rel and returns the
 // raw text (BSD/sha256sum format: "<hash>  <filename>").
 func checksumLines(ctx context.Context, rel *githubRelease, checksumAsset string) (string, error) {

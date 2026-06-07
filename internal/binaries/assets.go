@@ -42,7 +42,9 @@ var ffmpegSpec = binarySpec{
 		}
 		return m[key{goos, goarch}]
 	},
-	checksumAsset: "", // BtbN does not publish a checksum file per-asset
+	// BtbN publishes one combined sha256sum-format file ("<hash>  <asset>")
+	// covering every asset in the release; parseChecksum matches our asset by name.
+	checksumAsset: "checksums.sha256",
 	// BtbN archives: top-level dir is the archive name without extension, then bin/
 	// e.g. ffmpeg-master-latest-win64-gpl/bin/ffmpeg.exe
 	extractedBin: func(goos, archiveDir, name string) string {

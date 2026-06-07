@@ -285,7 +285,9 @@ func startDaemon(cfg *config.Config, logger *slog.Logger) (shutdown func(), dlQu
 	anilistClient := anilist.New()
 
 	// --- Extension manager ---
-	extManager := extension.NewManager(st, registry, resolver.HTTPClient(25*time.Second), cfg.DataDir, logger)
+	// Extensions are third-party JS pulled from user-added repos; their fetch()
+	// runs through a guarded DoH client that cannot reach loopback/private hosts.
+	extManager := extension.NewManager(st, registry, resolver.GuardedHTTPClient(25*time.Second), cfg.DataDir, logger)
 	if err := extManager.LoadAndRegisterAll(context.Background()); err != nil {
 		logger.Warn("extension: load failed (non-fatal)", "err", err)
 	}

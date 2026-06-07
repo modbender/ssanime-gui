@@ -15,6 +15,10 @@ import (
 	"github.com/modbender/ssanime-gui/internal/store"
 )
 
+// loopbackHost is a valid Host for the localGuard middleware; httptest's default
+// ("example.com") is correctly rejected as a DNS-rebinding attempt.
+const loopbackHost = "127.0.0.1:4773"
+
 // newTestServer builds a real server with a temp-file DB and all dependencies.
 func newTestServer(t *testing.T) http.Handler {
 	t.Helper()
@@ -40,6 +44,7 @@ func newTestServer(t *testing.T) http.Handler {
 func getJSON(t *testing.T, srv http.Handler, path string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Host = loopbackHost
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 	return rec
@@ -49,6 +54,7 @@ func postJSON(t *testing.T, srv http.Handler, path string, body any) *httptest.R
 	t.Helper()
 	b, _ := json.Marshal(body)
 	req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(b))
+	req.Host = loopbackHost
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
@@ -59,6 +65,7 @@ func patchJSON(t *testing.T, srv http.Handler, path string, body any) *httptest.
 	t.Helper()
 	b, _ := json.Marshal(body)
 	req := httptest.NewRequest(http.MethodPatch, path, bytes.NewReader(b))
+	req.Host = loopbackHost
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
@@ -69,6 +76,7 @@ func putJSON(t *testing.T, srv http.Handler, path string, body any) *httptest.Re
 	t.Helper()
 	b, _ := json.Marshal(body)
 	req := httptest.NewRequest(http.MethodPut, path, bytes.NewReader(b))
+	req.Host = loopbackHost
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
@@ -78,6 +86,7 @@ func putJSON(t *testing.T, srv http.Handler, path string, body any) *httptest.Re
 func deleteReq(t *testing.T, srv http.Handler, path string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodDelete, path, nil)
+	req.Host = loopbackHost
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 	return rec

@@ -2,7 +2,9 @@ package binaries
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -32,12 +34,28 @@ func provisionFFmpeg(ctx context.Context, dataDir string, onProgress ProgressFun
 		return "", err
 	}
 
+	// Resolve the expected SHA-256 BEFORE downloading; a declared-but-unobtainable
+	// checksum is a hard error, never a silent downgrade to unverified.
+	expectedHash, err := resolveExpectedHash(ctx, rel, ffmpegSpec, assetName)
+	if err != nil {
+		return "", fmt.Errorf("ffmpeg checksum: %w", err)
+	}
+
 	binDir := filepath.Join(dataDir, "bin")
 	archivePath := filepath.Join(binDir, assetName)
 
 	logger.Info("binaries: downloading ffmpeg", "url", assetURL, "bytes", assetSize)
 	if err := downloadToFile(ctx, assetURL, archivePath, assetSize, onProgress); err != nil {
 		return "", fmt.Errorf("download ffmpeg: %w", err)
+	}
+
+	if expectedHash != "" {
+		logger.Info("binaries: verifying ffmpeg sha256")
+		if err := verifyFile(archivePath, expectedHash); err != nil {
+			os.Remove(archivePath)
+			return "", fmt.Errorf("ffmpeg sha256 verification failed: %w", err)
+		}
+		logger.Info("binaries: ffmpeg sha256 OK")
 	}
 
 	// Extract into a sibling directory named after the asset (strip extension).
@@ -111,15 +129,11 @@ func provisionYtDlp(ctx context.Context, dataDir string, onProgress ProgressFunc
 		return "", err
 	}
 
-	// Fetch checksums before downloading the binary.
-	var expectedHash string
-	if ytdlpSpec.checksumAsset != "" {
-		sums, sumErr := checksumLines(ctx, rel, ytdlpSpec.checksumAsset)
-		if sumErr != nil {
-			logger.Warn("binaries: could not fetch yt-dlp checksums (skipping verification)", "err", sumErr)
-		} else {
-			expectedHash = parseChecksum(sums, assetName)
-		}
+	// Resolve the expected SHA-256 before downloading. A declared-but-unobtainable
+	// checksum is a hard error — never a silent downgrade to an unverified binary.
+	expectedHash, err := resolveExpectedHash(ctx, rel, ytdlpSpec, assetName)
+	if err != nil {
+		return "", fmt.Errorf("yt-dlp checksum: %w", err)
 	}
 
 	binDir := filepath.Join(dataDir, "bin")
@@ -273,7 +287,7 @@ func atomicCopyFile(src, dst string) error {
 	return nil
 }
 
-func copyStream(src interface{ Read([]byte) (int, error) }, dst interface{ Write([]byte) (int, error) }) (int64, error) {
+func copyStream(src io.Reader, dst io.Writer) (int64, error) {
 	buf := make([]byte, 32*1024)
 	var total int64
 	for {
@@ -286,7 +300,7 @@ func copyStream(src interface{ Read([]byte) (int, error) }, dst interface{ Write
 			}
 		}
 		if err != nil {
-			if err.Error() == "EOF" {
+			if errors.Is(err, io.EOF) {
 				return total, nil
 			}
 			return total, err

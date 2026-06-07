@@ -140,18 +140,11 @@ func (q *Queue) Paused() bool { return q.paused.Load() }
 
 func (q *Queue) worker(ctx context.Context, id int) {
 	defer q.wg.Done()
-	defer func() {
-		if r := recover(); r != nil {
-			q.logger.Error("encode worker panic", "worker", id, "panic", r)
-		}
-	}()
 
 	ticker := time.NewTicker(scanInterval)
 	defer ticker.Stop()
 	for {
-		ep, ok := q.claim(ctx)
-		if ok {
-			q.process(ctx, ep)
+		if q.tryClaimAndProcess(ctx, id) {
 			continue
 		}
 		select {
@@ -160,6 +153,24 @@ func (q *Queue) worker(ctx context.Context, id int) {
 		case <-ticker.C:
 		}
 	}
+}
+
+// tryClaimAndProcess claims one episode and processes it, returning whether work
+// was done. Its recover is a per-iteration backstop: a panic in claim() (process
+// already recovers internally) must not kill the worker and permanently shrink
+// the pool — we log it and let the loop continue.
+func (q *Queue) tryClaimAndProcess(ctx context.Context, id int) (worked bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			q.logger.Error("encode worker iteration panic", "worker", id, "panic", r)
+		}
+	}()
+	ep, ok := q.claim(ctx)
+	if !ok {
+		return false
+	}
+	q.process(ctx, ep)
+	return true
 }
 
 // claim atomically grabs the oldest downloaded episode and flips it to encoding.

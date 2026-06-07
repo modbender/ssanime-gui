@@ -59,6 +59,9 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 	r.Use(middleware.Recoverer)
 
 	r.Route("/api", func(api chi.Router) {
+		// Loopback-only host check, CSRF Origin check, and body cap on the API.
+		api.Use(localGuard)
+
 		api.Get("/healthz", h.handleHealthz)
 		api.Get("/ping", h.handlePing)
 		api.Get("/events", h.handleEvents)

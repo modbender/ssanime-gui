@@ -26,6 +26,7 @@ func newTestHandler(t *testing.T) http.Handler {
 func TestHealthz(t *testing.T) {
 	srv := newTestHandler(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/healthz", nil)
+	req.Host = loopbackHost
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 
@@ -44,6 +45,7 @@ func TestHealthz(t *testing.T) {
 func TestPing(t *testing.T) {
 	srv := newTestHandler(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/ping", nil)
+	req.Host = loopbackHost
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 
