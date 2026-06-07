@@ -1,0 +1,31 @@
+# Build output
+/ssanime
+/dist/
+/cmd/ssanime/ssanime
+*.exe
+*-linux-amd64
+*-darwin-amd64
+
+# Tooling scratch
+/.playwright-mcp/
+*.out
+
+# Vite's intermediate dir (unused — build outputs straight to internal/server/dist)
+/frontend/dist/
+# NOTE: internal/server/dist IS committed — it's go:embed-ed, so the repo must build from a clean clone.
+
+# Local runtime data
+*.db
+*.db-wal
+*.db-shm
+
+# Node / Svelte
+node_modules/
+frontend/node_modules/
+.vite/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,215 @@
+package extension
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/modbender/ssanime-gui/internal/source"
+	"github.com/modbender/ssanime-gui/internal/store"
+)
+
+// Manager owns the lifecycle of JS extensions: fetching repo indexes,
+// installing extensions into the DB, loading enabled extensions into
+// source.Registry on boot.
+type Manager struct {
+	st       *store.Store
+	registry *source.Registry
+	// httpClient is used for fetching repo index.json and JS payloads.
+	// Use the DoH-backed client so nyaa-related extension requests work.
+	httpClient *http.Client
+	// dataDir is the app-data directory; JS payloads are cached there.
+	dataDir string
+	logger  *slog.Logger
+}
+
+// NewManager builds a Manager. httpClient should be the DoH-backed client.
+func NewManager(st *store.Store, registry *source.Registry, httpClient *http.Client, dataDir string, logger *slog.Logger) *Manager {
+	return &Manager{
+		st:         st,
+		registry:   registry,
+		httpClient: httpClient,
+		dataDir:    dataDir,
+		logger:     logger,
+	}
+}
+
+// ExtensionsDir returns the directory where JS payload files are cached.
+func (m *Manager) ExtensionsDir() string {
+	return filepath.Join(m.dataDir, "extensions")
+}
+
+// FetchRepoIndex downloads a repo's index.json and returns the available extensions.
+func (m *Manager) FetchRepoIndex(ctx context.Context, indexURL string) ([]IndexEntry, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, indexURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("extension repo: build request: %w", err)
+	}
+	resp, err := m.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("extension repo %s: fetch: %w", indexURL, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("extension repo %s: HTTP %d", indexURL, resp.StatusCode)
+	}
+
+	var entries []IndexEntry
+	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
+		return nil, fmt.Errorf("extension repo %s: decode: %w", indexURL, err)
+	}
+	return entries, nil
+}
+
+// AddRepo persists a new extension repo to the DB (enabled by default).
+func (m *Manager) AddRepo(ctx context.Context, name, url string) (store.ExtensionRepo, error) {
+	return m.st.Write().CreateExtensionRepo(ctx, store.CreateExtensionRepoParams{
+		Uuid:    uuid.NewString(),
+		Name:    name,
+		Url:     url,
+		Enabled: 1,
+	})
+}
+
+// ListRepos returns all known extension repos.
+func (m *Manager) ListRepos(ctx context.Context) ([]store.ExtensionRepo, error) {
+	return m.st.Read().ListExtensionRepos(ctx)
+}
+
+// InstallExtension downloads a JS extension from the repo index entry and
+// upserts it into the extensions table. It is enabled by default.
+func (m *Manager) InstallExtension(ctx context.Context, entry IndexEntry, repoID int64) (store.Extension, error) {
+	payload, err := m.downloadPayload(ctx, entry.Code)
+	if err != nil {
+		return store.Extension{}, fmt.Errorf("install %s: download payload: %w", entry.ID, err)
+	}
+
+	version := entry.Version
+	if version == "" {
+		version = "0.0.1"
+	}
+	sourceURL := entry.Code
+
+	ext, err := m.st.Write().UpsertExtensionByExtID(ctx, store.UpsertExtensionByExtIDParams{
+		Uuid:      uuid.NewString(),
+		RepoID:    &repoID,
+		ExtID:     entry.ID,
+		Name:      entry.Name,
+		Type:      ExtTypeTorrent,
+		Lang:      "javascript",
+		Version:   &version,
+		SourceUrl: &sourceURL,
+		Payload:   &payload,
+		Enabled:   1,
+		IsBuiltin: 0,
+	})
+	if err != nil {
+		return store.Extension{}, fmt.Errorf("install %s: upsert: %w", entry.ID, err)
+	}
+	m.logger.Info("extension installed", "id", entry.ID, "name", entry.Name, "version", version)
+	return ext, nil
+}
+
+// EnableExtension sets the enabled flag and, if loaded, registers the provider.
+func (m *Manager) EnableExtension(ctx context.Context, dbID int64) error {
+	return m.st.Write().SetExtensionEnabled(ctx, store.SetExtensionEnabledParams{
+		ID:      dbID,
+		Enabled: 1,
+	})
+}
+
+// DisableExtension clears the enabled flag. The provider stays in the registry
+// until next boot (runtime disable-without-restart is a future extension).
+func (m *Manager) DisableExtension(ctx context.Context, dbID int64) error {
+	return m.st.Write().SetExtensionEnabled(ctx, store.SetExtensionEnabledParams{
+		ID:      dbID,
+		Enabled: 0,
+	})
+}
+
+// SyncRepo fetches the repo's index and upserts all torrent extensions.
+func (m *Manager) SyncRepo(ctx context.Context, repo store.ExtensionRepo) error {
+	entries, err := m.FetchRepoIndex(ctx, repo.Url)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if !strings.EqualFold(e.Type, ExtTypeTorrent) {
+			continue
+		}
+		if _, err := m.InstallExtension(ctx, e, repo.ID); err != nil {
+			m.logger.Warn("sync: install failed", "id", e.ID, "err", err)
+		}
+	}
+	if err := m.st.Write().MarkExtensionRepoSynced(ctx, repo.ID); err != nil {
+		return err
+	}
+	return nil
+}
+
+// LoadAndRegisterAll loads every enabled torrent extension from the DB and
+// registers it into the source.Registry. Called once on boot, before the
+// poller starts.
+func (m *Manager) LoadAndRegisterAll(ctx context.Context) error {
+	rows, err := m.st.Read().ListEnabledExtensionsByType(ctx, ExtTypeTorrent)
+	if err != nil {
+		return fmt.Errorf("extension: load enabled: %w", err)
+	}
+
+	loaded := 0
+	for _, row := range rows {
+		if row.IsBuiltin != 0 {
+			continue // native providers are already in the registry
+		}
+		if row.Payload == nil || *row.Payload == "" {
+			m.logger.Warn("extension: no payload, skipping", "id", row.ExtID)
+			continue
+		}
+
+		p, err := NewJSProvider(row.ExtID, row.Name, *row.Payload, m.httpClient, m.logger)
+		if err != nil {
+			m.logger.Warn("extension: compile failed", "id", row.ExtID, "err", err)
+			continue
+		}
+		m.registry.Register(p)
+		loaded++
+		m.logger.Info("extension: registered JS provider", "id", row.ExtID, "name", row.Name)
+	}
+
+	m.logger.Info("extensions: loaded", "count", loaded, "total", len(rows))
+	return nil
+}
+
+// downloadPayload fetches a JS payload from url.
+func (m *Manager) downloadPayload(ctx context.Context, url string) (string, error) {
+	dlCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(dlCtx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := m.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTP %d fetching %s", resp.StatusCode, url)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 5<<20)) // 5 MB cap
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}

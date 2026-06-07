@@ -1,0 +1,204 @@
+// Package anilist is a minimal AniList GraphQL client. It queries the public
+// (no-auth) https://graphql.anilist.co endpoint for anime media metadata used to
+// enrich series rows and feed the sourcing layer's SmartSearch. Responses are
+// cached in-memory (bounded) and the client backs off politely on HTTP 429.
+package anilist
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strconv"
+	"sync"
+	"time"
+)
+
+// Endpoint is the public AniList GraphQL API.
+const Endpoint = "https://graphql.anilist.co"
+
+const (
+	defaultTimeout  = 15 * time.Second
+	defaultCacheCap = 512
+	maxRetries      = 3
+)
+
+// Media is the trimmed AniList media metadata this app needs.
+type Media struct {
+	ID           int      `json:"id"`
+	IDMal        *int     `json:"idMal"`
+	RomajiTitle  string   `json:"romajiTitle"`
+	EnglishTitle string   `json:"englishTitle"`
+	NativeTitle  string   `json:"nativeTitle"`
+	Format       string   `json:"format"`       // TV|MOVIE|OVA|ONA|SPECIAL|...
+	Status       string   `json:"status"`       // RELEASING|FINISHED|NOT_YET_RELEASED|CANCELLED|HIATUS
+	EpisodeCount int      `json:"episodeCount"` // 0 when unknown
+	Season       string   `json:"season"`       // WINTER|SPRING|SUMMER|FALL
+	SeasonYear   int      `json:"seasonYear"`
+	CoverImage   string   `json:"coverImage"`
+	BannerImage  string   `json:"bannerImage"`
+	Synonyms     []string `json:"synonyms"`
+	IsAdult      bool     `json:"isAdult"`
+}
+
+// Client is a cached AniList GraphQL client. Safe for concurrent use.
+type Client struct {
+	http     *http.Client
+	endpoint string
+
+	mu       sync.Mutex
+	cache    map[string]Media // key -> media
+	order    []string         // insertion order for bounded eviction
+	cacheCap int
+}
+
+// Option configures a Client.
+type Option func(*Client)
+
+// WithHTTPClient overrides the HTTP client (e.g. to share a transport).
+func WithHTTPClient(c *http.Client) Option {
+	return func(cl *Client) {
+		if c != nil {
+			cl.http = c
+		}
+	}
+}
+
+// WithCacheCap sets the maximum number of cached media (FIFO eviction).
+func WithCacheCap(n int) Option {
+	return func(cl *Client) {
+		if n > 0 {
+			cl.cacheCap = n
+		}
+	}
+}
+
+// New builds an AniList client.
+func New(opts ...Option) *Client {
+	c := &Client{
+		http:     &http.Client{Timeout: defaultTimeout},
+		endpoint: Endpoint,
+		cache:    make(map[string]Media),
+		cacheCap: defaultCacheCap,
+	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
+}
+
+// GetMedia fetches a media by AniList id, serving from cache when present.
+func (c *Client) GetMedia(ctx context.Context, id int) (Media, error) {
+	key := "id:" + strconv.Itoa(id)
+	if m, ok := c.cacheGet(key); ok {
+		return m, nil
+	}
+	m, err := c.query(ctx, mediaByIDQuery, map[string]any{"id": id})
+	if err != nil {
+		return Media{}, err
+	}
+	c.cachePut(key, m)
+	return m, nil
+}
+
+// SearchMedia fetches the top anime media matching a free-text query.
+func (c *Client) SearchMedia(ctx context.Context, query string) (Media, error) {
+	key := "search:" + query
+	if m, ok := c.cacheGet(key); ok {
+		return m, nil
+	}
+	m, err := c.query(ctx, mediaSearchQuery, map[string]any{"search": query})
+	if err != nil {
+		return Media{}, err
+	}
+	c.cachePut(key, m)
+	return m, nil
+}
+
+// query POSTs a GraphQL request and maps the single Media result, retrying with
+// backoff on 429 (honoring Retry-After when present).
+func (c *Client) query(ctx context.Context, gql string, vars map[string]any) (Media, error) {
+	payload, err := json.Marshal(map[string]any{"query": gql, "variables": vars})
+	if err != nil {
+		return Media{}, err
+	}
+
+	var lastErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(payload))
+		if err != nil {
+			return Media{}, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := c.http.Do(req)
+		if err != nil {
+			return Media{}, fmt.Errorf("anilist: request: %w", err)
+		}
+
+		if resp.StatusCode == http.StatusTooManyRequests {
+			wait := retryAfter(resp.Header.Get("Retry-After"), attempt)
+			resp.Body.Close()
+			lastErr = fmt.Errorf("anilist: rate limited (429)")
+			select {
+			case <-ctx.Done():
+				return Media{}, ctx.Err()
+			case <-time.After(wait):
+			}
+			continue
+		}
+
+		body, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			return Media{}, readErr
+		}
+		if resp.StatusCode != http.StatusOK {
+			return Media{}, fmt.Errorf("anilist: status %s: %s", resp.Status, truncate(body, 200))
+		}
+		return decodeMedia(body)
+	}
+	return Media{}, lastErr
+}
+
+// retryAfter computes the wait before a retry: the Retry-After header (seconds)
+// when present, else exponential backoff (1s, 2s, 4s).
+func retryAfter(header string, attempt int) time.Duration {
+	if header != "" {
+		if secs, err := strconv.Atoi(header); err == nil && secs > 0 {
+			return time.Duration(secs) * time.Second
+		}
+	}
+	return time.Duration(1<<attempt) * time.Second
+}
+
+func (c *Client) cacheGet(key string) (Media, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	m, ok := c.cache[key]
+	return m, ok
+}
+
+func (c *Client) cachePut(key string, m Media) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, exists := c.cache[key]; !exists {
+		c.order = append(c.order, key)
+		for len(c.order) > c.cacheCap {
+			oldest := c.order[0]
+			c.order = c.order[1:]
+			delete(c.cache, oldest)
+		}
+	}
+	c.cache[key] = m
+}
+
+func truncate(b []byte, n int) string {
+	if len(b) <= n {
+		return string(b)
+	}
+	return string(b[:n]) + "…"
+}
