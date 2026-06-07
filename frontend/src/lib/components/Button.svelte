@@ -25,18 +25,21 @@
   } = $props()
 
   const variantClasses: Record<Variant, string> = {
-    default: 'bg-[#7c6af0] hover:bg-[#6a58e0] text-white',
-    secondary: 'bg-[#18181f] hover:bg-[#2a2a35] text-[#e8e8f0] border border-[#2a2a35]',
-    ghost: 'hover:bg-[#18181f] text-[#e8e8f0]',
-    destructive: 'bg-red-600 hover:bg-red-700 text-white',
-    outline: 'border border-[#2a2a35] hover:bg-[#18181f] text-[#e8e8f0]',
+    default:
+      'bg-[var(--accent)] text-white shadow-[0_4px_18px_-6px_rgb(var(--accent-rgb)/0.7)] hover:brightness-110',
+    secondary:
+      'bg-[var(--color-surface-2)] text-[var(--color-text)] border border-[var(--color-border)] hover:bg-[var(--color-surface-3)] hover:border-[var(--color-border-strong)]',
+    ghost: 'text-[var(--color-text-dim)] hover:bg-white/5 hover:text-[var(--color-text)]',
+    destructive: 'bg-[var(--color-error)] text-white hover:brightness-110',
+    outline:
+      'border border-[var(--color-border)] text-[var(--color-text-dim)] hover:bg-white/5 hover:text-[var(--color-text)] hover:border-[var(--color-border-strong)]',
   }
 
   const sizeClasses: Record<Size, string> = {
-    sm: 'h-7 px-2.5 text-xs rounded-md',
-    md: 'h-9 px-4 text-sm rounded-lg',
-    lg: 'h-10 px-5 text-sm rounded-lg',
-    icon: 'h-8 w-8 rounded-md flex items-center justify-center',
+    sm: 'h-7 px-3 text-xs rounded-lg',
+    md: 'h-9 px-4 text-[13px] rounded-xl',
+    lg: 'h-11 px-6 text-sm rounded-xl',
+    icon: 'h-9 w-9 rounded-xl flex items-center justify-center',
   }
 </script>
 
@@ -46,7 +49,9 @@
   {title}
   onclick={onclick}
   class={cn(
-    'inline-flex items-center gap-1.5 font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-[#7c6af0]',
+    'inline-flex items-center justify-center gap-1.5 font-medium cursor-pointer select-none',
+    'transition-[background,transform,filter,border-color,box-shadow] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]',
+    'active:scale-[0.97] disabled:opacity-45 disabled:cursor-not-allowed disabled:active:scale-100',
     variantClasses[variant],
     sizeClasses[size],
     cls,

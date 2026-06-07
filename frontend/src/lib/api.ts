@@ -50,6 +50,7 @@ export interface SeriesProgress {
   poster_path: string | null
   cover_image_url: string | null
   banner_image_url: string | null
+  cover_color: string | null
   anilist_id: number | null
   romaji_title: string | null
   english_title: string | null
@@ -113,6 +114,7 @@ export interface SeriesDetail {
   poster_path: string | null
   cover_image_url: string | null
   banner_image_url: string | null
+  cover_color: string | null
   anilist_id: number | null
   romaji_title: string | null
   english_title: string | null

@@ -38,6 +38,7 @@ type Media struct {
 	Season       string   `json:"season"`       // WINTER|SPRING|SUMMER|FALL
 	SeasonYear   int      `json:"seasonYear"`
 	CoverImage   string   `json:"coverImage"`
+	CoverColor   string   `json:"coverColor"`
 	BannerImage  string   `json:"bannerImage"`
 	Synonyms     []string `json:"synonyms"`
 	IsAdult      bool     `json:"isAdult"`

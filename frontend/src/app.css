@@ -1,49 +1,145 @@
 @import "tailwindcss";
 
+/* ------------------------------------------------------------------ */
+/*  ssanime — design system                                            */
+/*  Seanime/Hayase-flavoured neutral-dark palette. Near-black zinc      */
+/*  surfaces, hairline borders, one restrained violet accent that can   */
+/*  be overridden per-series via the --accent CSS variable.             */
+/* ------------------------------------------------------------------ */
+
 @theme {
-  --color-bg: #0a0a0f;
-  --color-surface: #111118;
-  --color-surface-2: #18181f;
-  --color-border: #2a2a35;
-  --color-muted: #6b6b80;
-  --color-text: #e8e8f0;
+  /* Surfaces — near-black, climbing in lightness */
+  --color-bg: #08080b;
+  --color-surface: #0e0e13;
+  --color-surface-2: #16161d;
+  --color-surface-3: #1d1d26;
+  --color-elevated: #212129;
+
+  /* Hairlines */
+  --color-border: #232330;
+  --color-border-strong: #32323f;
+
+  /* Text */
+  --color-text: #ededf2;
+  --color-text-dim: #a4a4b4;
+  --color-muted: #6d6d80;
+  --color-faint: #45454f;
+
+  /* Accent — default violet; runtime-overridable via --accent */
   --color-accent: #7c6af0;
-  --color-accent-hover: #6a58e0;
-  --color-success: #22c55e;
-  --color-warning: #f59e0b;
-  --color-error: #ef4444;
-  --color-info: #3b82f6;
+  --color-accent-hover: #8b7af5;
+  --color-accent-soft: #7c6af026;
+
+  /* Semantic */
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-error: #f87171;
+  --color-info: #60a5fa;
+
+  /* Radii — concentric scale */
+  --radius-card: 0.875rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.75rem;
+
+  /* Easing */
+  --ease-fluid: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --font-sans: 'Plus Jakarta Sans Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* Per-series accent override hook. Components read var(--accent). */
+:root {
+  --accent: #7c6af0;
+  --accent-rgb: 124 106 240;
 }
 
 * {
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
-  background: #0a0a0f;
-  color: #e8e8f0;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
   height: 100%;
   font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 #app {
   height: 100%;
 }
 
+::selection {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Scrollbars — thin, surface-toned */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #111118;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2a2a35;
-  border-radius: 3px;
+  background: var(--color-border);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #6b6b80;
+  background: var(--color-border-strong);
+  background-clip: padding-box;
+}
+
+/* Horizontal carousels: hide the scrollbar but keep scrolling */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Focus rings — accent, generous, only on keyboard */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@keyframes ss-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-up {
+  animation: ss-fade-up 0.6s var(--ease-fluid) both;
+}
+
+@keyframes ss-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade {
+  animation: ss-fade 0.5s var(--ease-fluid) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

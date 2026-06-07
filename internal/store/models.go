@@ -174,6 +174,7 @@ type Series struct {
 	Synonyms         *string `json:"synonyms"`
 	CoverImageUrl    *string `json:"cover_image_url"`
 	BannerImageUrl   *string `json:"banner_image_url"`
+	CoverColor       *string `json:"cover_color"`
 	Season           *string `json:"season"`
 	SeasonYear       *int64  `json:"season_year"`
 	AddedAt          int64   `json:"added_at"`

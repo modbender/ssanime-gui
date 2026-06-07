@@ -17,7 +17,7 @@
 </script>
 
 <Router>
-  <div class="flex h-screen bg-[#0a0a0f] text-[#e8e8f0] overflow-hidden">
+  <div class="flex h-screen bg-[var(--color-bg)] text-[var(--color-text)] overflow-hidden">
     <Sidebar />
     <main class="flex-1 overflow-hidden flex flex-col min-w-0">
       <Route path="/">

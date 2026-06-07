@@ -28,7 +28,9 @@
   oninput={oninput}
   onchange={onchange}
   class={cn(
-    'w-full h-9 rounded-lg border border-[#2a2a35] bg-[#111118] px-3 text-sm text-[#e8e8f0] placeholder:text-[#6b6b80] focus:outline-none focus:border-[#7c6af0] transition-colors disabled:opacity-50',
+    'w-full h-9 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm text-[var(--color-text)]',
+    'placeholder:text-[var(--color-muted)] transition-colors duration-200',
+    'focus:outline-none focus:border-[var(--accent)] focus:bg-[var(--color-surface-2)] disabled:opacity-50',
     cls,
   )}
 />

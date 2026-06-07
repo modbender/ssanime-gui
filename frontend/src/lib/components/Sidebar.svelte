@@ -4,15 +4,14 @@
   import logoMark from '$lib/assets/logo-mark.svg?raw'
 
   const navItems = [
-    { href: '/', label: 'Library', icon: 'M4 6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6zm10 0a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2V6zM4 16a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2zm10 0a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-2z' },
-    { href: '/queue', label: 'Queue', icon: 'M4 6h16M4 10h16M4 14h16M4 18h16' },
-    { href: '/feeds', label: 'Auto-downloader', icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0 1 18 14.158V11a6.002 6.002 0 0 0-4-5.659V5a2 2 0 1 0-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 1 1-6 0v-1m6 0H9' },
-    { href: '/profiles', label: 'Profiles', icon: 'M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18' },
-    { href: '/settings', label: 'Settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 0 0-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 0 0-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 0 0-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 0 0-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 0 0 1.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z' },
-    { href: '/logs', label: 'Logs', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z' },
+    { href: '/', label: 'Home', icon: 'M3 10.5 12 3l9 7.5M5 9v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9' },
+    { href: '/queue', label: 'Queue', icon: 'M4 7h16M4 12h16M4 17h10' },
+    { href: '/feeds', label: 'Auto-downloader', icon: 'M5 5a14 14 0 0 1 14 14M5 12a7 7 0 0 1 7 7M6.5 18.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0Z' },
+    { href: '/profiles', label: 'Encode profiles', icon: 'M12 3 4 7v6c0 5 3.5 7.5 8 8.5 4.5-1 8-3.5 8-8.5V7l-8-4Z' },
+    { href: '/settings', label: 'Settings', icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z' },
+    { href: '/logs', label: 'Logs', icon: 'M8 6h11M8 12h11M8 18h11M3.5 6h.01M3.5 12h.01M3.5 18h.01' },
   ]
 
-  // Active path detection — use window.location since svelte-routing doesn't expose a reactive store easily
   let currentPath = $state(window.location.pathname)
 
   function isActive(href: string) {
@@ -20,7 +19,6 @@
     return currentPath.startsWith(href)
   }
 
-  // Update on navigation
   $effect(() => {
     const handler = () => { currentPath = window.location.pathname }
     window.addEventListener('popstate', handler)
@@ -28,40 +26,59 @@
   })
 </script>
 
-<aside class="flex flex-col h-full w-56 bg-[#0d0d14] border-r border-[#2a2a35] shrink-0">
-  <!-- Logo -->
-  <div class="flex items-center gap-2.5 px-4 h-14 border-b border-[#2a2a35]">
-    <!-- Mark: three converging chevrons = compression / small size animations -->
-    <div class="w-7 h-7 shrink-0 flex items-center justify-center">
+<aside class="relative flex flex-col items-center h-full w-[68px] shrink-0 bg-[var(--color-surface)] border-r border-[var(--color-border)] py-4 z-20">
+  <!-- Logo mark -->
+  <a
+    href="/"
+    onclick={() => { currentPath = '/' }}
+    class="group relative mb-6 w-10 h-10 rounded-xl bg-white/[0.04] ring-1 ring-white/10 flex items-center justify-center transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:scale-105"
+    aria-label="ssanime — home"
+  >
+    <div class="w-5 h-5 [&_svg]:w-full [&_svg]:h-full">
       {@html logoMark}
     </div>
-    <span class="text-[#e8e8f0] font-semibold text-sm tracking-tight">ssanime</span>
-
     <!-- SSE connection dot -->
-    <div
-      class="ml-auto w-2 h-2 rounded-full shrink-0 {sseState.connected ? 'bg-green-400' : 'bg-red-400'}"
-      title={sseState.connected ? 'Connected' : 'Disconnected'}
-    ></div>
-  </div>
+    <span
+      class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-[var(--color-surface)] transition-colors duration-300 {sseState.connected ? 'bg-[var(--color-success)]' : 'bg-[var(--color-error)]'}"
+      title={sseState.connected ? 'Connected to daemon' : 'Disconnected'}
+    ></span>
+  </a>
 
-  <!-- Nav -->
-  <nav class="flex-1 py-3 px-2 flex flex-col gap-0.5" aria-label="Main navigation">
+  <!-- Nav rail -->
+  <nav class="flex-1 flex flex-col items-center gap-1.5" aria-label="Main navigation">
     {#each navItems as item}
+      {@const active = isActive(item.href)}
       <Link
         to={item.href}
-        class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors group {isActive(item.href) ? 'bg-[#7c6af0]/15 text-[#e8e8f0]' : 'text-[#6b6b80] hover:bg-[#18181f] hover:text-[#e8e8f0]'}"
         onclick={() => { currentPath = item.href }}
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="shrink-0">
-          <path d={item.icon} stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        {item.label}
+        <span
+          class="group relative flex items-center justify-center w-11 h-11 rounded-xl transition-[background,color,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] {active
+            ? 'bg-[var(--accent-soft)] text-[var(--color-text)]'
+            : 'text-[var(--color-muted)] hover:bg-white/5 hover:text-[var(--color-text)]'}"
+        >
+          <!-- active indicator pip -->
+          <span
+            class="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-full bg-[var(--accent)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] {active ? 'opacity-100' : 'opacity-0 -translate-x-1'}"
+          ></span>
+
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:scale-110">
+            <path d={item.icon} stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+
+          <!-- hover tooltip -->
+          <span
+            class="pointer-events-none absolute left-[120%] top-1/2 -translate-y-1/2 translate-x-1 whitespace-nowrap rounded-lg bg-[var(--color-elevated)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-text)] ring-1 ring-white/10 shadow-xl opacity-0 transition-all duration-200 ease-out group-hover:opacity-100 group-hover:translate-x-0 z-30"
+          >
+            {item.label}
+          </span>
+        </span>
       </Link>
     {/each}
   </nav>
 
   <!-- Version footer -->
-  <div class="px-4 py-3 border-t border-[#2a2a35] text-xs text-[#6b6b80]">
-    ssanime-gui v0.1
+  <div class="mt-4 text-[9px] font-medium tracking-wider text-[var(--color-faint)] [writing-mode:vertical-rl] rotate-180 select-none">
+    v0.1
   </div>
 </aside>

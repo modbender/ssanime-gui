@@ -5,6 +5,32 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+/** Default accent (violet) used when a series has no cover_color. */
+export const DEFAULT_ACCENT = '#7c6af0'
+
+/** Parse a #rrggbb / #rgb hex into an "r g b" channel string for CSS color-mix / rgb(). */
+export function hexToRgbChannels(hex: string | null | undefined): string {
+  if (!hex) return '124 106 240'
+  let h = hex.trim().replace('#', '')
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('')
+  if (h.length !== 6 || /[^0-9a-fA-F]/.test(h)) return '124 106 240'
+  const n = parseInt(h, 16)
+  return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`
+}
+
+/**
+ * Resolve a usable accent hex from a series' cover_color, with a graceful
+ * fallback to the default violet when the value is null/blank/invalid.
+ */
+export function resolveAccent(coverColor: string | null | undefined): string {
+  if (!coverColor) return DEFAULT_ACCENT
+  const h = coverColor.trim()
+  if (/^#?[0-9a-fA-F]{3}$|^#?[0-9a-fA-F]{6}$/.test(h)) {
+    return h.startsWith('#') ? h : `#${h}`
+  }
+  return DEFAULT_ACCENT
+}
+
 export function formatBytes(bytes: number | null | undefined): string {
   if (bytes == null || bytes === 0) return '0 B'
   const k = 1024

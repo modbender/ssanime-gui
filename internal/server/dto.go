@@ -16,6 +16,7 @@ type SeriesProgress struct {
 	PosterPath        *string `json:"poster_path"`
 	CoverImageURL     *string `json:"cover_image_url"`
 	BannerImageURL    *string `json:"banner_image_url"`
+	CoverColor        *string `json:"cover_color"`
 	AnilistID         *int64  `json:"anilist_id"`
 	RomajiTitle       *string `json:"romaji_title"`
 	EnglishTitle      *string `json:"english_title"`
@@ -45,6 +46,7 @@ type SeriesDetail struct {
 	PosterPath       *string         `json:"poster_path"`
 	CoverImageURL    *string         `json:"cover_image_url"`
 	BannerImageURL   *string         `json:"banner_image_url"`
+	CoverColor       *string         `json:"cover_color"`
 	AnilistID        *int64          `json:"anilist_id"`
 	RomajiTitle      *string         `json:"romaji_title"`
 	EnglishTitle     *string         `json:"english_title"`

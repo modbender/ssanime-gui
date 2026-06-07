@@ -16,7 +16,7 @@ const mediaFields = `
     seasonYear
     isAdult
     title { romaji english native }
-    coverImage { large extraLarge }
+    coverImage { large extraLarge color }
     bannerImage
     synonyms`
 
@@ -60,6 +60,7 @@ type rawMedia struct {
 	CoverImage struct {
 		Large      string `json:"large"`
 		ExtraLarge string `json:"extraLarge"`
+		Color      string `json:"color"`
 	} `json:"coverImage"`
 	BannerImage string   `json:"bannerImage"`
 	Synonyms    []string `json:"synonyms"`
@@ -94,6 +95,7 @@ func decodeMedia(body []byte) (Media, error) {
 		Season:       m.Season,
 		SeasonYear:   m.SeasonYear,
 		CoverImage:   cover,
+		CoverColor:   m.CoverImage.Color,
 		BannerImage:  m.BannerImage,
 		Synonyms:     m.Synonyms,
 		IsAdult:      m.IsAdult,

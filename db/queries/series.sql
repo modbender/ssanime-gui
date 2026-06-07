@@ -45,9 +45,9 @@ INSERT INTO series (
     uuid, title, feed_title, alt_titles, season_number, subscribed, favorite,
     airing_status, poster_path, poster_portrait, default_profile_id,
     anilist_id, mal_id, romaji_title, english_title, format, status,
-    episode_count, synonyms, cover_image_url, banner_image_url, season, season_year
+    episode_count, synonyms, cover_image_url, banner_image_url, cover_color, season, season_year
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 RETURNING *;
 
@@ -58,7 +58,7 @@ UPDATE series SET
     poster_portrait = ?, default_profile_id = ?, anilist_id = ?, mal_id = ?,
     romaji_title = ?, english_title = ?, format = ?, status = ?,
     episode_count = ?, synonyms = ?, cover_image_url = ?, banner_image_url = ?,
-    season = ?, season_year = ?, modified_at = unixepoch()
+    cover_color = ?, season = ?, season_year = ?, modified_at = unixepoch()
 WHERE id = ?
 RETURNING *;
 

@@ -105,6 +105,7 @@ func (h *Handler) handleListSeries(w http.ResponseWriter, r *http.Request) {
 			PosterPath:        row.PosterPath,
 			CoverImageURL:     row.CoverImageUrl,
 			BannerImageURL:    row.BannerImageUrl,
+			CoverColor:        row.CoverColor,
 			AnilistID:         row.AnilistID,
 			RomajiTitle:       row.RomajiTitle,
 			EnglishTitle:      row.EnglishTitle,
@@ -171,6 +172,7 @@ func (h *Handler) handleGetSeries(w http.ResponseWriter, r *http.Request) {
 		PosterPath:       series.PosterPath,
 		CoverImageURL:    series.CoverImageUrl,
 		BannerImageURL:   series.BannerImageUrl,
+		CoverColor:       series.CoverColor,
 		AnilistID:        series.AnilistID,
 		RomajiTitle:      series.RomajiTitle,
 		EnglishTitle:     series.EnglishTitle,
@@ -245,6 +247,9 @@ func (h *Handler) handleCreateSeries(w http.ResponseWriter, r *http.Request) {
 			if m.BannerImage != "" {
 				params.BannerImageUrl = &m.BannerImage
 			}
+			if m.CoverColor != "" {
+				params.CoverColor = &m.CoverColor
+			}
 			if m.Season != "" {
 				params.Season = &m.Season
 			}
@@ -289,6 +294,9 @@ func (h *Handler) handleCreateSeries(w http.ResponseWriter, r *http.Request) {
 				}
 				if m.BannerImage != "" {
 					params.BannerImageUrl = &m.BannerImage
+				}
+				if m.CoverColor != "" {
+					params.CoverColor = &m.CoverColor
 				}
 			}
 		}
@@ -382,6 +390,7 @@ func (h *Handler) handlePatchSeries(w http.ResponseWriter, r *http.Request) {
 			Synonyms:         series.Synonyms,
 			CoverImageUrl:    series.CoverImageUrl,
 			BannerImageUrl:   series.BannerImageUrl,
+			CoverColor:       series.CoverColor,
 			Season:           series.Season,
 			SeasonYear:       series.SeasonYear,
 		}
