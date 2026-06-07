@@ -9,7 +9,7 @@
   "app": {
     "windows": [],
     "security": {
-      "csp": "default-src 'self' http://localhost:4773 http://127.0.0.1:4773; connect-src 'self' http://localhost:4773 http://127.0.0.1:4773 ws://localhost:4773 ws://127.0.0.1:4773; img-src 'self' http://localhost:4773 http://127.0.0.1:4773 data: blob:; media-src 'self' http://localhost:4773 http://127.0.0.1:4773; style-src 'self' 'unsafe-inline'; script-src 'self'"
+      "csp": "default-src 'self' http://localhost:4773 http://127.0.0.1:4773; connect-src 'self' http://localhost:4773 http://127.0.0.1:4773 ws://localhost:4773 ws://127.0.0.1:4773; img-src 'self' http://localhost:4773 http://127.0.0.1:4773 data: blob:; media-src 'self' http://localhost:4773 http://127.0.0.1:4773; style-src 'self' 'unsafe-inline' http://localhost:4773 http://127.0.0.1:4773; script-src 'self' 'unsafe-inline' http://localhost:4773 http://127.0.0.1:4773"
     }
   },
   "bundle": {

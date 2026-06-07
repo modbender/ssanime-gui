@@ -20,3 +20,14 @@ tauri-plugin-shell = "2"
 tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# Windows: assign the sidecar to a Job Object with KILL_ON_JOB_CLOSE so the OS
+# tears it down whenever THIS process dies — including crash / Task-Manager kill,
+# where RunEvent::Exit never fires. This is the only reliable Windows mechanism.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }

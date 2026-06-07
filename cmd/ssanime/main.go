@@ -48,11 +48,18 @@ import (
 )
 
 func main() {
-	// Parse --no-open flag; avoid the flag package to prevent conflicts with systray.
+	// Parse flags; avoid the flag package to prevent conflicts with systray.
+	// --no-open: suppress auto-opening the browser tab.
+	// --headless: run server + workers without the systray (used by the Tauri desktop shell).
 	noOpen := false
+	headless := false
 	for _, arg := range os.Args[1:] {
-		if arg == "--no-open" || arg == "-no-open" {
+		switch arg {
+		case "--no-open", "-no-open":
 			noOpen = true
+		case "--headless", "-headless":
+			headless = true
+			noOpen = true // headless implies no-open
 		}
 	}
 
@@ -71,7 +78,15 @@ func main() {
 		defer logFile.Close()
 	}
 
-	logger.Info("starting", "app", config.AppName, "dataDir", cfg.DataDir, "port", cfg.Port)
+	logger.Info("starting", "app", config.AppName, "dataDir", cfg.DataDir, "port", cfg.Port, "headless", headless)
+
+	if headless {
+		// Headless mode: used by the Tauri desktop shell. Run the full daemon
+		// (server + workers) but without the systray. Block until SIGINT or
+		// parent process kills us, then execute graceful LIFO shutdown.
+		runHeadless(cfg, logger)
+		return
+	}
 
 	// daemonShutdown is populated by startDaemonFull inside onReady.
 	// onExit (called on the systray event-loop thread when Quit fires) calls it.
@@ -84,6 +99,42 @@ func main() {
 		onReady(cfg, logger, noOpen, &daemonShutdown),
 		onExit(&daemonShutdown, logger),
 	)
+}
+
+// runHeadless starts the full daemon (store, hub, queues, HTTP server) without
+// a systray. It blocks until SIGINT or SIGTERM, then runs graceful LIFO shutdown.
+// This is the mode used when the Tauri desktop shell owns the process lifetime.
+func runHeadless(cfg *config.Config, logger *slog.Logger) {
+	shutdown, _, _ := startDaemon(cfg, logger)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// SIGINT (manual run / Ctrl-C).
+	go func() {
+		sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer stop()
+		<-sigCtx.Done()
+		cancel()
+	}()
+
+	// Die-with-parent: when launched by the Tauri shell, our stdin is an anonymous
+	// pipe held by that parent. If the parent exits — even via crash or force-kill —
+	// the OS closes the pipe and the read returns EOF, so we shut down instead of
+	// orphaning. Only armed when stdin is actually a pipe, so a standalone
+	// `--headless` run (console / null stdin) still relies on SIGINT.
+	if fi, err := os.Stdin.Stat(); err == nil && fi.Mode()&os.ModeNamedPipe != 0 {
+		go func() {
+			_, _ = io.Copy(io.Discard, os.Stdin)
+			logger.Info("headless: parent pipe closed, shutting down")
+			cancel()
+		}()
+	}
+
+	<-ctx.Done()
+	logger.Info("headless: shutting down")
+	shutdown()
+	logger.Info("headless: shutdown complete")
 }
 
 // onReady returns the systray onReady callback. It runs in its own goroutine.

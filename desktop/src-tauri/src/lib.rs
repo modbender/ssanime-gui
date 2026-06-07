@@ -1,19 +1,39 @@
 /// ssanime-gui desktop shell — Tauri v2
 ///
 /// Lifecycle:
-///   1. App starts up.
-///   2. setup() spawns the Go sidecar (`binaries/ssanime`) with `--no-open`.
-///   3. A background task polls `127.0.0.1:4773` (TCP) until the daemon accepts.
-///   4. Once ready, it opens a `WebviewWindow` pointed at `http://127.0.0.1:4773/`.
-///   5. On app exit (`RunEvent::Exit`), the sidecar child is killed so no orphan remains.
+///   1. setup() runs on the main thread: creates "main" window immediately, loading
+///      the bundled placeholder page (desktop/src-tauri/ui-placeholder/index.html).
+///      The window is visible instantly — no waiting.
+///   2. A background std::thread spawns the Go sidecar with --no-open --headless.
+///   3. The background thread polls 127.0.0.1:4773 (TCP) for up to 30s.
+///   4. Once the daemon accepts connections, it calls window.navigate(daemon_url)
+///      to redirect the already-visible window to the real UI.
+///   5. On app exit (RunEvent::Exit) the sidecar child is killed so no orphan remains.
+///
+/// Orphan safety on Windows:
+///   RunEvent::Exit covers a graceful quit, but NOT a crash or a Task-Manager
+///   force-kill of this process. To guarantee the sidecar never outlives us, on
+///   Windows we put it in a Job Object flagged JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE.
+///   The job's only handle is held by this process; when we die — by any means —
+///   the OS closes that handle and kills everything in the job (the sidecar).
+///
+/// Why the window is created in setup() rather than a background thread:
+///   On Windows, WebView2 window creation must happen on the main OS thread.
+///   setup() is called on the main thread. Attempting to build a WebviewWindow from
+///   a spawned thread (or async task) silently produces no window on Windows.
+///
+/// Why we use std::process::Command rather than tauri_plugin_shell::sidecar():
+///   The shell plugin's sidecar() is primarily designed for JS frontend access control.
+///   From Rust we directly launch the process; this avoids the plugin's path resolution
+///   logic that can fail in debug/standalone builds.
 use std::{
     net::TcpStream,
+    process::{Child, Command},
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
 use tauri::{AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
-use tauri_plugin_shell::{process::CommandChild, ShellExt};
 
 const DAEMON_ADDR: &str = "127.0.0.1:4773";
 const DAEMON_URL: &str = "http://127.0.0.1:4773/";
@@ -21,7 +41,108 @@ const POLL_TIMEOUT: Duration = Duration::from_secs(30);
 const POLL_INTERVAL: Duration = Duration::from_millis(200);
 
 /// Global handle to the sidecar child so we can kill it on exit.
-type SharedChild = Arc<Mutex<Option<CommandChild>>>;
+type SharedChild = Arc<Mutex<Option<Child>>>;
+
+/// Windows: create a Job Object configured to kill all member processes when its
+/// last handle closes, then assign `child` to it. The returned handle MUST be kept
+/// alive for the whole process lifetime — dropping/closing it kills the sidecar
+/// immediately. We intentionally leak it (store in a static) so it lives until we exit.
+#[cfg(windows)]
+fn confine_to_job(child: &Child) {
+    use std::os::windows::io::AsRawHandle;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject,
+        JobObjectExtendedLimitInformation, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+
+    unsafe {
+        let job = match CreateJobObjectW(None, None) {
+            Ok(j) => j,
+            Err(e) => {
+                eprintln!("[ssanime-desktop] CreateJobObject failed: {e}");
+                return;
+            }
+        };
+
+        let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        let set_res: windows::core::Result<()> = SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &info as *const _ as *const std::ffi::c_void,
+            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        );
+        if let Err(e) = set_res {
+            eprintln!("[ssanime-desktop] SetInformationJobObject failed: {e}");
+            return;
+        }
+
+        let child_handle = HANDLE(child.as_raw_handle() as _);
+        let assign_res: windows::core::Result<()> = AssignProcessToJobObject(job, child_handle);
+        if let Err(e) = assign_res {
+            eprintln!("[ssanime-desktop] AssignProcessToJobObject failed: {e}");
+            return;
+        }
+
+        // The job HANDLE is a Copy newtype with no Drop, and we never CloseHandle it,
+        // so the OS keeps it open until this process exits — exactly the lifetime we
+        // want. On exit (graceful or crash) the OS closes it → KILL_ON_JOB_CLOSE fires.
+        let _ = job;
+        eprintln!("[ssanime-desktop] sidecar confined to kill-on-close job object");
+    }
+}
+
+/// Resolve the path to the Go sidecar binary.
+///
+/// In release bundles the binary is placed next to (or in `binaries/` relative to)
+/// the main executable by the Tauri bundler. In debug builds we copy it to
+/// `target/debug/binaries/ssanime-x86_64-pc-windows-msvc.exe` (done by the build
+/// or the Taskfile). The name appended is the Rust target triple so the same logic
+/// works on all platforms.
+fn sidecar_path() -> std::path::PathBuf {
+    let triple = std::env::consts::ARCH.to_owned()
+        + "-"
+        + {
+            #[cfg(target_os = "windows")]
+            { "pc-windows-msvc" }
+            #[cfg(target_os = "macos")]
+            { "apple-darwin" }
+            #[cfg(target_os = "linux")]
+            { "unknown-linux-gnu" }
+        };
+
+    let exe_dir = std::env::current_exe()
+        .expect("cannot resolve current exe")
+        .parent()
+        .expect("exe has no parent dir")
+        .to_path_buf();
+
+    let ext = if cfg!(target_os = "windows") { ".exe" } else { "" };
+    let triple_name = format!("ssanime-{triple}{ext}");
+    // Tauri's bundler STRIPS the target-triple suffix when it copies an externalBin
+    // next to the main exe, so in an installed/built app the sidecar is just `ssanime.exe`.
+    let plain_name = format!("ssanime{ext}");
+
+    // Try every layout we might encounter, in order of likelihood:
+    //   1. bundled next to the exe, suffix stripped  → ssanime.exe          (installed / `tauri build`)
+    //   2. next to the exe with the triple suffix    → ssanime-<triple>.exe (some dev runs)
+    //   3. in a binaries/ subdir, either name        → dev / Taskfile copy layout
+    let candidates = [
+        exe_dir.join(&plain_name),
+        exe_dir.join(&triple_name),
+        exe_dir.join("binaries").join(&triple_name),
+        exe_dir.join("binaries").join(&plain_name),
+    ];
+    for c in &candidates {
+        if c.exists() {
+            return c.clone();
+        }
+    }
+    // Nothing found — return the most likely production path so the error message is useful.
+    exe_dir.join(&plain_name)
+}
 
 /// Poll `DAEMON_ADDR` with TCP connects until it accepts or timeout elapses.
 /// Returns `true` if the daemon became ready within the timeout.
@@ -36,58 +157,71 @@ fn wait_for_daemon(timeout: Duration) -> bool {
     false
 }
 
-/// Spawn the daemon in a background thread, wait for readiness, then open the main window.
-fn launch_daemon_and_window(app: AppHandle, child_handle: SharedChild) {
+/// Spawn the daemon sidecar and, once it is ready, navigate the already-visible
+/// "main" window to the daemon URL. Runs entirely in a background thread so it
+/// never blocks the main thread (and therefore never blocks setup()).
+fn launch_daemon_and_navigate(app: AppHandle, child_handle: SharedChild) {
     std::thread::spawn(move || {
-        // Spawn sidecar with --no-open so it doesn't open its own browser tab.
-        let shell = app.shell();
-        let result = shell
-            .sidecar("binaries/ssanime")
-            .and_then(|cmd| cmd.args(["--no-open"]).spawn());
+        let path = sidecar_path();
+        eprintln!("[ssanime-desktop] spawning sidecar: {}", path.display());
 
-        match result {
+        // --no-open: don't open a browser tab (Tauri window is the UI).
+        // --headless: skip the systray (Tauri owns the process lifetime).
+        // stdin(piped): give the daemon a pipe so it can detect OUR death (even a
+        // crash/force-kill closes the pipe → the headless daemon sees EOF and exits,
+        // so it never orphans). The ChildStdin stays open because we keep the Child.
+        let spawn_result = Command::new(&path)
+            .args(["--no-open", "--headless"])
+            .stdin(std::process::Stdio::piped())
+            .spawn();
+
+        match spawn_result {
             Err(e) => {
-                eprintln!("[ssanime-desktop] failed to spawn sidecar: {e}");
-                return;
+                eprintln!(
+                    "[ssanime-desktop] failed to spawn sidecar at {}: {e}",
+                    path.display()
+                );
+                // Still navigate — the webview will show a connection error, which
+                // is better than showing the loading spinner forever.
             }
-            Ok((_rx, child)) => {
-                // Store child so we can kill it on exit.
+            Ok(child) => {
+                // Windows: bind the sidecar to a kill-on-close job BEFORE storing it,
+                // so even an immediate crash of this process tears the sidecar down.
+                #[cfg(windows)]
+                confine_to_job(&child);
                 *child_handle.lock().unwrap() = Some(child);
             }
         }
 
         // Wait for daemon to accept TCP connections.
-        if !wait_for_daemon(POLL_TIMEOUT) {
+        let ready = wait_for_daemon(POLL_TIMEOUT);
+        if !ready {
             eprintln!(
-                "[ssanime-desktop] daemon did not become ready within {}s",
+                "[ssanime-desktop] daemon did not become ready within {}s — navigating anyway",
                 POLL_TIMEOUT.as_secs()
             );
-            // Still attempt to open; the webview will show its own error if it can't connect.
         }
 
-        // Open the main window on the Tauri runtime thread.
-        let url = WebviewUrl::External(DAEMON_URL.parse().expect("static URL is valid"));
-        let app_clone = app.clone();
-        tauri::async_runtime::spawn(async move {
-            let build_result = WebviewWindowBuilder::new(&app_clone, "main", url)
-                .title("ssanime-gui")
-                .inner_size(1280.0, 800.0)
-                .min_inner_size(800.0, 500.0)
-                .resizable(true)
-                .visible(true)
-                .build();
-
-            if let Err(e) = build_result {
-                eprintln!("[ssanime-desktop] failed to create window: {e}");
+        // Navigate the already-visible window to the daemon UI.
+        // app.get_webview_window is safe to call from any thread.
+        match app.get_webview_window("main") {
+            None => {
+                eprintln!("[ssanime-desktop] 'main' window not found; cannot navigate");
             }
-        });
+            Some(win) => {
+                let url: tauri::Url = DAEMON_URL.parse().expect("DAEMON_URL is a valid URL");
+                if let Err(e) = win.navigate(url) {
+                    eprintln!("[ssanime-desktop] navigate failed: {e}");
+                }
+            }
+        }
     });
 }
 
 /// Kill the sidecar child if one is stored.
 fn kill_sidecar(child_handle: &SharedChild) {
     if let Ok(mut guard) = child_handle.lock() {
-        if let Some(child) = guard.take() {
+        if let Some(mut child) = guard.take() {
             if let Err(e) = child.kill() {
                 eprintln!("[ssanime-desktop] failed to kill sidecar: {e}");
             }
@@ -111,8 +245,23 @@ pub fn run() {
             }
         }))
         .setup(move |app| {
+            // FIX: Create the window HERE on the main thread so Windows WebView2
+            // can initialise its COM/UI objects correctly. Loading the bundled
+            // placeholder page means the user sees a window immediately; the
+            // background thread will call navigate() once the daemon is ready.
+            let loading_url = WebviewUrl::App("index.html".into());
+            WebviewWindowBuilder::new(app, "main", loading_url)
+                .title("ssanime-gui")
+                .inner_size(1280.0, 800.0)
+                .min_inner_size(800.0, 500.0)
+                .resizable(true)
+                .visible(true)
+                .build()?;
+
+            // Kick off daemon spawn + readiness poll in a background thread.
             let handle = app.handle().clone();
-            launch_daemon_and_window(handle, child_for_setup);
+            launch_daemon_and_navigate(handle, child_for_setup);
+
             Ok(())
         })
         .build(tauri::generate_context!())

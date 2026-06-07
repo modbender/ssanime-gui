@@ -76,9 +76,10 @@ tasks:
       - bun run build
 
   build-sidecar:
-    desc: "Build the Go sidecar and copy it into desktop/src-tauri/binaries/ (for Tauri bundling)"
+    desc: "Build the Go sidecar (no console window) into desktop/src-tauri/binaries/ (for Tauri bundling)"
     cmds:
-      - go build -ldflags "-s -w" -o desktop/src-tauri/binaries/ssanime-x86_64-pc-windows-msvc.exe ./cmd/ssanime
+      # -H=windowsgui: the sidecar is embedded by the Tauri shell — no console window should pop up.
+      - go build -ldflags "-H=windowsgui -s -w" -o desktop/src-tauri/binaries/ssanime-x86_64-pc-windows-msvc.exe ./cmd/ssanime
     env:
       GOOS: windows
       GOARCH: amd64
