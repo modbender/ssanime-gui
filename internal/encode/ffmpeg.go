@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/modbender/ssanime-gui/internal/procguard"
 )
 
 // commonFFmpegPaths are checked when ffmpeg/ffprobe are not on PATH (Windows
@@ -155,6 +157,11 @@ func (t Tools) Run(ctx context.Context, args []string, totalSeconds float64, onP
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start ffmpeg: %w", err)
 	}
+	// Best-effort orphan prevention: tie ffmpeg to the daemon's process group so
+	// a force-kill of the daemon reaps it. Failure leaves today's behavior (a
+	// force-kill might orphan), so it is swallowed rather than threaded through a
+	// logger this package does not have.
+	_ = procguard.Reap(cmd.Process)
 
 	parseProgress(stdout, totalSeconds, onProgress)
 
