@@ -11,6 +11,7 @@ require (
 	github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/google/uuid v1.6.0
+	github.com/klauspost/compress v1.18.5
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/pressly/goose/v3 v3.27.1
 	github.com/ulikunitz/xz v0.5.15

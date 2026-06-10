@@ -33,6 +33,7 @@ import (
 	"github.com/cli/browser"
 
 	"github.com/modbender/ssanime-gui/internal/anilist"
+	"github.com/modbender/ssanime-gui/internal/animedb"
 	"github.com/modbender/ssanime-gui/internal/binaries"
 	"github.com/modbender/ssanime-gui/internal/config"
 	"github.com/modbender/ssanime-gui/internal/doh"
@@ -285,6 +286,18 @@ func startDaemon(cfg *config.Config, logger *slog.Logger) (shutdown func(), dlQu
 	// --- AniList client ---
 	anilistClient := anilist.New()
 
+	// --- Offline anime database (add-series search) ---
+	// Serves the add-series title search from a local manami-project index so
+	// search costs zero AniList calls. The dataset downloads over normal DNS
+	// (GitHub raw) — a plain client, NOT the DoH-guarded one. Start kicks off a
+	// background load/download; animeDB.Stop cancels it on shutdown.
+	animeDB := animedb.New(cfg.DataDir,
+		animedb.WithHTTPClient(&http.Client{Timeout: 5 * time.Minute}),
+		animedb.WithLogger(logger),
+	)
+	animeDB.Start(context.Background())
+	add(animeDB.Stop)
+
 	// --- Extension manager ---
 	// Extensions are third-party JS pulled from user-added repos; their fetch()
 	// runs through a guarded DoH client that cannot reach loopback/private hosts.
@@ -361,6 +374,7 @@ func startDaemon(cfg *config.Config, logger *slog.Logger) (shutdown func(), dlQu
 		Handler: server.New(st, hub, logger, server.Config{
 			Registry:  registry,
 			Anilist:   anilistClient,
+			AnimeDB:   animeDB,
 			ExtMgr:    extManager,
 			Refresher: refresher,
 		}),

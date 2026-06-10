@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/modbender/ssanime-gui/internal/anilist"
+	"github.com/modbender/ssanime-gui/internal/animedb"
 	"github.com/modbender/ssanime-gui/internal/events"
 	"github.com/modbender/ssanime-gui/internal/extension"
 	"github.com/modbender/ssanime-gui/internal/source"
@@ -35,6 +36,7 @@ type Handler struct {
 	logger    *slog.Logger
 	registry  *source.Registry
 	anilist   *anilist.Client
+	animedb   *animedb.DB
 	extMgr    *extension.Manager
 	refresher MetadataRefresher
 	logs      *RingBuffer
@@ -44,6 +46,7 @@ type Handler struct {
 type Config struct {
 	Registry  *source.Registry
 	Anilist   *anilist.Client
+	AnimeDB   *animedb.DB
 	ExtMgr    *extension.Manager
 	Refresher MetadataRefresher
 }
@@ -61,6 +64,7 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 		logger:    logger,
 		registry:  cfg.Registry,
 		anilist:   cfg.Anilist,
+		animedb:   cfg.AnimeDB,
 		extMgr:    cfg.ExtMgr,
 		refresher: cfg.Refresher,
 		logs:      ring,
