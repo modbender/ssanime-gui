@@ -56,6 +56,15 @@ var (
     }
   }
 }`
+
+	// mediaBatchQuery fetches up to 50 media by id in one request. AniList's Page
+	// perPage maxes at 50, so callers must chunk ids accordingly.
+	mediaBatchQuery = `query ($ids: [Int]) {
+  Page(perPage: 50) {
+    media(id_in: $ids, type: ANIME) {` + mediaFields + `
+    }
+  }
+}`
 )
 
 // graphQLResponse is the AniList envelope. Errors come back with HTTP 200, so the

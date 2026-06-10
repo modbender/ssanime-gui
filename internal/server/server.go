@@ -6,6 +6,7 @@
 package server
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 
@@ -19,23 +20,32 @@ import (
 	"github.com/modbender/ssanime-gui/internal/store"
 )
 
+// MetadataRefresher refreshes one series' AniList metadata on demand. The
+// background *metadata.Refresher satisfies it; kept narrow so the server doesn't
+// import the whole package surface.
+type MetadataRefresher interface {
+	RefreshSeries(ctx context.Context, id int64) (store.Series, error)
+}
+
 // Handler carries the shared dependencies every route needs and registers the
 // route table.
 type Handler struct {
-	store    *store.Store
-	hub      *events.Hub
-	logger   *slog.Logger
-	registry *source.Registry
-	anilist  *anilist.Client
-	extMgr   *extension.Manager
-	logs     *RingBuffer
+	store     *store.Store
+	hub       *events.Hub
+	logger    *slog.Logger
+	registry  *source.Registry
+	anilist   *anilist.Client
+	extMgr    *extension.Manager
+	refresher MetadataRefresher
+	logs      *RingBuffer
 }
 
 // Config holds optional dependencies for server.New.
 type Config struct {
-	Registry *source.Registry
-	Anilist  *anilist.Client
-	ExtMgr   *extension.Manager
+	Registry  *source.Registry
+	Anilist   *anilist.Client
+	ExtMgr    *extension.Manager
+	Refresher MetadataRefresher
 }
 
 // New builds the Handler and returns the fully wired http.Handler: REST + SSE
@@ -46,13 +56,14 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 	}
 	ring := NewRingBuffer(500)
 	h := &Handler{
-		store:    st,
-		hub:      hub,
-		logger:   logger,
-		registry: cfg.Registry,
-		anilist:  cfg.Anilist,
-		extMgr:   cfg.ExtMgr,
-		logs:     ring,
+		store:     st,
+		hub:       hub,
+		logger:    logger,
+		registry:  cfg.Registry,
+		anilist:   cfg.Anilist,
+		extMgr:    cfg.ExtMgr,
+		refresher: cfg.Refresher,
+		logs:      ring,
 	}
 
 	r := chi.NewRouter()
@@ -84,6 +95,7 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 				r.Delete("/", h.handleDeleteSeries)
 				r.Get("/episodes", h.handleListEpisodes)
 				r.Post("/scan", h.handleScanEpisodes)
+				r.Post("/refresh", h.handleRefreshSeries)
 			})
 		})
 

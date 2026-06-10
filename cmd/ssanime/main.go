@@ -40,6 +40,7 @@ import (
 	"github.com/modbender/ssanime-gui/internal/encode"
 	"github.com/modbender/ssanime-gui/internal/events"
 	"github.com/modbender/ssanime-gui/internal/extension"
+	"github.com/modbender/ssanime-gui/internal/metadata"
 	"github.com/modbender/ssanime-gui/internal/poller"
 	"github.com/modbender/ssanime-gui/internal/server"
 	"github.com/modbender/ssanime-gui/internal/source"
@@ -297,6 +298,14 @@ func startDaemon(cfg *config.Config, logger *slog.Logger) (shutdown func(), dlQu
 	feedPoller.Start()
 	add(feedPoller.Stop)
 
+	// --- AniList metadata refresher ---
+	// Keeps subscribed, still-airing series fresh so a RELEASING show auto-flips to
+	// FINISHED and the poller stops chasing a completed series. Rate-limit-tolerant
+	// by construction: on 429/network error it keeps the existing DB data.
+	refresher := metadata.New(st, anilistClient, hub, logger)
+	refresher.Start()
+	add(refresher.Stop)
+
 	// --- Download queue ---
 	dlWorkers := 2
 	if set, err := st.Read().GetSettings(context.Background()); err == nil && set.ConcurrencyDownload > 0 {
@@ -350,9 +359,10 @@ func startDaemon(cfg *config.Config, logger *slog.Logger) (shutdown func(), dlQu
 	srv := &http.Server{
 		Addr: fmt.Sprintf("127.0.0.1:%d", cfg.Port),
 		Handler: server.New(st, hub, logger, server.Config{
-			Registry: registry,
-			Anilist:  anilistClient,
-			ExtMgr:   extManager,
+			Registry:  registry,
+			Anilist:   anilistClient,
+			ExtMgr:    extManager,
+			Refresher: refresher,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

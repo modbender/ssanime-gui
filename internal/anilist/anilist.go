@@ -131,6 +131,64 @@ func (c *Client) SearchMedia(ctx context.Context, query string) ([]Media, error)
 	return list, nil
 }
 
+// batchChunkSize is the AniList Page perPage maximum: at most 50 media per
+// request. ids beyond this are split across multiple requests.
+const batchChunkSize = 50
+
+// GetMediaBatch fetches multiple media by AniList id in as few requests as
+// possible (one per chunk of up to 50 ids), returning a map keyed by media id.
+// Zero/duplicate ids are ignored. Each result is also written to the by-id cache
+// so subsequent GetMedia calls hit it.
+//
+// On a rate-limit/network error mid-run, the whole call fails (returns the
+// error) rather than returning partial results — the refresher retries the full
+// set next tick, which keeps "metadata_refreshed_at" honest (a series is only
+// stamped once its data was actually obtained).
+func (c *Client) GetMediaBatch(ctx context.Context, ids []int) (map[int]Media, error) {
+	chunks := chunkIDs(ids, batchChunkSize)
+	out := make(map[int]Media)
+	for _, chunk := range chunks {
+		body, err := c.fetch(ctx, mediaBatchQuery, map[string]any{"ids": chunk})
+		if err != nil {
+			return nil, err
+		}
+		list, err := decodeMediaList(body)
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range list {
+			out[m.ID] = m
+			c.cachePut("id:"+strconv.Itoa(m.ID), m)
+		}
+	}
+	return out, nil
+}
+
+// chunkIDs dedupes and drops zero ids, then splits the rest into chunks of size.
+func chunkIDs(ids []int, size int) [][]int {
+	seen := make(map[int]struct{}, len(ids))
+	uniq := make([]int, 0, len(ids))
+	for _, id := range ids {
+		if id == 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		uniq = append(uniq, id)
+	}
+	var chunks [][]int
+	for start := 0; start < len(uniq); start += size {
+		end := start + size
+		if end > len(uniq) {
+			end = len(uniq)
+		}
+		chunks = append(chunks, uniq[start:end])
+	}
+	return chunks
+}
+
 // query POSTs a GraphQL request and maps the single Media result.
 func (c *Client) query(ctx context.Context, gql string, vars map[string]any) (Media, error) {
 	body, err := c.fetch(ctx, gql, vars)

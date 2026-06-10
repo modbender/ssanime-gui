@@ -36,6 +36,9 @@
   // Scan state
   let scanning = $state(false)
 
+  // Metadata refresh state
+  let refreshing = $state(false)
+
   async function load() {
     loading = true; error = ''
     try {
@@ -96,6 +99,20 @@
       await load()
     } catch (e: any) { alert(e.message) }
     finally { encoding = false }
+  }
+
+  // refreshMeta pulls fresh AniList metadata (airing status, episode count, art)
+  // for this series. The daemon also does this on a slow background cadence; this
+  // is the on-demand path. AniList rate-limits hard, so a 503 here is expected
+  // and non-fatal — the existing metadata is kept.
+  async function refreshMeta() {
+    refreshing = true
+    try {
+      await api.refreshSeries(numId)
+      await load()
+    } catch (e: any) {
+      alert(e.message || 'AniList is rate-limited right now — existing metadata kept. Try again shortly.')
+    } finally { refreshing = false }
   }
 
   async function scan() {
@@ -285,6 +302,15 @@
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 {/if}
                 Scan torrents
+              </Button>
+
+              <Button variant="ghost" onclick={refreshMeta} disabled={refreshing} title="Refresh AniList metadata">
+                {#if refreshing}
+                  <Spinner size={14}/>
+                {:else}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                {/if}
+                Refresh
               </Button>
 
               {#if selected.size > 0}

@@ -83,6 +83,10 @@ type Querier interface {
 	ListScreenshotsByEpisode(ctx context.Context, episodeID int64) ([]Screenshot, error)
 	ListScreenshotsBySeries(ctx context.Context, seriesID int64) ([]Screenshot, error)
 	ListSeries(ctx context.Context) ([]Series, error)
+	// ListSeriesForMetadataRefresh returns subscribed, non-finished series whose
+	// AniList metadata is stale (never refreshed, or older than the cutoff). NULLs
+	// sort first on ASC, so never-refreshed series are picked up before stale ones.
+	ListSeriesForMetadataRefresh(ctx context.Context, arg ListSeriesForMetadataRefreshParams) ([]Series, error)
 	// ListSeriesWithProgress joins archived-episode counts for the Library grid and
 	// derived-status computation (archived = every selected output archived).
 	ListSeriesWithProgress(ctx context.Context) ([]ListSeriesWithProgressRow, error)
@@ -130,6 +134,13 @@ type Querier interface {
 	UpdateExtensionSettings(ctx context.Context, arg UpdateExtensionSettingsParams) error
 	UpdateFeed(ctx context.Context, arg UpdateFeedParams) (Feed, error)
 	UpdateSeries(ctx context.Context, arg UpdateSeriesParams) (Series, error)
+	// UpdateSeriesMetadata refreshes the volatile AniList-derived columns for one
+	// series, preserving user/display fields (title, subscribed, favorite,
+	// season_number, default_profile_id, feed_title are never touched). Authoritative
+	// scalars (status/airing_status/episode_count/format/season/season_year) are set
+	// directly; images, colour, titles and synonyms use COALESCE(NULLIF(@x, ''), col)
+	// so a sparse response never blanks a previously-populated column.
+	UpdateSeriesMetadata(ctx context.Context, arg UpdateSeriesMetadataParams) error
 	UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (Setting, error)
 	UpsertExtensionByExtID(ctx context.Context, arg UpsertExtensionByExtIDParams) (Extension, error)
 }

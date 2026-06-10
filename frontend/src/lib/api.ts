@@ -292,6 +292,7 @@ export const api = {
   deleteSeries: (id: number) => del<null>(`/series/${id}`),
   listEpisodes: (id: number) => get<EpisodeDetail[]>(`/series/${id}/episodes`),
   scanEpisodes: (id: number) => post<EpisodeDetail[]>(`/series/${id}/scan`),
+  refreshSeries: (id: number) => post<unknown>(`/series/${id}/refresh`, {}),
 
   // Encode
   bulkEncode: (body: { episode_ids: number[]; profile_id?: number; resolutions?: number[] }) =>
