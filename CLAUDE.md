@@ -4,10 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-This repo is **implemented and building**. The Go daemon (`cmd/ssanime` + 17 `internal/` packages),
+This repo is **implemented and building**. The Go daemon (`cmd/ssanime` + 19 `internal/` packages),
 the embedded Svelte SPA (`frontend/`, built to `internal/server/dist` and `go:embed`-ed), and the
-Tauri desktop shell (`desktop/`) all exist and compile; `go test ./...` is green (~97 tests across
-17 packages) and CI gates every push/PR on `main`. The end-to-end pipeline (DoH→nyaa search →
+Tauri desktop shell (`desktop/`) all exist and compile; `go test ./...` is green (~124 tests across
+19 packages) and CI gates every push/PR on `main`. The end-to-end pipeline (DoH→nyaa search →
 embedded `anacrolix/torrent` download → ffmpeg multi-resolution encode → Jellyfin-style archive →
 cleanup) has been validated against a real torrent. Remaining work is feature breadth, polish, and
 distribution — not bring-up.
@@ -15,10 +15,12 @@ distribution — not bring-up.
 Implemented `internal/` packages: `anilist` (GraphQL metadata), `binaries` (ffmpeg/yt-dlp provision
 + checksum), `config`, `doh` (SSRF-guarded DNS-over-HTTPS), `download` (anacrolix + qBittorrent/
 Transmission backends behind `Downloader`), `encode` (ffmpeg x265, ffprobe-anchored progress,
-multi-res fan-out), `events` (SSE hub), `extension` (goja/hibike runtime), `poller` (RSS/scrape feed
-watcher → enqueue), `procguard` (Windows job-object so a force-killed daemon doesn't orphan ffmpeg),
-`server` (REST + SSE + `localGuard` CSRF/rebind defense), `source` (nyaa/subsplease providers,
-habari parsing, autoselect), `store` (sqlc/goose/`modernc.org/sqlite`, dual read/write pool), `tray`.
+multi-res fan-out), `events` (SSE hub), `extension` (goja/hibike runtime), `metadata` (rate-limit-
+tolerant AniList refresh trickle), `animedb` (offline anime-database index powering AniList-free
+add-search), `poller` (RSS/scrape feed watcher → enqueue), `procguard` (Windows job-object so a
+force-killed daemon doesn't orphan ffmpeg), `server` (REST + SSE + `localGuard` CSRF/rebind defense),
+`source` (nyaa/subsplease providers, habari parsing, autoselect), `store` (sqlc/goose/`modernc.org/
+sqlite`, dual read/write pool), `tray`.
 
 The original spec at `docs/superpowers/specs/2026-06-06-ssanime-gui-design.md` was **substantially
 refined** during build — the source of truth for the data model, sourcing, and decisions is
@@ -84,7 +86,9 @@ inside `download` and `encode` themselves rather than in a separate `queue` pack
 | `source` | Providers (nyaa, subsplease), habari release-name parsing, SmartSearch + autoselect |
 | `download` | Download manager behind `Downloader`; backends: embedded `anacrolix/torrent`, qBittorrent, Transmission. Owns its worker pool |
 | `encode` | ffmpeg x265 wrapper, encode worker pool, profiles, ffprobe-anchored progress, multi-resolution fan-out |
-| `anilist` | AniList GraphQL metadata (cover image/color, banner, titles, airing status) |
+| `anilist` | AniList GraphQL metadata (cover image/color, banner, titles, airing status); batched + 429-tolerant |
+| `metadata` | Background refresher: keeps subscribed, non-finished series' AniList metadata fresh on a slow batched cadence |
+| `animedb` | Offline anime-offline-database index; powers add-series search with zero AniList calls |
 | `binaries` | Locates / provisions / checksum-verifies ffmpeg & yt-dlp into app-data |
 | `doh` | SSRF-guarded DNS-over-HTTPS resolver (bypasses ISP nyaa.si DNS block) |
 | `extension` | goja JS extension runtime implementing the hibike provider interface |
