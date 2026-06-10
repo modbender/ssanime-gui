@@ -35,28 +35,72 @@ this exact order, or the sidecar ships without the SPA:
 3. **Tauri build** — `bunx @tauri-apps/cli@latest build` in `desktop/`, producing
    the NSIS + MSI installers.
 
-The release workflow (`.github/workflows/release.yml`) runs steps 1 and 2 as
-explicit steps before handing off to `tauri-apps/tauri-action` for step 3, so each
-build phase is independently visible in the logs.
+The build steps (frontend → sidecar) run as explicit steps before handing off to
+`tauri-apps/tauri-action` for step 3, so each build phase is independently visible
+in the logs. tauri-action runs in **build-only** mode (no `tagName`/`releaseName`),
+and the installers are attached to the release with `gh release upload`.
 
-## Cutting a release
+## Cutting a release (automatic — release-please)
 
-1. Bump `version` in `desktop/src-tauri/tauri.conf.json` (e.g. `0.1.0` → `0.2.0`).
-   tauri-action derives the installer filenames from this field, **not** from the
-   git tag — they must agree, so bump here before tagging.
-2. Commit the bump.
-3. Tag and push:
-   ```sh
-   git tag v0.2.0
-   git push origin v0.2.0
-   ```
-4. The `Release` workflow runs on the `v*` tag: it builds the frontend, the
-   sidecar, and the Tauri installers, then opens a **draft** GitHub Release with
-   the NSIS `.exe` and MSI `.msi` attached.
-5. Review the draft and its assets, then publish it manually.
+Releases are driven by [release-please](https://github.com/googleapis/release-please-action)
+from **Conventional Commit** messages. **You never bump the version or tag by hand.**
 
-The draft step is deliberate — nothing goes public without a human reviewing the
-artifacts first.
+How it works:
+
+1. Land normal `feat:` / `fix:` / `perf:` PRs on `main` as usual.
+2. On every push to `main`, `.github/workflows/release-please.yml` runs and
+   maintains a single open **Release PR** titled like *"chore(main): release
+   0.2.0"*. It stages the next version and an updated `CHANGELOG.md`, computed
+   from the commits since the last release using **standard semver**:
+
+   | Commit type | Bump |
+   |---|---|
+   | `feat!:` or `BREAKING CHANGE:` footer | **major** (e.g. `0.1.0` → `1.0.0`) |
+   | `feat:` | **minor** (`0.1.0` → `0.2.0`) |
+   | `fix:`, `perf:` | **patch** (`0.1.0` → `0.1.1`) |
+   | `chore`, `docs`, `refactor`, `ci`, `build`, `test` | no bump (changelog/hidden only) |
+
+   This is release-please's default behavior; the pre-1.0 dampeners
+   (`bump-minor-pre-major` / `bump-patch-for-minor-pre-major`) are explicitly set
+   to `false` in `release-please-config.json` so semver is strict even below 1.0.0.
+
+3. **Merge the Release PR.** That makes release-please:
+   - tag `v<version>` (e.g. `v0.2.0`) and publish the GitHub Release with the
+     generated changelog as the body,
+   - and, via `extra-files`, bump `desktop/src-tauri/tauri.conf.json`'s `version`
+     in lockstep so the installer filenames match the tag (no manual edit).
+4. Only once that release is created does the **`build-installers`** job
+   (`if: release_created == 'true'`) build the frontend → sidecar → Tauri
+   installers and **upload the NSIS `.exe` + MSI `.msi` to the release
+   release-please just created** (via `gh release upload --clobber`). Ordinary
+   commits never trigger an installer build — exactly one build per release.
+
+> The single source of truth for the version is `tauri.conf.json`'s `version`
+> field, kept in sync with the git tag by release-please. There is no separate Go
+> version constant.
+
+### Required repo setting (one-time)
+
+release-please opens its Release PR using the default `GITHUB_TOKEN`. For that to
+work, **Settings → Actions → General → Workflow permissions** must have
+**"Allow GitHub Actions to create and approve pull requests"** turned **ON**.
+Without it, the `release-please` job fails to open the PR.
+
+### First run
+
+`release-please-config.json` sets `bootstrap-sha` to the `main` HEAD that
+introduced this workflow, so the **first** changelog starts fresh from that point
+instead of replaying the entire repo history. The first Release PR appears once a
+`feat`/`fix`/`perf` commit lands on `main` after the workflow is merged.
+
+## Manual fallback (emergency builds)
+
+`.github/workflows/release.yml` no longer triggers on tag push (that would
+double-fire alongside release-please). It is now **`workflow_dispatch`-only**: a
+maintainer can run it from the Actions tab with a `tag` input (e.g. `v0.2.0`) to
+(re)build the installers and re-attach them to that **existing** release via
+`gh release upload --clobber`. It never creates a release — use it only when the
+automatic `build-installers` job failed and you need to retry the build by hand.
 
 ## Local build (for testing)
 
