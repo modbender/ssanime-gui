@@ -3,6 +3,7 @@ package source
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -23,6 +24,12 @@ const nyaaRSSBase = "https://nyaa.si/?page=rss&c=1_2&f=0&s=seeders&o=desc&q="
 
 // nyaaLatestURL is the unfiltered seeders-sorted feed (no query) for GetLatest.
 const nyaaLatestURL = "https://nyaa.si/?page=rss&c=1_2&f=0&s=id&o=desc"
+
+// maxFeedBytes caps external feed/API response bodies (nyaa RSS, SubsPlease
+// JSON) before parsing. A normal feed is well under a MiB; 16 MiB is generous
+// and stops a hostile or compromised source from streaming an unbounded body
+// into the parser.
+const maxFeedBytes = 16 << 20
 
 // queryClean strips characters nyaa's search treats as noise.
 var queryClean = regexp.MustCompile(`[^\w\s-]`)
@@ -101,11 +108,26 @@ func (n *Nyaa) GetTorrentInfoHash(_ context.Context, t *AnimeTorrent) (string, e
 	return "", fmt.Errorf("nyaa: no info hash for %q", t.Name)
 }
 
-// fetch parses a nyaa RSS URL into normalized, habari-enriched torrents.
+// fetch parses a nyaa RSS URL into normalized, habari-enriched torrents. The
+// body is fetched through the provider's DoH client and bounded with a
+// LimitReader before parsing — gofeed's ParseURL* would read it unbounded.
 func (n *Nyaa) fetch(ctx context.Context, feedURL string) ([]*AnimeTorrent, error) {
-	feed, err := n.parser.ParseURLWithContext(feedURL, ctx)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, feedURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("nyaa: fetch %s: %w", feedURL, err)
+	}
+	req.Header.Set("User-Agent", "ssanime-gui/1.0")
+	resp, err := n.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("nyaa: fetch %s: %w", feedURL, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("nyaa: fetch %s: status %s", feedURL, resp.Status)
+	}
+	feed, err := n.parser.Parse(io.LimitReader(resp.Body, maxFeedBytes))
+	if err != nil {
+		return nil, fmt.Errorf("nyaa: parse %s: %w", feedURL, err)
 	}
 	out := make([]*AnimeTorrent, 0, len(feed.Items))
 	for _, item := range feed.Items {

@@ -16,7 +16,11 @@ func (h *Handler) handleListProfiles(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "failed to list profiles")
 		return
 	}
-	WriteJSON(w, http.StatusOK, profiles)
+	out := make([]ProfileResponse, len(profiles))
+	for i, p := range profiles {
+		out[i] = toProfileResponse(p)
+	}
+	WriteJSON(w, http.StatusOK, out)
 }
 
 func (h *Handler) handleCreateProfile(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +76,7 @@ func (h *Handler) handleCreateProfile(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "failed to create profile")
 		return
 	}
-	WriteJSON(w, http.StatusCreated, profile)
+	WriteJSON(w, http.StatusCreated, toProfileResponse(profile))
 }
 
 func (h *Handler) handlePatchProfile(w http.ResponseWriter, r *http.Request) {
@@ -184,7 +188,7 @@ func (h *Handler) handlePatchProfile(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "failed to update profile")
 		return
 	}
-	WriteJSON(w, http.StatusOK, profile)
+	WriteJSON(w, http.StatusOK, toProfileResponse(profile))
 }
 
 func (h *Handler) handleDeleteProfile(w http.ResponseWriter, r *http.Request) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -13,6 +14,11 @@ import (
 	"sync"
 	"time"
 )
+
+// maxAPIBytes caps a download-client API response body before decoding. Torrent
+// list/info JSON is small even for large clients; 8 MiB bounds a hostile or
+// misbehaving client from streaming an unbounded body into the JSON decoder.
+const maxAPIBytes = 8 << 20
 
 // qbittorrentBackend talks to a user-run qBittorrent over its WebUI API (v2).
 // It connects per download_clients row (host/port/username/password) and
@@ -47,6 +53,8 @@ func newQBittorrentBackend(_ context.Context, cfg Config) (Backend, error) {
 	}
 	tr := cfg.HTTPTransport
 	return &qbittorrentBackend{
+		// TODO: validate host + support https when a client-management write path
+		// is added (audit deferred — today only the seeder writes this row).
 		base: fmt.Sprintf("http://%s:%d", host, port),
 		user: cfg.Username,
 		pass: cfg.Password,
@@ -190,7 +198,7 @@ func (b *qbittorrentBackend) poll(ctx context.Context, hash string) (Progress, e
 		NumLeechs int     `json:"num_leechs"`
 		State     string  `json:"state"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxAPIBytes)).Decode(&rows); err != nil {
 		return Progress{}, err
 	}
 	if len(rows) == 0 {

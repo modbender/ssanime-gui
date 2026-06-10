@@ -6,6 +6,7 @@
 package server
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 
@@ -13,29 +14,41 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/modbender/ssanime-gui/internal/anilist"
+	"github.com/modbender/ssanime-gui/internal/animedb"
 	"github.com/modbender/ssanime-gui/internal/events"
 	"github.com/modbender/ssanime-gui/internal/extension"
 	"github.com/modbender/ssanime-gui/internal/source"
 	"github.com/modbender/ssanime-gui/internal/store"
 )
 
+// MetadataRefresher refreshes one series' AniList metadata on demand. The
+// background *metadata.Refresher satisfies it; kept narrow so the server doesn't
+// import the whole package surface.
+type MetadataRefresher interface {
+	RefreshSeries(ctx context.Context, id int64) (store.Series, error)
+}
+
 // Handler carries the shared dependencies every route needs and registers the
 // route table.
 type Handler struct {
-	store    *store.Store
-	hub      *events.Hub
-	logger   *slog.Logger
-	registry *source.Registry
-	anilist  *anilist.Client
-	extMgr   *extension.Manager
-	logs     *RingBuffer
+	store     *store.Store
+	hub       *events.Hub
+	logger    *slog.Logger
+	registry  *source.Registry
+	anilist   *anilist.Client
+	animedb   *animedb.DB
+	extMgr    *extension.Manager
+	refresher MetadataRefresher
+	logs      *RingBuffer
 }
 
 // Config holds optional dependencies for server.New.
 type Config struct {
-	Registry *source.Registry
-	Anilist  *anilist.Client
-	ExtMgr   *extension.Manager
+	Registry  *source.Registry
+	Anilist   *anilist.Client
+	AnimeDB   *animedb.DB
+	ExtMgr    *extension.Manager
+	Refresher MetadataRefresher
 }
 
 // New builds the Handler and returns the fully wired http.Handler: REST + SSE
@@ -46,17 +59,22 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 	}
 	ring := NewRingBuffer(500)
 	h := &Handler{
-		store:    st,
-		hub:      hub,
-		logger:   logger,
-		registry: cfg.Registry,
-		anilist:  cfg.Anilist,
-		extMgr:   cfg.ExtMgr,
-		logs:     ring,
+		store:     st,
+		hub:       hub,
+		logger:    logger,
+		registry:  cfg.Registry,
+		anilist:   cfg.Anilist,
+		animedb:   cfg.AnimeDB,
+		extMgr:    cfg.ExtMgr,
+		refresher: cfg.Refresher,
+		logs:      ring,
 	}
 
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
+	// Security response headers (CSP, nosniff, frame-deny) on every response,
+	// API and embedded SPA alike.
+	r.Use(secureHeaders)
 
 	r.Route("/api", func(api chi.Router) {
 		// Loopback-only host check, CSRF Origin check, and body cap on the API.
@@ -81,6 +99,7 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 				r.Delete("/", h.handleDeleteSeries)
 				r.Get("/episodes", h.handleListEpisodes)
 				r.Post("/scan", h.handleScanEpisodes)
+				r.Post("/refresh", h.handleRefreshSeries)
 			})
 		})
 

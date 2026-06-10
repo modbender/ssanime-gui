@@ -25,6 +25,12 @@ var videoExts = map[string]struct{}{
 // info resolution) before giving up.
 const gotInfoTimeout = 2 * time.Minute
 
+// maxDownloadBytes caps the declared size of a single downloaded file. An anime
+// episode is at most a few GiB even at high bitrate; 64 GiB leaves headroom for
+// remuxes/movies while refusing a magnet that declares an absurd size to fill
+// the disk. A package constant (not a config field) until a settings seam exists.
+const maxDownloadBytes = 64 << 30
+
 // embeddedBackend wraps a single anacrolix/torrent client. It supports N
 // concurrent downloads (one *Torrent each) and never seeds: the client is
 // configured with Seed=false + NoUpload=true, and each download is Dropped on
@@ -88,6 +94,18 @@ func (b *embeddedBackend) Add(ctx context.Context, req Request) (Handle, error) 
 		return nil, fmt.Errorf("torrent %q has no downloadable files", t.Name())
 	}
 
+	// Reject before downloading a single byte: a declared file larger than the
+	// ceiling, or one that won't fit on the download volume, is a disk-fill DoS.
+	size := primary.Length()
+	if size > maxDownloadBytes {
+		t.Drop()
+		return nil, fmt.Errorf("torrent file is %d bytes, exceeds max download size %d", size, maxDownloadBytes)
+	}
+	if free, err := freeDiskBytes(b.root); err == nil && size > free {
+		t.Drop()
+		return nil, fmt.Errorf("torrent file is %d bytes, only %d free on download volume", size, free)
+	}
+
 	// Download only the chosen file: set every file to None, raise the primary.
 	for _, f := range t.Files() {
 		f.SetPriority(types.PiecePriorityNone)
@@ -95,11 +113,17 @@ func (b *embeddedBackend) Add(ctx context.Context, req Request) (Handle, error) 
 	primary.SetPriority(types.PiecePriorityNormal)
 	primary.Download()
 
+	sourcePath, err := safeSourcePath(b.root, t.InfoHash().HexString(), primary.Path())
+	if err != nil {
+		t.Drop()
+		return nil, err
+	}
+
 	h := &embeddedHandle{
 		backend:    b,
 		torrent:    t,
 		total:      primary.Length(),
-		sourcePath: filepath.Join(b.root, t.InfoHash().HexString(), filepath.FromSlash(primary.Path())),
+		sourcePath: sourcePath,
 		done:       make(chan struct{}),
 		lastSample: time.Now(),
 	}
@@ -114,6 +138,36 @@ func (b *embeddedBackend) Close() error {
 		return fmt.Errorf("close anacrolix client: %w", errs[0])
 	}
 	return nil
+}
+
+// safeSourcePath derives the on-disk path of the primary file under
+// {root}/{infohash}, using the same primitive the anacrolix file storage uses to
+// place data (storage.ToSafeFilePath) so the two computations can't drift. File
+// path components come from the (untrusted) torrent info dict; ToSafeFilePath
+// rejects any that escape into a parent directory, and we additionally assert
+// the joined result stays within root before recording it. fileComponents is
+// File.Path() — already "name/.../file" with components joined by '/', matching
+// the storage layer's {infohash dir}/{name}/{file} layout.
+func safeSourcePath(root, infohashHex, fileComponents string) (string, error) {
+	rel, err := storage.ToSafeFilePath(filepath.FromSlash(fileComponents))
+	if err != nil {
+		return "", fmt.Errorf("unsafe torrent file path %q: %w", fileComponents, err)
+	}
+	full := filepath.Join(root, infohashHex, rel)
+	if !isSubpath(root, full) {
+		return "", fmt.Errorf("torrent file path %q escapes download root", fileComponents)
+	}
+	return full, nil
+}
+
+// isSubpath reports whether sub is base or lies beneath it, mirroring anacrolix's
+// own storage.isSubFilepath guard (filepath.Rel + ".." prefix check).
+func isSubpath(base, sub string) bool {
+	rel, err := filepath.Rel(base, sub)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // magnetFor derives a magnet URI from the request. A bare info hash is wrapped

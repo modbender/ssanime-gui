@@ -45,9 +45,10 @@ INSERT INTO series (
     uuid, title, feed_title, alt_titles, season_number, subscribed, favorite,
     airing_status, poster_path, poster_portrait, default_profile_id,
     anilist_id, mal_id, romaji_title, english_title, format, status,
-    episode_count, synonyms, cover_image_url, banner_image_url, cover_color, season, season_year
+    episode_count, synonyms, cover_image_url, banner_image_url, cover_color, season, season_year,
+    metadata_refreshed_at
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 RETURNING *;
 
@@ -61,6 +62,42 @@ UPDATE series SET
     cover_color = ?, season = ?, season_year = ?, modified_at = unixepoch()
 WHERE id = ?
 RETURNING *;
+
+-- ListSeriesForMetadataRefresh returns subscribed, non-finished series whose
+-- AniList metadata is stale (never refreshed, or older than the cutoff). NULLs
+-- sort first on ASC, so never-refreshed series are picked up before stale ones.
+-- name: ListSeriesForMetadataRefresh :many
+SELECT * FROM series
+WHERE anilist_id IS NOT NULL
+  AND subscribed = 1
+  AND (airing_status IS NULL OR airing_status NOT IN ('FINISHED', 'CANCELLED'))
+  AND (metadata_refreshed_at IS NULL OR metadata_refreshed_at < ?)
+ORDER BY metadata_refreshed_at ASC
+LIMIT ?;
+
+-- UpdateSeriesMetadata refreshes the volatile AniList-derived columns for one
+-- series, preserving user/display fields (title, subscribed, favorite,
+-- season_number, default_profile_id, feed_title are never touched). Authoritative
+-- scalars (status/airing_status/episode_count/format/season/season_year) are set
+-- directly; images, colour, titles and synonyms use COALESCE(NULLIF(@x, ''), col)
+-- so a sparse response never blanks a previously-populated column.
+-- name: UpdateSeriesMetadata :exec
+UPDATE series SET
+    status = @status,
+    airing_status = @airing_status,
+    episode_count = @episode_count,
+    format = @format,
+    season = @season,
+    season_year = @season_year,
+    cover_image_url = COALESCE(NULLIF(@cover_image_url, ''), cover_image_url),
+    banner_image_url = COALESCE(NULLIF(@banner_image_url, ''), banner_image_url),
+    cover_color = COALESCE(NULLIF(@cover_color, ''), cover_color),
+    romaji_title = COALESCE(NULLIF(@romaji_title, ''), romaji_title),
+    english_title = COALESCE(NULLIF(@english_title, ''), english_title),
+    synonyms = COALESCE(NULLIF(@synonyms, ''), synonyms),
+    metadata_refreshed_at = @now,
+    modified_at = @now
+WHERE id = @id;
 
 -- name: SetSeriesSubscribed :exec
 UPDATE series SET subscribed = ?, modified_at = unixepoch() WHERE id = ?;

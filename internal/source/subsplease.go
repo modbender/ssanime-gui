@@ -126,7 +126,7 @@ func (s *SubsPlease) fetch(ctx context.Context, apiURL string) ([]*AnimeTorrent,
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("subsplease: %s returned %s", apiURL, resp.Status)
 	}
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxFeedBytes))
 	if err != nil {
 		return nil, err
 	}

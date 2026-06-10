@@ -2,42 +2,109 @@ package server
 
 import (
 	"net/http"
+	"net/url"
 	"strconv"
 
+	"github.com/modbender/ssanime-gui/internal/animedb"
 	"github.com/modbender/ssanime-gui/internal/source"
 )
 
+// animeSearchLimit caps offline search results, matching what the add-series
+// dropdown can usefully show.
+const animeSearchLimit = 25
+
+// cspImageHosts is the set of image hosts the CSP img-src directive allows.
+// A search-result CoverImage is only emitted when its host is in this set; any
+// other host (manami pictures are mostly cdn.myanimelist.net) is dropped to ""
+// so the card shows a placeholder rather than a CSP-blocked broken image. The
+// real cover arrives when the series is added (the by-id AniList fetch in
+// handleCreateSeries). Keep in sync with the img-src list in security.go.
+var cspImageHosts = map[string]bool{
+	"s4.anilist.co": true,
+	"img.anili.st":  true,
+}
+
+// cspSafeImage returns rawURL if its host is CSP-allowed, otherwise "".
+func cspSafeImage(rawURL string) string {
+	if rawURL == "" {
+		return ""
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil || !cspImageHosts[u.Hostname()] {
+		return ""
+	}
+	return rawURL
+}
+
+// handleSearchAnilist answers the add-series search. It serves from the offline
+// animedb index (zero AniList calls) when that index is ready, and falls back to
+// the live AniList API during first-boot warmup while the dataset is still
+// downloading. Both branches return the identical AnilistSearchResult shape.
 func (h *Handler) handleSearchAnilist(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	if q == "" {
 		WriteError(w, http.StatusBadRequest, "q required")
 		return
 	}
+
+	if h.animedb != nil && h.animedb.Ready() {
+		WriteJSON(w, http.StatusOK, offlineSearchResults(h.animedb.Search(q, animeSearchLimit)))
+		return
+	}
+
+	// Warmup fallback: the offline index isn't loaded yet (initial download in
+	// flight) — answer from AniList so search still works on first boot.
 	if h.anilist == nil {
 		WriteError(w, http.StatusServiceUnavailable, "anilist client not available")
 		return
 	}
-	m, err := h.anilist.SearchMedia(r.Context(), q)
+	media, err := h.anilist.SearchMedia(r.Context(), q)
 	if err != nil {
 		h.logger.Warn("anilist search failed", "q", q, "err", err)
 		WriteError(w, http.StatusBadGateway, "anilist search failed: "+err.Error())
 		return
 	}
-	WriteJSON(w, http.StatusOK, AnilistSearchResult{
-		ID:           m.ID,
-		IDMal:        m.IDMal,
-		RomajiTitle:  m.RomajiTitle,
-		EnglishTitle: m.EnglishTitle,
-		Format:       m.Format,
-		Status:       m.Status,
-		EpisodeCount: m.EpisodeCount,
-		CoverImage:   m.CoverImage,
-		BannerImage:  m.BannerImage,
-		Season:       m.Season,
-		SeasonYear:   m.SeasonYear,
-		Synonyms:     m.Synonyms,
-		IsAdult:      m.IsAdult,
-	})
+	results := make([]AnilistSearchResult, 0, len(media))
+	for _, m := range media {
+		results = append(results, AnilistSearchResult{
+			ID:           m.ID,
+			IDMal:        m.IDMal,
+			RomajiTitle:  m.RomajiTitle,
+			EnglishTitle: m.EnglishTitle,
+			Format:       m.Format,
+			Status:       m.Status,
+			EpisodeCount: m.EpisodeCount,
+			CoverImage:   m.CoverImage,
+			BannerImage:  m.BannerImage,
+			Season:       m.Season,
+			SeasonYear:   m.SeasonYear,
+			Synonyms:     m.Synonyms,
+			IsAdult:      m.IsAdult,
+		})
+	}
+	WriteJSON(w, http.StatusOK, results)
+}
+
+// offlineSearchResults maps animedb hits into the AnilistSearchResult wire
+// shape. The offline dataset has no separate english title (Title → RomajiTitle,
+// EnglishTitle left ""), no MAL id, and no reliable is_adult flag, so those stay
+// zero-valued. CoverImage is filtered to CSP-safe hosts only.
+func offlineSearchResults(hits []animedb.Result) []AnilistSearchResult {
+	out := make([]AnilistSearchResult, 0, len(hits))
+	for _, h := range hits {
+		out = append(out, AnilistSearchResult{
+			ID:           h.AniListID,
+			RomajiTitle:  h.Title,
+			Format:       h.Type,
+			Status:       h.Status,
+			EpisodeCount: h.Episodes,
+			CoverImage:   cspSafeImage(h.Picture),
+			Season:       h.Season,
+			SeasonYear:   h.Year,
+			Synonyms:     h.Synonyms,
+		})
+	}
+	return out
 }
 
 func (h *Handler) handleSearchTorrents(w http.ResponseWriter, r *http.Request) {
