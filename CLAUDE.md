@@ -132,6 +132,18 @@ explicit user approval (per the "design pivots require approval" rule):
 Per global preference, use **`bun`** for the Svelte/Vite frontend (`bun install`, `bun add`,
 `bun run`, `bunx`), not npm/pnpm/yarn.
 
+## Build tooling
+
+Builds are driven by **[Mage](https://magefile.org)** (`magefile.go` at the repo root) — run
+`mage -l` to list targets. Key ones: `mage server` (host-OS daemon), `mage sidecar` (Tauri
+sidecar), `mage tauri` (desktop app; deps frontend+sidecar), `mage buildAll`, `mage run`,
+`mage test`/`vet`/`clean`. The `//go:build mage` tag keeps the magefile out of `go build`/`go
+test ./...`; `go mod tidy` would strip the `magefile/mage` require (it ignores the tag), so don't
+run it without re-adding the dep. CI doesn't use mage — the workflows inline `go build`/`bun run`
+directly, so the magefile is purely local convenience. The Tauri bundler emits to
+`desktop/target/release/bundle/` (cargo workspace root is `desktop/`), **not**
+`desktop/src-tauri/target/`.
+
 ## Reuse from prior attempts
 
 The abandoned Wails build lives at `D:\Projects\wails\ssanime-gui` (Go + Wails v2 + Nuxt 4). Mine

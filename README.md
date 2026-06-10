@@ -10,7 +10,7 @@ daemon with a system-tray icon; the UI is a Svelte SPA served over `http://127.0
 
 - Go 1.25+
 - [Bun](https://bun.sh) (for the Svelte frontend)
-- `task` (optional, for the Taskfile targets) or use `build.ps1` directly on Windows
+- [Mage](https://magefile.org) (`go install github.com/magefile/mage@latest`) — drives the build targets; run `mage -l` to list them
 
 ffmpeg and ffprobe are **auto-downloaded on first run** into `{DataDir}/bin/` — you do not
 need to install them separately. (yt-dlp is also provisioned for the planned direct-link
@@ -18,52 +18,28 @@ downloader, which is not yet active in v1.)
 
 ## Build
 
-### Frontend (required before building the Go binary)
+All build targets are driven by [Mage](https://magefile.org). Run `mage -l` to list them.
+
+### Daemon (standalone, browser-served)
 
 ```sh
-cd frontend
-bun install
-bun run build     # produces frontend/dist/  (embedded via go:embed)
+mage frontend   # build the Svelte SPA -> internal/server/dist (embedded via go:embed)
+mage server     # build the host-OS daemon (Windows -> ssanime.exe, no console window)
 ```
 
-### Windows — no console window (production)
+`mage server` builds for the current OS: cgo-free on Windows/Linux, with CGO for the
+AppKit systray on macOS. The manual equivalent on Windows is
+`go build -ldflags "-H=windowsgui -s -w" -o ssanime.exe ./cmd/ssanime`.
 
-```powershell
-go build -ldflags "-H=windowsgui -s -w" -o ssanime.exe ./cmd/ssanime
-# or:
-.\build.ps1
-```
-
-### Windows — with console (debugging / log to stdout)
-
-```powershell
-go build -o ssanime.exe ./cmd/ssanime
-# or:
-.\build.ps1 -Target windows-console
-```
-
-### Linux amd64
+### All platforms
 
 ```sh
-GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
-  go build -ldflags "-s -w" -o ssanime-linux-amd64 ./cmd/ssanime
+mage buildAll   # ssanime-windows-amd64.exe, ssanime-linux-amd64, ssanime-darwin-arm64
 ```
 
-### macOS amd64 (must build natively on a Mac)
-
-`fyne.io/systray` on macOS uses the AppKit Objective-C bridge, which requires CGO.
-Cross-compiling from Windows/Linux is not supported without a cross-CGO toolchain.
-
-```sh
-# On a Mac:
-go build -ldflags "-s -w" -o ssanime-darwin-amd64 ./cmd/ssanime
-```
-
-### All platforms (via Taskfile)
-
-```sh
-task build-all
-```
+macOS is built only when running natively on a Mac — `fyne.io/systray` uses the AppKit
+Objective-C bridge (CGO), which can't be cross-compiled without a cross-CGO toolchain, so
+`buildAll` skips it on Windows/Linux.
 
 ### Desktop app (Tauri)
 
@@ -82,13 +58,11 @@ on startup with `--no-open`, waits for the daemon to bind `127.0.0.1:4773`, then
 **Build:**
 
 ```sh
-task build-desktop
-# Equivalent manual steps:
-#   go build -ldflags "-s -w" -o desktop/src-tauri/binaries/ssanime-x86_64-pc-windows-msvc.exe ./cmd/ssanime
-#   cd desktop && bunx @tauri-apps/cli@latest build
+mage tauri
+# Runs, in order: mage frontend -> mage sidecar -> `cd desktop && bunx @tauri-apps/cli@latest build`
 ```
 
-Artifacts land in `desktop/src-tauri/target/release/bundle/`:
+Artifacts land in `desktop/target/release/bundle/` (the cargo workspace root is `desktop/`):
 - `nsis/ssanime-gui_<version>_x64-setup.exe` — NSIS installer
 - `msi/ssanime-gui_<version>_x64_en-US.msi` — MSI installer (if WiX is available)
 
@@ -126,9 +100,8 @@ appear on stdout. `DataDir` is:
 ## Development
 
 ```sh
-go test ./...           # run all tests (91 as of Phase 9)
-go vet ./...            # static analysis
-task test               # same via Taskfile
+mage test               # run all tests (go test ./...)
+mage vet                # static analysis (go vet ./...)
 ```
 
 ## License

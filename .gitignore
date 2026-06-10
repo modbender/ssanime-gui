@@ -37,3 +37,6 @@ frontend/node_modules/
 Thumbs.db
 .idea/
 .vscode/
+
+# Mage generated wrapper (only present with `mage -keep`)
+mage_output_file.go
