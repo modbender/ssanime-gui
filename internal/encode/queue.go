@@ -574,9 +574,9 @@ func (q *Queue) emitProgress(ep store.Episode, out store.EncodedOutput, resoluti
 		return
 	}
 	q.hub.Broadcast(events.TypeEncodeProgress, map[string]any{
-		"episodeId":  ep.ID,
-		"seriesId":   ep.SeriesID,
-		"outputId":   out.ID,
+		"episode_id": ep.ID,
+		"series_id":  ep.SeriesID,
+		"output_id":  out.ID,
 		"resolution": resolution,
 		"percent":    pct,
 		"speed":      speed,
@@ -588,9 +588,9 @@ func (q *Queue) emitOutputStatus(ep store.Episode, out store.EncodedOutput, reso
 		return
 	}
 	q.hub.Broadcast(events.TypeEncodeProgress, map[string]any{
-		"episodeId":  ep.ID,
-		"seriesId":   ep.SeriesID,
-		"outputId":   out.ID,
+		"episode_id": ep.ID,
+		"series_id":  ep.SeriesID,
+		"output_id":  out.ID,
 		"resolution": resolution,
 		"status":     status,
 	})
@@ -601,8 +601,8 @@ func (q *Queue) emitStatus(episodeID, seriesID int64, status string) {
 		return
 	}
 	q.hub.Broadcast(events.TypeEpisodeStatus, map[string]any{
-		"episodeId": episodeID,
-		"seriesId":  seriesID,
-		"status":    status,
+		"episode_id": episodeID,
+		"series_id":  seriesID,
+		"status":     status,
 	})
 }

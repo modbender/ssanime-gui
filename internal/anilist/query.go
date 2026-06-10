@@ -51,7 +51,9 @@ var (
 }`
 
 	mediaSearchQuery = `query ($search: String) {
-  Media(search: $search, type: ANIME, sort: SEARCH_MATCH) {` + mediaFields + `
+  Page(perPage: 10) {
+    media(search: $search, type: ANIME, sort: SEARCH_MATCH) {` + mediaFields + `
+    }
   }
 }`
 )
@@ -61,6 +63,9 @@ var (
 type graphQLResponse struct {
 	Data struct {
 		Media *rawMedia `json:"Media"`
+		Page  struct {
+			Media []*rawMedia `json:"media"`
+		} `json:"Page"`
 	} `json:"data"`
 	Errors []struct {
 		Message string `json:"message"`
@@ -92,17 +97,48 @@ type rawMedia struct {
 
 // decodeMedia maps a GraphQL response body to a Media, surfacing GraphQL errors.
 func decodeMedia(body []byte) (Media, error) {
-	var r graphQLResponse
-	if err := json.Unmarshal(body, &r); err != nil {
-		return Media{}, fmt.Errorf("anilist: decode: %w", err)
-	}
-	if len(r.Errors) > 0 {
-		return Media{}, fmt.Errorf("anilist: %s", r.Errors[0].Message)
+	r, err := decodeEnvelope(body)
+	if err != nil {
+		return Media{}, err
 	}
 	if r.Data.Media == nil {
 		return Media{}, fmt.Errorf("anilist: no media found")
 	}
-	m := r.Data.Media
+	return mapMedia(r.Data.Media), nil
+}
+
+// decodeMediaList maps a paged GraphQL search response to a slice of Media.
+func decodeMediaList(body []byte) ([]Media, error) {
+	r, err := decodeEnvelope(body)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Media, 0, len(r.Data.Page.Media))
+	for _, m := range r.Data.Page.Media {
+		if m == nil {
+			continue
+		}
+		out = append(out, mapMedia(m))
+	}
+	return out, nil
+}
+
+// decodeEnvelope unmarshals the AniList envelope and surfaces GraphQL errors,
+// which come back with HTTP 200 in an errors array.
+func decodeEnvelope(body []byte) (graphQLResponse, error) {
+	var r graphQLResponse
+	if err := json.Unmarshal(body, &r); err != nil {
+		return graphQLResponse{}, fmt.Errorf("anilist: decode: %w", err)
+	}
+	if len(r.Errors) > 0 {
+		return graphQLResponse{}, fmt.Errorf("anilist: %s", r.Errors[0].Message)
+	}
+	return r, nil
+}
+
+// mapMedia maps a raw GraphQL media record to a trimmed Media, pinning image
+// URLs to allowlisted CDN hosts.
+func mapMedia(m *rawMedia) Media {
 	cover := safeImageURL(m.CoverImage.ExtraLarge)
 	if cover == "" {
 		cover = safeImageURL(m.CoverImage.Large)
@@ -123,5 +159,5 @@ func decodeMedia(body []byte) (Media, error) {
 		BannerImage:  safeImageURL(m.BannerImage),
 		Synonyms:     m.Synonyms,
 		IsAdult:      m.IsAdult,
-	}, nil
+	}
 }

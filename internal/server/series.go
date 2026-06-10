@@ -270,7 +270,8 @@ func (h *Handler) handleCreateSeries(w http.ResponseWriter, r *http.Request) {
 	} else if req.Title != nil {
 		params.Title = *req.Title
 		if h.anilist != nil {
-			if m, err := h.anilist.SearchMedia(ctx, *req.Title); err == nil {
+			if list, err := h.anilist.SearchMedia(ctx, *req.Title); err == nil && len(list) > 0 {
+				m := list[0]
 				aid := int64(m.ID)
 				params.AnilistID = &aid
 				if m.IDMal != nil {

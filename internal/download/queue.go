@@ -410,14 +410,14 @@ func (q *Queue) emitProgress(ep store.Episode, p Progress) {
 		return
 	}
 	q.hub.Broadcast(events.TypeDownloadProgress, map[string]any{
-		"episodeId":  ep.ID,
-		"seriesId":   ep.SeriesID,
-		"bytesDone":  p.BytesDone,
-		"bytesTotal": p.BytesTotal,
-		"percent":    p.Percent(),
-		"peers":      p.Peers,
-		"speedBps":   p.SpeedBps,
-		"done":       p.Done,
+		"episode_id":  ep.ID,
+		"series_id":   ep.SeriesID,
+		"bytes_done":  p.BytesDone,
+		"bytes_total": p.BytesTotal,
+		"percent":     p.Percent(),
+		"peers":       p.Peers,
+		"speed_bps":   p.SpeedBps,
+		"done":        p.Done,
 	})
 }
 
@@ -426,8 +426,8 @@ func (q *Queue) emitStatus(episodeID, seriesID int64, status string) {
 		return
 	}
 	q.hub.Broadcast(events.TypeEpisodeStatus, map[string]any{
-		"episodeId": episodeID,
-		"seriesId":  seriesID,
-		"status":    status,
+		"episode_id": episodeID,
+		"series_id":  seriesID,
+		"status":     status,
 	})
 }

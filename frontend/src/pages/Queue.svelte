@@ -130,7 +130,7 @@
                     <div class="space-y-1.5">
                       <ProgressBar value={prog.percent} max={100} />
                       <div class="flex justify-between text-xs text-[var(--color-muted)]">
-                        <span class="tabular-nums">{formatBytes(prog.bytes_downloaded)} / {formatBytes(prog.bytes_total)}</span>
+                        <span class="tabular-nums">{formatBytes(prog.bytes_done)} / {formatBytes(prog.bytes_total)}</span>
                         <span class="tabular-nums">{formatBytes(prog.speed_bps)}/s · {prog.percent}%</span>
                       </div>
                     </div>
@@ -169,8 +169,9 @@
                         {/if}
                         {#if prog}
                           <span class="text-[var(--color-muted)] text-xs tabular-nums">{prog.resolution}p</span>
-                          <span class="text-[var(--color-muted)] text-xs tabular-nums">{prog.fps.toFixed(1)} fps</span>
-                          <span class="text-[var(--color-muted)] text-xs tabular-nums">{prog.speed.toFixed(2)}x</span>
+                          {#if prog.speed}
+                            <span class="text-[var(--color-muted)] text-xs tabular-nums">{prog.speed}</span>
+                          {/if}
                         {/if}
                       </div>
                     </div>
@@ -182,7 +183,9 @@
                       <ProgressBar value={prog.percent} max={100} />
                       <div class="flex justify-between text-xs text-[var(--color-muted)]">
                         <span class="tabular-nums">{prog.percent}% complete</span>
-                        <span class="tabular-nums">{prog.speed.toFixed(2)}x speed</span>
+                        {#if prog.speed}
+                          <span class="tabular-nums">{prog.speed}</span>
+                        {/if}
                       </div>
                     </div>
                   {:else}

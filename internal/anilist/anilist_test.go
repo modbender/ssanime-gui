@@ -112,6 +112,34 @@ func TestQueryBacksOffOn429(t *testing.T) {
 	}
 }
 
+func TestSearchMediaDecodesPagedList(t *testing.T) {
+	const body = `{"data":{"Page":{"media":[
+		{"id":1,"title":{"romaji":"One","english":"One EN"},"episodes":12,"coverImage":{"large":"https://s4.anilist.co/a.jpg"}},
+		{"id":2,"title":{"romaji":"Two"},"episodes":24}
+	]}}}`
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	})
+
+	list, err := c.SearchMedia(context.Background(), "anything")
+	if err != nil {
+		t.Fatalf("SearchMedia: %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("len = %d, want 2", len(list))
+	}
+	if list[0].ID != 1 || list[0].RomajiTitle != "One" {
+		t.Errorf("first = %+v", list[0])
+	}
+	if list[0].CoverImage != "https://s4.anilist.co/a.jpg" {
+		t.Errorf("cover = %q (allowlisted host should pass through)", list[0].CoverImage)
+	}
+	if list[1].ID != 2 || list[1].EpisodeCount != 24 {
+		t.Errorf("second = %+v", list[1])
+	}
+}
+
 func TestGraphQLErrorSurfaced(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

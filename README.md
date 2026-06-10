@@ -1,9 +1,10 @@
 # ssanime-gui
 
-Local anime **download → encode → archive** manager. Downloads via torrents (embedded
-`anacrolix/torrent`) or yt-dlp, re-encodes to x265 with ffmpeg, and organises the library
-in a Jellyfin-compatible layout. Runs as a background daemon with a system-tray icon; the
-UI is a Svelte SPA served over `http://127.0.0.1:4773/`.
+Local anime **download → encode → archive** manager. Downloads via torrents — an embedded
+`anacrolix/torrent` client or an external qBittorrent/Transmission backend — re-encodes to x265
+with ffmpeg, and organises the library in a Jellyfin-compatible layout. A yt-dlp / direct-link
+downloader is planned behind the `Downloader` interface but not wired in v1. Runs as a background
+daemon with a system-tray icon; the UI is a Svelte SPA served over `http://127.0.0.1:4773/`.
 
 ## Requirements
 
@@ -11,8 +12,9 @@ UI is a Svelte SPA served over `http://127.0.0.1:4773/`.
 - [Bun](https://bun.sh) (for the Svelte frontend)
 - `task` (optional, for the Taskfile targets) or use `build.ps1` directly on Windows
 
-ffmpeg, ffprobe, and yt-dlp are **auto-downloaded on first run** into `{DataDir}/bin/`.
-You do not need to install them separately.
+ffmpeg and ffprobe are **auto-downloaded on first run** into `{DataDir}/bin/` — you do not
+need to install them separately. (yt-dlp is also provisioned for the planned direct-link
+downloader, which is not yet active in v1.)
 
 ## Build
 

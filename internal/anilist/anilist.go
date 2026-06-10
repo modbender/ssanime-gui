@@ -54,10 +54,12 @@ type Client struct {
 	http     *http.Client
 	endpoint string
 
-	mu       sync.Mutex
-	cache    map[string]Media // key -> media
-	order    []string         // insertion order for bounded eviction
-	cacheCap int
+	mu        sync.Mutex
+	cache     map[string]Media   // key -> media (by-id fetches)
+	order     []string           // insertion order for bounded eviction
+	listCache map[string][]Media // key -> media list (search results)
+	listOrder []string
+	cacheCap  int
 }
 
 // Option configures a Client.
@@ -84,10 +86,11 @@ func WithCacheCap(n int) Option {
 // New builds an AniList client.
 func New(opts ...Option) *Client {
 	c := &Client{
-		http:     &http.Client{Timeout: defaultTimeout},
-		endpoint: Endpoint,
-		cache:    make(map[string]Media),
-		cacheCap: defaultCacheCap,
+		http:      &http.Client{Timeout: defaultTimeout},
+		endpoint:  Endpoint,
+		cache:     make(map[string]Media),
+		listCache: make(map[string][]Media),
+		cacheCap:  defaultCacheCap,
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -109,40 +112,54 @@ func (c *Client) GetMedia(ctx context.Context, id int) (Media, error) {
 	return m, nil
 }
 
-// SearchMedia fetches the top anime media matching a free-text query.
-func (c *Client) SearchMedia(ctx context.Context, query string) (Media, error) {
+// SearchMedia fetches the top anime media matching a free-text query, ranked by
+// search relevance.
+func (c *Client) SearchMedia(ctx context.Context, query string) ([]Media, error) {
 	key := "search:" + query
-	if m, ok := c.cacheGet(key); ok {
-		return m, nil
+	if list, ok := c.listCacheGet(key); ok {
+		return list, nil
 	}
-	m, err := c.query(ctx, mediaSearchQuery, map[string]any{"search": query})
+	body, err := c.fetch(ctx, mediaSearchQuery, map[string]any{"search": query})
 	if err != nil {
-		return Media{}, err
+		return nil, err
 	}
-	c.cachePut(key, m)
-	return m, nil
+	list, err := decodeMediaList(body)
+	if err != nil {
+		return nil, err
+	}
+	c.listCachePut(key, list)
+	return list, nil
 }
 
-// query POSTs a GraphQL request and maps the single Media result, retrying with
-// backoff on 429 (honoring Retry-After when present).
+// query POSTs a GraphQL request and maps the single Media result.
 func (c *Client) query(ctx context.Context, gql string, vars map[string]any) (Media, error) {
-	payload, err := json.Marshal(map[string]any{"query": gql, "variables": vars})
+	body, err := c.fetch(ctx, gql, vars)
 	if err != nil {
 		return Media{}, err
+	}
+	return decodeMedia(body)
+}
+
+// fetch POSTs a GraphQL request and returns the raw response body, retrying with
+// backoff on 429 (honoring Retry-After when present).
+func (c *Client) fetch(ctx context.Context, gql string, vars map[string]any) ([]byte, error) {
+	payload, err := json.Marshal(map[string]any{"query": gql, "variables": vars})
+	if err != nil {
+		return nil, err
 	}
 
 	var lastErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(payload))
 		if err != nil {
-			return Media{}, err
+			return nil, err
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "application/json")
 
 		resp, err := c.http.Do(req)
 		if err != nil {
-			return Media{}, fmt.Errorf("anilist: request: %w", err)
+			return nil, fmt.Errorf("anilist: request: %w", err)
 		}
 
 		if resp.StatusCode == http.StatusTooManyRequests {
@@ -151,7 +168,7 @@ func (c *Client) query(ctx context.Context, gql string, vars map[string]any) (Me
 			lastErr = fmt.Errorf("anilist: rate limited (429)")
 			select {
 			case <-ctx.Done():
-				return Media{}, ctx.Err()
+				return nil, ctx.Err()
 			case <-time.After(wait):
 			}
 			continue
@@ -160,14 +177,14 @@ func (c *Client) query(ctx context.Context, gql string, vars map[string]any) (Me
 		body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxRespBytes))
 		resp.Body.Close()
 		if readErr != nil {
-			return Media{}, readErr
+			return nil, readErr
 		}
 		if resp.StatusCode != http.StatusOK {
-			return Media{}, fmt.Errorf("anilist: status %s: %s", resp.Status, truncate(body, 200))
+			return nil, fmt.Errorf("anilist: status %s: %s", resp.Status, truncate(body, 200))
 		}
-		return decodeMedia(body)
+		return body, nil
 	}
-	return Media{}, lastErr
+	return nil, lastErr
 }
 
 // retryAfter computes the wait before a retry: the Retry-After header (seconds)
@@ -200,6 +217,27 @@ func (c *Client) cachePut(key string, m Media) {
 		}
 	}
 	c.cache[key] = m
+}
+
+func (c *Client) listCacheGet(key string) ([]Media, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	list, ok := c.listCache[key]
+	return list, ok
+}
+
+func (c *Client) listCachePut(key string, list []Media) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, exists := c.listCache[key]; !exists {
+		c.listOrder = append(c.listOrder, key)
+		for len(c.listOrder) > c.cacheCap {
+			oldest := c.listOrder[0]
+			c.listOrder = c.listOrder[1:]
+			delete(c.listCache, oldest)
+		}
+	}
+	c.listCache[key] = list
 }
 
 func truncate(b []byte, n int) string {

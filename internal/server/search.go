@@ -17,27 +17,31 @@ func (h *Handler) handleSearchAnilist(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusServiceUnavailable, "anilist client not available")
 		return
 	}
-	m, err := h.anilist.SearchMedia(r.Context(), q)
+	media, err := h.anilist.SearchMedia(r.Context(), q)
 	if err != nil {
 		h.logger.Warn("anilist search failed", "q", q, "err", err)
 		WriteError(w, http.StatusBadGateway, "anilist search failed: "+err.Error())
 		return
 	}
-	WriteJSON(w, http.StatusOK, AnilistSearchResult{
-		ID:           m.ID,
-		IDMal:        m.IDMal,
-		RomajiTitle:  m.RomajiTitle,
-		EnglishTitle: m.EnglishTitle,
-		Format:       m.Format,
-		Status:       m.Status,
-		EpisodeCount: m.EpisodeCount,
-		CoverImage:   m.CoverImage,
-		BannerImage:  m.BannerImage,
-		Season:       m.Season,
-		SeasonYear:   m.SeasonYear,
-		Synonyms:     m.Synonyms,
-		IsAdult:      m.IsAdult,
-	})
+	results := make([]AnilistSearchResult, 0, len(media))
+	for _, m := range media {
+		results = append(results, AnilistSearchResult{
+			ID:           m.ID,
+			IDMal:        m.IDMal,
+			RomajiTitle:  m.RomajiTitle,
+			EnglishTitle: m.EnglishTitle,
+			Format:       m.Format,
+			Status:       m.Status,
+			EpisodeCount: m.EpisodeCount,
+			CoverImage:   m.CoverImage,
+			BannerImage:  m.BannerImage,
+			Season:       m.Season,
+			SeasonYear:   m.SeasonYear,
+			Synonyms:     m.Synonyms,
+			IsAdult:      m.IsAdult,
+		})
+	}
+	WriteJSON(w, http.StatusOK, results)
 }
 
 func (h *Handler) handleSearchTorrents(w http.ResponseWriter, r *http.Request) {
