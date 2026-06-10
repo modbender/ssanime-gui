@@ -17,12 +17,13 @@ const maxBodyBytes = 1 << 20
 // (the SPA loads one Vite-built module script, no inline <script>), allows
 // 'unsafe-inline' styles only (Svelte/Tailwind inject inline style attributes),
 // and pins img-src to the AniList CDN hosts the metadata layer actually emits
-// plus data: URIs. frame-ancestors / X-Frame-Options block framing; nosniff
-// blocks MIME confusion.
+// plus data: URIs. font-src allows data: because the bundled Plus Jakarta Sans
+// variable font is inlined as a data: URI by the build. frame-ancestors /
+// X-Frame-Options block framing; nosniff blocks MIME confusion.
 var securityHeaders = map[string]string{
 	"Content-Security-Policy": "default-src 'self'; " +
 		"img-src 'self' https://s4.anilist.co https://img.anili.st data:; " +
-		"script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; " +
+		"script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; " +
 		"connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
 	"X-Content-Type-Options": "nosniff",
 	"X-Frame-Options":        "DENY",
