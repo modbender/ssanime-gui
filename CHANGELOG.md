@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0](https://github.com/modbender/ssanime-gui/compare/v0.1.1...v0.2.0) (2026-06-10)
+
+
+### Features
+
+* build Windows/Linux/macOS installers and attach to releases ([04da3f6](https://github.com/modbender/ssanime-gui/commit/04da3f62fa7b9b45c4d0be2723c75c91a34e2715))
+* multi-OS release installers + Mage build tool ([8f60be0](https://github.com/modbender/ssanime-gui/commit/8f60be0accd9113feb9e429b65bd3d7e56e3e829))
+
 ## [0.1.1](https://github.com/modbender/ssanime-gui/compare/v0.1.0...v0.1.1) (2026-06-10)
 
 
