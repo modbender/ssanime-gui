@@ -93,6 +93,9 @@ Artifacts land in `desktop/src-tauri/target/release/bundle/`:
 **Both artifacts ship:** the headless `ssanime.exe` remains fully functional standalone
 (daemon + systray, browser as the UI). The Tauri `.exe` adds a native window on top.
 
+For cutting tagged releases (the `v*` GitHub Actions workflow) and the Windows
+code-signing posture, see [docs/distribution.md](docs/distribution.md).
+
 ## Running
 
 ```sh
