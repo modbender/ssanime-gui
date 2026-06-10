@@ -107,15 +107,10 @@ jobs:
       #    (https://v2.tauri.app/distribute/pipelines/github/).
       - name: build tauri installers
         uses: tauri-apps/tauri-action@v0
-        env:
-          # --- Code signing (currently UNSIGNED) --------------------------------
-          # The app ships unsigned for now; SmartScreen will warn "unknown
-          # publisher". To sign later, set bundle.windows.certificateThumbprint in
-          # tauri.conf.json (or a custom signCommand) and inject the cert here —
-          # no workflow rewrite needed. See docs/distribution.md for the full path.
-          # Example secret wiring once a cert exists (keep commented until then):
-          #   TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          #   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        # Code signing (currently UNSIGNED): SmartScreen warns "unknown publisher".
+        # To sign later, set bundle.windows.certificateThumbprint in tauri.conf.json
+        # (or a custom signCommand) and add an `env:` block here wiring
+        # TAURI_SIGNING_PRIVATE_KEY / _PASSWORD from secrets. See docs/distribution.md.
         with:
           projectPath: desktop
           # tagName/releaseName/releaseId intentionally omitted -> build-only.
