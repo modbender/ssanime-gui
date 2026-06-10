@@ -4,16 +4,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-This repo is **pre-implementation** (no Go module, frontend, build, or tests yet). The original
-spec at `docs/superpowers/specs/2026-06-06-ssanime-gui-design.md` has been **substantially refined**
-— the current source of truth for the data model, sourcing, and decisions is **`docs/reference/`**:
+This repo is **implemented and building**. The Go daemon (`cmd/ssanime` + 17 `internal/` packages),
+the embedded Svelte SPA (`frontend/`, built to `internal/server/dist` and `go:embed`-ed), and the
+Tauri desktop shell (`desktop/`) all exist and compile; `go test ./...` is green (~97 tests across
+17 packages) and CI gates every push/PR on `main`. The end-to-end pipeline (DoH→nyaa search →
+embedded `anacrolix/torrent` download → ffmpeg multi-resolution encode → Jellyfin-style archive →
+cleanup) has been validated against a real torrent. Remaining work is feature breadth, polish, and
+distribution — not bring-up.
+
+Implemented `internal/` packages: `anilist` (GraphQL metadata), `binaries` (ffmpeg/yt-dlp provision
++ checksum), `config`, `doh` (SSRF-guarded DNS-over-HTTPS), `download` (anacrolix + qBittorrent/
+Transmission backends behind `Downloader`), `encode` (ffmpeg x265, ffprobe-anchored progress,
+multi-res fan-out), `events` (SSE hub), `extension` (goja/hibike runtime), `poller` (RSS/scrape feed
+watcher → enqueue), `procguard` (Windows job-object so a force-killed daemon doesn't orphan ffmpeg),
+`server` (REST + SSE + `localGuard` CSRF/rebind defense), `source` (nyaa/subsplease providers,
+habari parsing, autoselect), `store` (sqlc/goose/`modernc.org/sqlite`, dual read/write pool), `tray`.
+
+The original spec at `docs/superpowers/specs/2026-06-06-ssanime-gui-design.md` was **substantially
+refined** during build — the source of truth for the data model, sourcing, and decisions is
+**`docs/reference/`**:
 - `schema-from-automin.md` — the schema (derived from the proven `automin` Django models), encode-
   profile inheritance, sourcing, the comprehensive-v1 additions, and all resolved decisions.
 - `db-layer-decision.md` — sqlc + goose + `modernc.org/sqlite` + the single-writer pool.
 - `seanime-architecture.md` — patterns borrowed from the Seanime clone (`D:\Projects\gui\seanime`).
 - `transcript-wails-*.md` — why the prior Wails/Electron attempts were abandoned.
 
-Read `docs/reference/` before the old spec where they conflict. Key updates since the spec:
+Read `docs/reference/` before the old spec where they conflict. Key decisions baked into the build:
 
 - **License: GPL-3.0** (the app reuses GPL `habari` + adapts GPL Seanime code).
 - **Build posture: comprehensive, no rush** — include AniList metadata, multi-resolution output, a
@@ -53,23 +69,29 @@ one .exe:
 Pipeline of statuses (mirrors automin's `dlfin → enc → fin`):
 `queued → downloading → downloaded → encoding → encoded → archived` (+ `error`).
 
-## Planned Go packages
+## Go packages
 
 Each package has one purpose and communicates through a narrow interface. The `Downloader`
-interface is the key seam: torrent vs. direct backends (or a future qBittorrent backend) plug in
-without touching `feeds`, `queue`, or `encode`.
+interface is the key seam: torrent (embedded `anacrolix`) and external-client (qBittorrent/
+Transmission) backends plug in without touching `poller` or `encode`. Per-stage worker pools live
+inside `download` and `encode` themselves rather than in a separate `queue` package.
 
 | Package | Responsibility |
 |---|---|
-| `server` | HTTP, REST handlers, SSE hub, serves embedded SPA |
-| `store` | SQLite persistence + migrations |
-| `feeds` | RSS/scrape watchers: poll on interval, apply filter rules, enqueue matches (`mmcdole/gofeed`) |
-| `download` | Download manager behind a `Downloader` interface; backends: torrent (`anacrolix/torrent`) + direct/HLS (`yt-dlp`) |
-| `encode` | ffmpeg x265 wrapper, encode queue, profiles, stderr progress parsing |
-| `library` | Organizes finished files, metadata, browse views |
-| `binaries` | Locates / provisions / self-updates ffmpeg & yt-dlp |
-| `queue` | Worker pools (goroutines + channels) replacing Celery; per-stage concurrency caps |
+| `server` | HTTP, REST handlers, SSE hub, serves embedded SPA, `localGuard` (CSRF/DNS-rebind defense) |
+| `store` | SQLite persistence + sqlc/goose migrations, dual read/write pool |
+| `poller` | RSS/scrape feed watchers: poll on interval, apply filter rules, autoselect, enqueue (`mmcdole/gofeed`) |
+| `source` | Providers (nyaa, subsplease), habari release-name parsing, SmartSearch + autoselect |
+| `download` | Download manager behind `Downloader`; backends: embedded `anacrolix/torrent`, qBittorrent, Transmission. Owns its worker pool |
+| `encode` | ffmpeg x265 wrapper, encode worker pool, profiles, ffprobe-anchored progress, multi-resolution fan-out |
+| `anilist` | AniList GraphQL metadata (cover image/color, banner, titles, airing status) |
+| `binaries` | Locates / provisions / checksum-verifies ffmpeg & yt-dlp into app-data |
+| `doh` | SSRF-guarded DNS-over-HTTPS resolver (bypasses ISP nyaa.si DNS block) |
+| `extension` | goja JS extension runtime implementing the hibike provider interface |
 | `events` | Pub/sub bus → pushes progress/logs to SSE clients |
+| `procguard` | Windows job-object so a force-killed daemon reaps its ffmpeg children (no orphans) |
+| `tray` | System-tray icon (Open UI / Pause all / Quit) |
+| `config` | App-data paths, settings load/save |
 
 ## Data model (SQLite)
 

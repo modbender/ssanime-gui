@@ -8,6 +8,7 @@
 
 # Tooling scratch
 /.playwright-mcp/
+/.codegraph/
 *.out
 
 # Rust / Tauri build artifacts (desktop shell)
