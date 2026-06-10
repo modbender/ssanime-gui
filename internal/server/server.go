@@ -57,6 +57,9 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
+	// Security response headers (CSP, nosniff, frame-deny) on every response,
+	// API and embedded SPA alike.
+	r.Use(secureHeaders)
 
 	r.Route("/api", func(api chi.Router) {
 		// Loopback-only host check, CSRF Origin check, and body cap on the API.

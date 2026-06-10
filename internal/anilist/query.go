@@ -3,7 +3,31 @@ package anilist
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 )
+
+// imageHostAllow is the set of hosts AniList serves cover/banner images from.
+// Image URLs come from an untrusted upstream response and are stored, then
+// rendered by the SPA, so we pin them to known CDN hosts before persisting —
+// the same hosts the server CSP img-src whitelists. Add a host with one entry.
+var imageHostAllow = map[string]bool{
+	"s4.anilist.co": true,
+	"img.anili.st":  true,
+}
+
+// safeImageURL returns raw if it is an https URL on an allowlisted AniList CDN
+// host, else "" — dropping anything that could be a javascript:/data: payload or
+// a redirect to an attacker host.
+func safeImageURL(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || !imageHostAllow[u.Hostname()] {
+		return ""
+	}
+	return raw
+}
 
 // mediaFields is the shared selection set for both queries.
 const mediaFields = `
@@ -79,9 +103,9 @@ func decodeMedia(body []byte) (Media, error) {
 		return Media{}, fmt.Errorf("anilist: no media found")
 	}
 	m := r.Data.Media
-	cover := m.CoverImage.ExtraLarge
+	cover := safeImageURL(m.CoverImage.ExtraLarge)
 	if cover == "" {
-		cover = m.CoverImage.Large
+		cover = safeImageURL(m.CoverImage.Large)
 	}
 	return Media{
 		ID:           m.ID,
@@ -96,7 +120,7 @@ func decodeMedia(body []byte) (Media, error) {
 		SeasonYear:   m.SeasonYear,
 		CoverImage:   cover,
 		CoverColor:   m.CoverImage.Color,
-		BannerImage:  m.BannerImage,
+		BannerImage:  safeImageURL(m.BannerImage),
 		Synonyms:     m.Synonyms,
 		IsAdult:      m.IsAdult,
 	}, nil

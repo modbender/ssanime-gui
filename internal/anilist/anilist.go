@@ -25,6 +25,11 @@ const (
 	maxRetries      = 3
 )
 
+// maxRespBytes caps the AniList response body. A single trimmed Media record is
+// a few KiB; 4 MiB bounds a hostile or runaway upstream from streaming an
+// unbounded body into the decoder.
+const maxRespBytes = 4 << 20
+
 // Media is the trimmed AniList media metadata this app needs.
 type Media struct {
 	ID           int      `json:"id"`
@@ -152,7 +157,7 @@ func (c *Client) query(ctx context.Context, gql string, vars map[string]any) (Me
 			continue
 		}
 
-		body, readErr := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxRespBytes))
 		resp.Body.Close()
 		if readErr != nil {
 			return Media{}, readErr

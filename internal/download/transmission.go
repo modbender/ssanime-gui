@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -37,6 +38,8 @@ func newTransmissionBackend(_ context.Context, cfg Config) (Backend, error) {
 		port = 9091
 	}
 	return &transmissionBackend{
+		// TODO: validate host + support https when a client-management write path
+		// is added (audit deferred — today only the seeder writes this row).
 		endpoint: fmt.Sprintf("http://%s:%d/transmission/rpc", host, port),
 		user:     cfg.Username,
 		pass:     cfg.Password,
@@ -98,7 +101,7 @@ func (b *transmissionBackend) call(ctx context.Context, method string, args any,
 	if out == nil {
 		return nil
 	}
-	return json.NewDecoder(resp.Body).Decode(out)
+	return json.NewDecoder(io.LimitReader(resp.Body, maxAPIBytes)).Decode(out)
 }
 
 func (b *transmissionBackend) Add(ctx context.Context, req Request) (Handle, error) {
