@@ -184,9 +184,7 @@ export interface Profile {
   uuid: string
   name: string
   parent_id: number | null
-  // Go sends either "builtin" (int 0/1) or "is_builtin" (bool) depending on handler version
   is_builtin: boolean
-  builtin?: number | boolean
   codec: string | null
   crf: number | null
   preset: string | null
@@ -201,22 +199,9 @@ export interface Profile {
   audio: string | null
   container: string | null
   x265_params: string | null
-  // Go may serialize this as a JSON string "[1080,720]" instead of an array
   output_resolutions: number[] | null
-}
-
-// Normalize a raw profile from the API — handles field name differences and
-// output_resolutions coming back as a JSON string instead of an array.
-function normalizeProfile(raw: any): Profile {
-  let resolutions: number[] | null = raw.output_resolutions ?? null
-  if (typeof resolutions === 'string') {
-    try { resolutions = JSON.parse(resolutions) } catch { resolutions = null }
-  }
-  return {
-    ...raw,
-    is_builtin: Boolean(raw.is_builtin ?? raw.builtin),
-    output_resolutions: resolutions,
-  }
+  added_at: number
+  modified_at: number
 }
 
 export interface ResolvedProfile {
@@ -292,6 +277,7 @@ export const api = {
   deleteSeries: (id: number) => del<null>(`/series/${id}`),
   listEpisodes: (id: number) => get<EpisodeDetail[]>(`/series/${id}/episodes`),
   scanEpisodes: (id: number) => post<EpisodeDetail[]>(`/series/${id}/scan`),
+  refreshSeries: (id: number) => post<unknown>(`/series/${id}/refresh`, {}),
 
   // Encode
   bulkEncode: (body: { episode_ids: number[]; profile_id?: number; resolutions?: number[] }) =>
@@ -316,9 +302,9 @@ export const api = {
   deleteFeed: (id: number) => del<null>(`/feeds/${id}`),
 
   // Profiles
-  listProfiles: () => get<any[]>('/profiles').then(arr => arr.map(normalizeProfile)),
-  createProfile: (body: Partial<Profile> & { name: string }) => post<any>('/profiles', body).then(normalizeProfile),
-  patchProfile: (id: number, body: Partial<Profile>) => patch<any>(`/profiles/${id}`, body).then(normalizeProfile),
+  listProfiles: () => get<Profile[]>('/profiles'),
+  createProfile: (body: Partial<Profile> & { name: string }) => post<Profile>('/profiles', body),
+  patchProfile: (id: number, body: Partial<Profile>) => patch<Profile>(`/profiles/${id}`, body),
   deleteProfile: (id: number) => del<null>(`/profiles/${id}`),
   getResolvedProfile: (id: number) => get<ResolvedProfile>(`/profiles/${id}/resolved`),
 

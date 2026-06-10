@@ -1,0 +1,103 @@
+name: Release
+
+# Cut a release by pushing a tag like `v0.1.0`. The tag version MUST match the
+# `version` field in desktop/src-tauri/tauri.conf.json — bump that, commit, then
+# tag. tauri-action derives the bundle filenames from tauri.conf.json's version,
+# not from the tag, so a mismatch produces installers whose names disagree with
+# the release tag. There is no auto-bump here on purpose: the human bumps the
+# version in tauri.conf.json before tagging.
+on:
+  push:
+    tags: ["v*"]
+
+# Cancel a superseded run for the same tag (e.g. a force-pushed tag), mirroring ci.yml.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+# tauri-action creates/updates a GitHub Release and uploads installers, which
+# needs write access to repo contents. CI uses contents: read; release needs write.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: release (windows)
+    # Windows only for v1: NSIS + MSI are Windows bundles, and the systray code
+    # needs CGO + a Mac runner on macOS (out of scope). A single Windows job is correct.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # Tauri's bundler is built in Rust, so the host toolchain must be present.
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Cache the Rust build of the Tauri bundler crate between releases.
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      # --- Build order is load-bearing (see docs/distribution.md) -------------
+      # The Go daemon `go:embed`s internal/server/dist, so the SPA must be built
+      # and emitted there BEFORE the sidecar is compiled, and the sidecar must
+      # exist BEFORE tauri-action bundles it. We run these as explicit steps
+      # (rather than tauri-action's beforeBuildCommand) so each is independently
+      # visible in the logs and easy to debug on the first run.
+
+      # 1. Build the SPA → frontend's build emits to internal/server/dist for go:embed.
+      - name: build frontend
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+      # 2. Build the Go sidecar with the SPA now embedded. The output filename is the
+      #    Tauri sidecar target-triple name; -H=windowsgui suppresses the console window.
+      - name: build sidecar
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          $env:GOOS = "windows"
+          $env:GOARCH = "amd64"
+          go build -ldflags "-H=windowsgui -s -w" -o desktop/src-tauri/binaries/ssanime-x86_64-pc-windows-msvc.exe ./cmd/ssanime
+
+      # 3. Build the Tauri app (NSIS + MSI) and draft a GitHub Release with the
+      #    installers attached. Pinned to @v0 per the official Tauri v2 docs
+      #    (https://v2.tauri.app/distribute/pipelines/github/); Dependabot's
+      #    github-actions glob keeps this current.
+      - name: build tauri app and draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # --- Code signing (currently UNSIGNED) --------------------------------
+          # The app ships unsigned for now; SmartScreen will warn "unknown
+          # publisher". To sign later, set bundle.windows.certificateThumbprint in
+          # tauri.conf.json (or a custom signCommand) and inject the cert here —
+          # no workflow rewrite needed. See docs/distribution.md for the full path.
+          # Example secret wiring once a cert exists (keep commented until then):
+          #   TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          #   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: desktop
+          # github.ref_name is the pushed tag (e.g. v0.1.0). tauri-action finds or
+          # creates the release for this tag.
+          tagName: ${{ github.ref_name }}
+          releaseName: ssanime-gui ${{ github.ref_name }}
+          # Draft so a human reviews the installers before the release goes public.
+          releaseDraft: true
+          prerelease: false
+          releaseBody: |
+            Windows installers (NSIS `.exe` and MSI `.msi`) are attached below.
+
+            The app is currently **unsigned** — Windows SmartScreen may warn about an
+            unknown publisher. The installer fetches the WebView2 runtime if it is
+            not already present (Windows 11 ships it pre-installed).

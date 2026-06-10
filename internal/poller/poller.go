@@ -212,11 +212,11 @@ func (p *Poller) pollFeed(ctx context.Context, feed store.Feed) error {
 	}
 
 	p.hub.Broadcast(events.TypeFeedChecked, map[string]any{
-		"feedId":   feed.ID,
-		"seriesId": series.ID,
-		"found":    len(results),
-		"created":  created,
-		"at":       now,
+		"feed_id":   feed.ID,
+		"series_id": series.ID,
+		"found":     len(results),
+		"created":   created,
+		"at":        now,
 	})
 	p.logger.Info("poller: feed checked", "feed", feed.ID, "series", series.ID,
 		"found", len(results), "created", created)
@@ -313,9 +313,9 @@ func (p *Poller) enqueue(ctx context.Context, series store.Series, t *source.Ani
 		return err
 	}
 	p.hub.Broadcast(events.TypeEpisodeStatus, map[string]any{
-		"episodeId": ep.ID,
-		"seriesId":  series.ID,
-		"status":    queuedStatus,
+		"episode_id": ep.ID,
+		"series_id":  series.ID,
+		"status":     queuedStatus,
 	})
 	return nil
 }

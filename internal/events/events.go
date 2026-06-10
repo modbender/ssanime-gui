@@ -18,6 +18,7 @@ const (
 	TypeEncodeProgress   Type = "encode.progress"
 	TypeEpisodeStatus    Type = "episode.status"
 	TypeFeedChecked      Type = "feed.checked"
+	TypeSeriesUpdated    Type = "series.updated"
 	TypeLog              Type = "log"
 	TypeHeartbeat        Type = "heartbeat"
 )

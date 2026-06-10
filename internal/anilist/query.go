@@ -3,7 +3,31 @@ package anilist
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 )
+
+// imageHostAllow is the set of hosts AniList serves cover/banner images from.
+// Image URLs come from an untrusted upstream response and are stored, then
+// rendered by the SPA, so we pin them to known CDN hosts before persisting —
+// the same hosts the server CSP img-src whitelists. Add a host with one entry.
+var imageHostAllow = map[string]bool{
+	"s4.anilist.co": true,
+	"img.anili.st":  true,
+}
+
+// safeImageURL returns raw if it is an https URL on an allowlisted AniList CDN
+// host, else "" — dropping anything that could be a javascript:/data: payload or
+// a redirect to an attacker host.
+func safeImageURL(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || !imageHostAllow[u.Hostname()] {
+		return ""
+	}
+	return raw
+}
 
 // mediaFields is the shared selection set for both queries.
 const mediaFields = `
@@ -27,7 +51,18 @@ var (
 }`
 
 	mediaSearchQuery = `query ($search: String) {
-  Media(search: $search, type: ANIME, sort: SEARCH_MATCH) {` + mediaFields + `
+  Page(perPage: 10) {
+    media(search: $search, type: ANIME, sort: SEARCH_MATCH) {` + mediaFields + `
+    }
+  }
+}`
+
+	// mediaBatchQuery fetches up to 50 media by id in one request. AniList's Page
+	// perPage maxes at 50, so callers must chunk ids accordingly.
+	mediaBatchQuery = `query ($ids: [Int]) {
+  Page(perPage: 50) {
+    media(id_in: $ids, type: ANIME) {` + mediaFields + `
+    }
   }
 }`
 )
@@ -37,6 +72,9 @@ var (
 type graphQLResponse struct {
 	Data struct {
 		Media *rawMedia `json:"Media"`
+		Page  struct {
+			Media []*rawMedia `json:"media"`
+		} `json:"Page"`
 	} `json:"data"`
 	Errors []struct {
 		Message string `json:"message"`
@@ -68,20 +106,51 @@ type rawMedia struct {
 
 // decodeMedia maps a GraphQL response body to a Media, surfacing GraphQL errors.
 func decodeMedia(body []byte) (Media, error) {
-	var r graphQLResponse
-	if err := json.Unmarshal(body, &r); err != nil {
-		return Media{}, fmt.Errorf("anilist: decode: %w", err)
-	}
-	if len(r.Errors) > 0 {
-		return Media{}, fmt.Errorf("anilist: %s", r.Errors[0].Message)
+	r, err := decodeEnvelope(body)
+	if err != nil {
+		return Media{}, err
 	}
 	if r.Data.Media == nil {
 		return Media{}, fmt.Errorf("anilist: no media found")
 	}
-	m := r.Data.Media
-	cover := m.CoverImage.ExtraLarge
+	return mapMedia(r.Data.Media), nil
+}
+
+// decodeMediaList maps a paged GraphQL search response to a slice of Media.
+func decodeMediaList(body []byte) ([]Media, error) {
+	r, err := decodeEnvelope(body)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Media, 0, len(r.Data.Page.Media))
+	for _, m := range r.Data.Page.Media {
+		if m == nil {
+			continue
+		}
+		out = append(out, mapMedia(m))
+	}
+	return out, nil
+}
+
+// decodeEnvelope unmarshals the AniList envelope and surfaces GraphQL errors,
+// which come back with HTTP 200 in an errors array.
+func decodeEnvelope(body []byte) (graphQLResponse, error) {
+	var r graphQLResponse
+	if err := json.Unmarshal(body, &r); err != nil {
+		return graphQLResponse{}, fmt.Errorf("anilist: decode: %w", err)
+	}
+	if len(r.Errors) > 0 {
+		return graphQLResponse{}, fmt.Errorf("anilist: %s", r.Errors[0].Message)
+	}
+	return r, nil
+}
+
+// mapMedia maps a raw GraphQL media record to a trimmed Media, pinning image
+// URLs to allowlisted CDN hosts.
+func mapMedia(m *rawMedia) Media {
+	cover := safeImageURL(m.CoverImage.ExtraLarge)
 	if cover == "" {
-		cover = m.CoverImage.Large
+		cover = safeImageURL(m.CoverImage.Large)
 	}
 	return Media{
 		ID:           m.ID,
@@ -96,8 +165,8 @@ func decodeMedia(body []byte) (Media, error) {
 		SeasonYear:   m.SeasonYear,
 		CoverImage:   cover,
 		CoverColor:   m.CoverImage.Color,
-		BannerImage:  m.BannerImage,
+		BannerImage:  safeImageURL(m.BannerImage),
 		Synonyms:     m.Synonyms,
 		IsAdult:      m.IsAdult,
-	}, nil
+	}
 }

@@ -7,9 +7,34 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/modbender/ssanime-gui/internal/anilist"
+	"github.com/modbender/ssanime-gui/internal/metadata"
 	"github.com/modbender/ssanime-gui/internal/store"
 )
+
+// applyMediaToCreate fills a CreateSeriesParams from fetched AniList media via
+// the shared mapper, so the Media -> series-column field list lives in exactly
+// one place (also used by the background metadata refresher).
+func applyMediaToCreate(p *store.CreateSeriesParams, m anilist.Media) {
+	f := anilist.MediaToSeriesFields(m)
+	p.Title = f.Title
+	p.AnilistID = f.AnilistID
+	p.MalID = f.MalID
+	p.RomajiTitle = f.RomajiTitle
+	p.EnglishTitle = f.EnglishTitle
+	p.Format = f.Format
+	p.Status = f.Status
+	p.AiringStatus = f.AiringStatus
+	p.EpisodeCount = f.EpisodeCount
+	p.Synonyms = f.Synonyms
+	p.CoverImageUrl = f.CoverImage
+	p.BannerImageUrl = f.BannerImage
+	p.CoverColor = f.CoverColor
+	p.Season = f.Season
+	p.SeasonYear = f.SeasonYear
+}
 
 // derivedStatus computes the UI status string from AniList airing_status and
 // the archive counts. No extra DB query needed — ListSeriesWithProgress joins counts.
@@ -197,6 +222,7 @@ func (h *Handler) handleCreateSeries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+	now := time.Now().Unix()
 
 	// Duplicate check for AniList ID.
 	if req.AnilistID != nil {
@@ -222,46 +248,8 @@ func (h *Handler) handleCreateSeries(w http.ResponseWriter, r *http.Request) {
 	if req.AnilistID != nil && h.anilist != nil {
 		m, err := h.anilist.GetMedia(ctx, int(*req.AnilistID))
 		if err == nil {
-			params.AnilistID = req.AnilistID
-			if m.IDMal != nil {
-				id := int64(*m.IDMal)
-				params.MalID = &id
-			}
-			params.Title = m.RomajiTitle
-			if m.EnglishTitle != "" {
-				params.EnglishTitle = &m.EnglishTitle
-				params.Title = m.EnglishTitle
-			}
-			params.RomajiTitle = &m.RomajiTitle
-			params.Format = &m.Format
-			s := m.Status
-			params.AiringStatus = &s
-			params.Status = &s
-			if m.EpisodeCount > 0 {
-				ec := int64(m.EpisodeCount)
-				params.EpisodeCount = &ec
-			}
-			if m.CoverImage != "" {
-				params.CoverImageUrl = &m.CoverImage
-			}
-			if m.BannerImage != "" {
-				params.BannerImageUrl = &m.BannerImage
-			}
-			if m.CoverColor != "" {
-				params.CoverColor = &m.CoverColor
-			}
-			if m.Season != "" {
-				params.Season = &m.Season
-			}
-			if m.SeasonYear != 0 {
-				sy := int64(m.SeasonYear)
-				params.SeasonYear = &sy
-			}
-			if len(m.Synonyms) > 0 {
-				syn, _ := json.Marshal(m.Synonyms)
-				s := string(syn)
-				params.Synonyms = &s
-			}
+			applyMediaToCreate(&params, m)
+			params.MetadataRefreshedAt = &now
 		} else {
 			h.logger.Warn("anilist fetch failed (proceeding without metadata)", "anilist_id", *req.AnilistID, "err", err)
 			params.AnilistID = req.AnilistID
@@ -270,34 +258,11 @@ func (h *Handler) handleCreateSeries(w http.ResponseWriter, r *http.Request) {
 	} else if req.Title != nil {
 		params.Title = *req.Title
 		if h.anilist != nil {
-			if m, err := h.anilist.SearchMedia(ctx, *req.Title); err == nil {
-				aid := int64(m.ID)
-				params.AnilistID = &aid
-				if m.IDMal != nil {
-					mid := int64(*m.IDMal)
-					params.MalID = &mid
-				}
-				if m.EnglishTitle != "" {
-					params.EnglishTitle = &m.EnglishTitle
-				}
-				params.RomajiTitle = &m.RomajiTitle
-				params.Format = &m.Format
-				st := m.Status
-				params.AiringStatus = &st
-				params.Status = &st
-				if m.EpisodeCount > 0 {
-					ec := int64(m.EpisodeCount)
-					params.EpisodeCount = &ec
-				}
-				if m.CoverImage != "" {
-					params.CoverImageUrl = &m.CoverImage
-				}
-				if m.BannerImage != "" {
-					params.BannerImageUrl = &m.BannerImage
-				}
-				if m.CoverColor != "" {
-					params.CoverColor = &m.CoverColor
-				}
+			if list, err := h.anilist.SearchMedia(ctx, *req.Title); err == nil && len(list) > 0 {
+				title := params.Title
+				applyMediaToCreate(&params, list[0])
+				params.Title = title // a title-search add keeps the user's typed title
+				params.MetadataRefreshedAt = &now
 			}
 		}
 	}
@@ -412,6 +377,36 @@ func (h *Handler) handlePatchSeries(w http.ResponseWriter, r *http.Request) {
 	// Re-fetch after partial updates.
 	series, _ = h.store.Read().GetSeries(ctx, id)
 	WriteJSON(w, http.StatusOK, series)
+}
+
+// handleRefreshSeries refreshes one series' AniList metadata on demand. On
+// success it returns the updated row. AniList being rate-limited or unreachable
+// is not a user error — it returns 503 with the existing metadata kept, never a
+// 500. A series with no anilist_id is a 422 (nothing to refresh from).
+func (h *Handler) handleRefreshSeries(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	if h.refresher == nil {
+		WriteError(w, http.StatusServiceUnavailable, "metadata refresh is unavailable")
+		return
+	}
+
+	updated, err := h.refresher.RefreshSeries(r.Context(), id)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		WriteError(w, http.StatusNotFound, "series not found")
+		return
+	case errors.Is(err, metadata.ErrNoAnilistID):
+		WriteError(w, http.StatusUnprocessableEntity, "series has no anilist_id to refresh from")
+		return
+	case err != nil:
+		h.logger.Info("refresh series: upstream unavailable", "id", id, "err", err)
+		WriteError(w, http.StatusServiceUnavailable, "AniList unavailable or rate-limited; existing metadata kept")
+		return
+	}
+	WriteJSON(w, http.StatusOK, updated)
 }
 
 func (h *Handler) handleDeleteSeries(w http.ResponseWriter, r *http.Request) {

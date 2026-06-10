@@ -3,21 +3,25 @@
 
 export interface DownloadProgress {
   episode_id: number
-  bytes_downloaded: number
+  series_id: number
+  bytes_done: number
   bytes_total: number
   speed_bps: number
   percent: number
-  status: string
+  peers: number
+  done: boolean
 }
 
+// Two emitters populate this: the per-tick progress emitter sends percent+speed,
+// the output-status emitter sends status. percent/speed/status are therefore optional.
 export interface EncodeProgress {
   episode_id: number
+  series_id: number
   output_id: number
   resolution: number
   percent: number
-  fps: number
-  speed: number
-  status: string
+  speed?: string
+  status?: string
 }
 
 export interface EpisodeStatus {

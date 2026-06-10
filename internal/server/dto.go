@@ -1,5 +1,87 @@
 package server
 
+import (
+	"encoding/json"
+
+	"github.com/modbender/ssanime-gui/internal/store"
+)
+
+// ---- Profile DTO ----
+
+// ProfileResponse is the stable wire shape for encode profiles. It normalises
+// the sqlc model: Builtin int64 → is_builtin bool, and OutputResolutions *string
+// (stored JSON like "[1080,720]") → output_resolutions []int so callers never
+// need to parse the raw string.
+type ProfileResponse struct {
+	ID                int64    `json:"id"`
+	UUID              string   `json:"uuid"`
+	Name              string   `json:"name"`
+	IsBuiltin         bool     `json:"is_builtin"`
+	ParentID          *int64   `json:"parent_id"`
+	Codec             *string  `json:"codec"`
+	CRF               *float64 `json:"crf"`
+	Preset            *string  `json:"preset"`
+	Smartblur         *bool    `json:"smartblur"`
+	Deinterlace       *bool    `json:"deinterlace"`
+	Deblock           *string  `json:"deblock"`
+	PsyRD             *float64 `json:"psy_rd"`
+	PsyRDOQ           *float64 `json:"psy_rdoq"`
+	AQStrength        *float64 `json:"aq_strength"`
+	AQMode            *int64   `json:"aq_mode"`
+	Scale             *int64   `json:"scale"`
+	Audio             *string  `json:"audio"`
+	Container         *string  `json:"container"`
+	X265Params        *string  `json:"x265_params"`
+	OutputResolutions []int    `json:"output_resolutions"`
+	AddedAt           int64    `json:"added_at"`
+	ModifiedAt        int64    `json:"modified_at"`
+}
+
+// toProfileResponse converts a store.EncodeProfile to the stable ProfileResponse
+// wire shape. int64 boolean columns (Builtin, Smartblur, Deinterlace) are mapped
+// to their Go bool equivalents; the output_resolutions JSON string is parsed into
+// []int (nil/invalid → nil, which serialises as JSON null).
+func toProfileResponse(p store.EncodeProfile) ProfileResponse {
+	var smartblur *bool
+	if p.Smartblur != nil {
+		v := *p.Smartblur != 0
+		smartblur = &v
+	}
+	var deinterlace *bool
+	if p.Deinterlace != nil {
+		v := *p.Deinterlace != 0
+		deinterlace = &v
+	}
+	var resolutions []int
+	if p.OutputResolutions != nil && *p.OutputResolutions != "" {
+		_ = json.Unmarshal([]byte(*p.OutputResolutions), &resolutions)
+	}
+	return ProfileResponse{
+		ID:                p.ID,
+		UUID:              p.Uuid,
+		Name:              p.Name,
+		IsBuiltin:         p.Builtin != 0,
+		ParentID:          p.ParentID,
+		Codec:             p.Codec,
+		CRF:               p.Crf,
+		Preset:            p.Preset,
+		Smartblur:         smartblur,
+		Deinterlace:       deinterlace,
+		Deblock:           p.Deblock,
+		PsyRD:             p.PsyRd,
+		PsyRDOQ:           p.PsyRdoq,
+		AQStrength:        p.AqStrength,
+		AQMode:            p.AqMode,
+		Scale:             p.Scale,
+		Audio:             p.Audio,
+		Container:         p.Container,
+		X265Params:        p.X265Params,
+		OutputResolutions: resolutions,
+		AddedAt:           p.AddedAt,
+		ModifiedAt:        p.ModifiedAt,
+	}
+}
+
 // ---- Series DTOs ----
 
 // SeriesProgress is the Library-grid row: series + episode counts + space savings.

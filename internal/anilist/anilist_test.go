@@ -112,6 +112,103 @@ func TestQueryBacksOffOn429(t *testing.T) {
 	}
 }
 
+func TestSearchMediaDecodesPagedList(t *testing.T) {
+	const body = `{"data":{"Page":{"media":[
+		{"id":1,"title":{"romaji":"One","english":"One EN"},"episodes":12,"coverImage":{"large":"https://s4.anilist.co/a.jpg"}},
+		{"id":2,"title":{"romaji":"Two"},"episodes":24}
+	]}}}`
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	})
+
+	list, err := c.SearchMedia(context.Background(), "anything")
+	if err != nil {
+		t.Fatalf("SearchMedia: %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("len = %d, want 2", len(list))
+	}
+	if list[0].ID != 1 || list[0].RomajiTitle != "One" {
+		t.Errorf("first = %+v", list[0])
+	}
+	if list[0].CoverImage != "https://s4.anilist.co/a.jpg" {
+		t.Errorf("cover = %q (allowlisted host should pass through)", list[0].CoverImage)
+	}
+	if list[1].ID != 2 || list[1].EpisodeCount != 24 {
+		t.Errorf("second = %+v", list[1])
+	}
+}
+
+func TestGetMediaBatchDecodesPageIntoMap(t *testing.T) {
+	const body = `{"data":{"Page":{"media":[
+		{"id":10,"title":{"romaji":"Ten"},"status":"RELEASING","episodes":12},
+		{"id":20,"title":{"romaji":"Twenty","english":"Twenty EN"},"status":"FINISHED","episodes":24}
+	]}}}`
+	var calls int32
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	})
+
+	// Zero and duplicate ids must be dropped before the request is built.
+	got, err := c.GetMediaBatch(context.Background(), []int{10, 20, 0, 10})
+	if err != nil {
+		t.Fatalf("GetMediaBatch: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len = %d, want 2", len(got))
+	}
+	if got[10].Status != "RELEASING" || got[20].EnglishTitle != "Twenty EN" {
+		t.Errorf("batch map = %+v", got)
+	}
+	if n := atomic.LoadInt32(&calls); n != 1 {
+		t.Errorf("server hit %d times, want 1 (single chunk)", n)
+	}
+
+	// Each result must also populate the by-id cache (no further server hit).
+	if _, err := c.GetMedia(context.Background(), 10); err != nil {
+		t.Fatalf("GetMedia after batch: %v", err)
+	}
+	if n := atomic.LoadInt32(&calls); n != 1 {
+		t.Errorf("server hit %d times after cached GetMedia, want 1", n)
+	}
+}
+
+func TestGetMediaBatchChunksOver50(t *testing.T) {
+	var calls int32
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"Page":{"media":[]}}}`))
+	})
+
+	ids := make([]int, 0, 120)
+	for i := 1; i <= 120; i++ {
+		ids = append(ids, i)
+	}
+	if _, err := c.GetMediaBatch(context.Background(), ids); err != nil {
+		t.Fatalf("GetMediaBatch: %v", err)
+	}
+	// 120 ids / 50 per chunk = 3 requests.
+	if n := atomic.LoadInt32(&calls); n != 3 {
+		t.Errorf("server hit %d times, want 3 chunks", n)
+	}
+}
+
+func TestGetMediaBatchReturnsErrorOn429Exhaustion(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "0")
+		w.WriteHeader(http.StatusTooManyRequests)
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := c.GetMediaBatch(ctx, []int{1, 2, 3}); err == nil {
+		t.Error("expected an error when every attempt is rate-limited")
+	}
+}
+
 func TestGraphQLErrorSurfaced(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

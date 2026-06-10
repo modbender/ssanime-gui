@@ -115,15 +115,45 @@ func (r *Resolver) transport(blockPrivate bool) *http.Transport {
 	}
 }
 
+// blockedCIDRs are reserved ranges the net.IP predicates miss: CGNAT (RFC 6598,
+// often the path to a home router/ISP gateway), IETF protocol assignments (RFC
+// 6890), and benchmarking (RFC 2544). Add a range with one entry.
+var blockedCIDRs = mustParseCIDRs(
+	"100.64.0.0/10", // RFC 6598 CGNAT
+	"192.0.0.0/24",  // RFC 6890 IETF protocol assignments
+	"198.18.0.0/15", // RFC 2544 benchmarking
+)
+
+func mustParseCIDRs(cidrs ...string) []*net.IPNet {
+	out := make([]*net.IPNet, 0, len(cidrs))
+	for _, c := range cidrs {
+		_, n, err := net.ParseCIDR(c)
+		if err != nil {
+			panic(fmt.Sprintf("doh: bad blocked CIDR %q: %v", c, err))
+		}
+		out = append(out, n)
+	}
+	return out
+}
+
 // isBlockedIP reports whether an SSRF-guarded client must refuse to reach ipStr:
 // loopback (127/8, ::1), private (RFC1918 / RFC4193), link-local (incl. the
-// 169.254.169.254 cloud-metadata range), or the unspecified address. An
-// unparseable value is treated as blocked.
+// 169.254.169.254 cloud-metadata range), the unspecified address, or any
+// reserved range in blockedCIDRs (CGNAT etc.). An unparseable value is treated
+// as blocked.
 func isBlockedIP(ipStr string) bool {
 	ip := net.ParseIP(ipStr)
 	if ip == nil {
 		return true
 	}
-	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
-		ip.IsLinkLocalMulticast() || ip.IsUnspecified()
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+		return true
+	}
+	for _, n := range blockedCIDRs {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }

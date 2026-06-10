@@ -94,6 +94,52 @@ func TestSeedIdempotent(t *testing.T) {
 	}
 }
 
+func TestBuiltinExtensionsSeeded(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	exts, err := s.Read().ListExtensions(ctx)
+	if err != nil {
+		t.Fatalf("list extensions: %v", err)
+	}
+	if len(exts) != len(builtinExtensions) {
+		t.Fatalf("extension count = %d, want %d", len(exts), len(builtinExtensions))
+	}
+	for _, want := range builtinExtensions {
+		row, err := s.Read().GetExtensionByExtID(ctx, want.extID)
+		if err != nil {
+			t.Fatalf("builtin extension %q missing: %v", want.extID, err)
+		}
+		if row.IsBuiltin != 1 {
+			t.Errorf("%s: is_builtin = %d, want 1", want.extID, row.IsBuiltin)
+		}
+		if row.Payload != nil {
+			t.Errorf("%s: payload should be NULL for native builtins", want.extID)
+		}
+		if row.Lang != "native" {
+			t.Errorf("%s: lang = %q, want native", want.extID, row.Lang)
+		}
+		if row.Type != "anime-torrent" {
+			t.Errorf("%s: type = %q, want anime-torrent", want.extID, row.Type)
+		}
+		if row.Enabled != 1 {
+			t.Errorf("%s: enabled = %d, want 1", want.extID, row.Enabled)
+		}
+	}
+
+	// Second seed must not create duplicates.
+	if err := s.seed(ctx, &config.Config{DataDir: t.TempDir()}); err != nil {
+		t.Fatalf("second seed: %v", err)
+	}
+	exts2, err := s.Read().ListExtensions(ctx)
+	if err != nil {
+		t.Fatalf("list extensions after second seed: %v", err)
+	}
+	if len(exts2) != len(builtinExtensions) {
+		t.Errorf("extension count after second seed = %d, want %d (idempotency broken)", len(exts2), len(builtinExtensions))
+	}
+}
+
 func TestEpisodeStatusTransition(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()

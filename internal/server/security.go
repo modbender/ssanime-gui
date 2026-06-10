@@ -12,6 +12,34 @@ import (
 // stops a malicious client from streaming an unbounded body into a decoder.
 const maxBodyBytes = 1 << 20
 
+// securityHeaders is the static response-header set applied to every response —
+// the API subtree and the embedded SPA alike. The CSP keeps scripts to 'self'
+// (the SPA loads one Vite-built module script, no inline <script>), allows
+// 'unsafe-inline' styles only (Svelte/Tailwind inject inline style attributes),
+// and pins img-src to the AniList CDN hosts the metadata layer actually emits
+// plus data: URIs. frame-ancestors / X-Frame-Options block framing; nosniff
+// blocks MIME confusion.
+var securityHeaders = map[string]string{
+	"Content-Security-Policy": "default-src 'self'; " +
+		"img-src 'self' https://s4.anilist.co https://img.anili.st data:; " +
+		"script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; " +
+		"connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+	"X-Content-Type-Options": "nosniff",
+	"X-Frame-Options":        "DENY",
+}
+
+// secureHeaders sets the static security headers on every response. It wraps the
+// whole router so both /api and the SPA fallback are covered.
+func secureHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		for k, v := range securityHeaders {
+			h.Set(k, v)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // localGuard hardens the localhost daemon against the browser-pivot attacks a
 // 127.0.0.1 bind does NOT stop on its own:
 //
