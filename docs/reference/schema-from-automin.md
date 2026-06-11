@@ -1,6 +1,6 @@
 # Schema — derived from automin (proven base) + scoped enhancements
 
-Source: `D:\Projects\django\automin\core\models.py` (working Django schema). We keep the
+Source: the automin Django project's `core/models.py` (working Django schema). We keep the
 download→encode→archive core, drop the distribution half (the spec's out-of-scope list), and fold
 automin's over-normalized models into fewer tables. Enhancements are marked **[NEW]**.
 
@@ -155,7 +155,7 @@ habari-parse → AniList-match → autoselect-best-original. Both normalize to t
 
 ### Reachability — the user's ISP DNS-blocks nyaa (VERIFIED + solved with DoH)
 
-Verified 2026-06-06 on the dev machine via the `D:\Projects\gui\nyaa-test` validator:
+Verified 2026-06-06 on the dev machine via a local nyaa validator:
 
 - **nyaa.si is ISP DNS-poisoned** — the system resolver returns sinkhole `202.83.21.14` (→ TCP reset).
   But the ISP does **NOT** IP-block: resolving nyaa's *real* IP via **DoH** (`https://1.1.1.1`) and

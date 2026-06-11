@@ -1,6 +1,6 @@
 # Seanime Architecture — Patterns for ssanime-gui
 
-Deep-dive of the Seanime Go anime media server (`D:\Projects\gui\seanime`), extracting
+Deep-dive of the Seanime Go anime media server (a local Seanime checkout), extracting
 architecture patterns relevant to **ssanime-gui** (daemon-first Go core, embedded Svelte SPA,
 SSE, SQLite, goroutine worker pools, embedded torrent + yt-dlp behind a `Downloader` interface,
 durable x265 transcode, auto-provisioned binaries).

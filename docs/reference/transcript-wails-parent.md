@@ -1,22 +1,22 @@
-# Development History: `D:\Projects\wails` Parent Workspace → ssanime-gui Rewrite
+# Development History: the prior Wails workspace → ssanime-gui Rewrite
 
-Mined from the Claude Code transcript that produced the current `D:\Projects\gui\ssanime-gui`
-project. This document captures *why* the daemon-first Go + Svelte stack was chosen, what the
-three earlier attempts under `D:\Projects\wails` tried, what broke, and what to carry forward.
+Mined from the Claude Code transcript that produced the current project. This document captures
+*why* the daemon-first Go + Svelte stack was chosen, what the three earlier attempts in the prior
+Wails workspace tried, what broke, and what to carry forward.
 
 > **Scope of the transcript:** This is almost entirely a **brainstorming / stack-decision
 > session**, not an implementation session. It ends at the moment the design spec is written —
 > no Go or Svelte code was written yet in the new project. The bulk of the technical substance
 > comes from two `Explore` subagents that reverse-engineered (a) the original Django `automin`
 > app and (b) the three prior Wails/Electron attempts. The final approved spec lives at
-> `D:\Projects\gui\ssanime-gui\docs\superpowers\specs\2026-06-06-ssanime-gui-design.md`.
+> `docs/superpowers/specs/2026-06-06-ssanime-gui-design.md`.
 
 ---
 
 ## 1. Timeline
 
-1. **Opening ask.** User: *"I have been trying to build a golang app version of
-   `D:\Projects\django\automin`, but I just can't find the right tech stack."* The idea: a local,
+1. **Opening ask.** User: *"I have been trying to build a golang app version of the automin Django
+   project, but I just can't find the right tech stack."* The idea: a local,
    UI-first video manager that downloads single/multiple anime videos, encodes them to a smaller
    format (ffmpeg), runs in the background when needed, and manages a local library.
 
@@ -25,7 +25,7 @@ three earlier attempts under `D:\Projects\wails` tried, what broke, and what to 
 
 3. **Two parallel `Explore` subagents dispatched:**
    - **Subagent A** reverse-engineered the Django `automin` pipeline.
-   - **Subagent B** audited the three folders under `D:\Projects\wails`.
+   - **Subagent B** audited the three folders in the prior Wails workspace.
 
 4. **Findings synthesized.** Key realization: the three Go/desktop attempts had been *circling
    one piece* of automin — the **encoder** — and each restart lost that work. The assistant named
@@ -56,7 +56,7 @@ three earlier attempts under `D:\Projects\wails` tried, what broke, and what to 
 9. **Final design presented and approved** ("Yes, all of it"), including the two open
    recommendations (embed `anacrolix/torrent`; auto-download ffmpeg/yt-dlp).
 
-10. **New project located at `D:\Projects\gui\ssanime-gui`** (per user) and the design spec
+10. **New project located in this repo** (per user) and the design spec
     written. Session ends asking the user to review the spec before moving to `writing-plans`.
 
 ---
@@ -139,9 +139,9 @@ Concrete dead-ends in the three prior attempts (from Subagent B):
 
 | Folder | Stack | State / why it stalled |
 |---|---|---|
-| `D:\Projects\wails\ssanime-gui` | **Wails v2.10.2 + Go + Nuxt 4 (Vue 3, Nuxt UI, Pinia, pnpm)** | **Furthest along (~70% of the encoder).** Real Go encoder service. Module still named generic `wails-nuxt4-template`. Known gaps: many x265 profile fields defined but **only CRF + preset actually wired to the ffmpeg CLI**; progress is coarse (per-file count, not within-file). |
-| `D:\Projects\wails\ssanime-gui-nuxt` | **Electron + Node/TS + Nuxt 3 + PrimeVue** | More UI polish (Queue, Progress, Settings tabs, full GitHub Actions release matrix) **but dropped Go for Node.** Left **5 stale, unused `.go` files** (`app.go`, `services/*.go`) in the repo with **no `go.mod`** — a red herring; the live code is `electron/services/*.ts`. Encoder reimplemented in TS via `child_process` + `ffmpeg-static`. |
-| `D:\Projects\wails\wails-template-nuxt4` | Wails v2.10.2 + Nuxt 4 | Bare scaffold, only `Greet`/`GetAppInfo`/`GetSystemInfo`. **`go.mod` identical to ssanime-gui** (template duplication). Untouched starter. |
+| Wails `ssanime-gui` (prior local Wails attempt) | **Wails v2.10.2 + Go + Nuxt 4 (Vue 3, Nuxt UI, Pinia, pnpm)** | **Furthest along (~70% of the encoder).** Real Go encoder service. Module still named generic `wails-nuxt4-template`. Known gaps: many x265 profile fields defined but **only CRF + preset actually wired to the ffmpeg CLI**; progress is coarse (per-file count, not within-file). |
+| Electron/Nuxt attempt (`ssanime-gui-nuxt`) | **Electron + Node/TS + Nuxt 3 + PrimeVue** | More UI polish (Queue, Progress, Settings tabs, full GitHub Actions release matrix) **but dropped Go for Node.** Left **5 stale, unused `.go` files** (`app.go`, `services/*.go`) in the repo with **no `go.mod`** — a red herring; the live code is `electron/services/*.ts`. Encoder reimplemented in TS via `child_process` + `ffmpeg-static`. |
+| Bare Wails+Nuxt4 scaffold (`wails-template-nuxt4`) | Wails v2.10.2 + Nuxt 4 | Bare scaffold, only `Greet`/`GetAppInfo`/`GetSystemInfo`. **`go.mod` identical to the Wails ssanime-gui attempt** (template duplication). Untouched starter. |
 
 Observations that point at the friction:
 - All three carried the **generic template identity** (`wails-nuxt4-template`, output
@@ -159,7 +159,7 @@ scoped.
 
 ## 4. What Actually Worked / Worth Carrying Forward
 
-1. **The Go encoder (`encoder.go`) from `D:\Projects\wails\ssanime-gui`** is the single reusable
+1. **The Go encoder (`encoder.go`) from the prior local Wails attempt** is the single reusable
    asset and is **frontend-agnostic.** Characteristics worth preserving:
    - FFmpeg wrapper running as a **goroutine**, x265 encoding, **context-based cancellation**,
      **progress parsing from stderr** (regexp/bufio over the ffmpeg `exec` stream).
@@ -232,8 +232,8 @@ Constraints and warnings the future build should heed:
    reintroduce a meta-framework "for DX."
 
 3. **Reuse, don't rewrite, the Go encoder.** Port `encoder.go` (goroutine + context cancel +
-   stderr progress parsing) and the `EncodingProfile` struct from
-   `D:\Projects\wails\ssanime-gui\services\`. **Finish the wiring that was incomplete there:** map
+   stderr progress parsing) and the `EncodingProfile` struct from the prior local Wails attempt's
+   `services/` dir. **Finish the wiring that was incomplete there:** map
    *all* x265 profile fields to the ffmpeg CLI (the old build only used CRF + preset) and improve
    progress to within-file (not per-file count).
 
@@ -257,7 +257,7 @@ Constraints and warnings the future build should heed:
 9. **UI pages planned:** Library (series grid + archived files), Queue (live download + encode
    progress), Auto-downloader (feeds + filter rules), Profiles (encode presets), Settings, Logs.
 
-10. **First commit is pending.** At session end the new repo at `D:\Projects\gui\ssanime-gui` was
+10. **First commit is pending.** At session end the new repo (this project) was
     **not yet a git repo** (left uncommitted per the user's "commit only when asked" rule). The
     next planned step was the `writing-plans` skill to sequence milestones
     (core daemon + SQLite + SPA shell → encode → download → feeds → polish).
@@ -266,7 +266,7 @@ Constraints and warnings the future build should heed:
 
 ## Source references
 
-- Main transcript: `353b0a6c-60dd-4735-ba2c-9a567716a897.jsonl` (brainstorming/decision session).
-- Subagent A (`agent-a65a7db36788f50f5`): Django `automin` architecture report.
-- Subagent B (`agent-ae5013c91e51e80cd`): audit of the three `D:\Projects\wails` attempts.
+- Main transcript: the development transcript (brainstorming/decision session).
+- Subagent A: Django `automin` architecture report.
+- Subagent B: audit of the three prior Wails workspace attempts.
 - Approved design spec: `docs/superpowers/specs/2026-06-06-ssanime-gui-design.md`.

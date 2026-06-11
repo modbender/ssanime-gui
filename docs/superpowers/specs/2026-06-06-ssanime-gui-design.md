@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-06
 **Status:** Approved (design); pending implementation plan
-**Location:** `D:\Projects\gui\ssanime-gui`
+**Location:** this repo
 
 ## 1. Purpose
 

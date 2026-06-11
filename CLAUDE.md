@@ -28,7 +28,7 @@ refined** during build — the source of truth for the data model, sourcing, and
 - `schema-from-automin.md` — the schema (derived from the proven `automin` Django models), encode-
   profile inheritance, sourcing, the comprehensive-v1 additions, and all resolved decisions.
 - `db-layer-decision.md` — sqlc + goose + `modernc.org/sqlite` + the single-writer pool.
-- `seanime-architecture.md` — patterns borrowed from the Seanime clone (`D:\Projects\gui\seanime`).
+- `seanime-architecture.md` — patterns borrowed from a local Seanime checkout.
 - `transcript-wails-*.md` — why the prior Wails/Electron attempts were abandoned.
 
 Read `docs/reference/` before the old spec where they conflict. Key decisions baked into the build:
@@ -146,7 +146,7 @@ directly, so the magefile is purely local convenience. The Tauri bundler emits t
 
 ## Reuse from prior attempts
 
-The abandoned Wails build lives at `D:\Projects\wails\ssanime-gui` (Go + Wails v2 + Nuxt 4). Mine
+The abandoned Wails build (Go + Wails v2 + Nuxt 4) is a prior local Wails attempt. Mine
 it for the encode logic; do **not** copy its shell architecture (Wails native window — rejected).
 
 - **`services/encoder.go`** → basis of the `encode` package. It already has: ffmpeg discovery

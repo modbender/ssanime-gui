@@ -1,4 +1,4 @@
-# REST API Handler Layer Implementation Plan
+﻿# REST API Handler Layer Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -15,7 +15,7 @@
 | File | Action | Purpose |
 |---|---|---|
 | `internal/server/server.go` | Modify | Extend `Handler` struct; add all route groups |
-| `internal/server/handlers.go` | Modify | Move `handleGetSettings` → keep; add `handlePutSettings` |
+| `internal/server/handlers.go` | Modify | Move `handleGetSettings` â†’ keep; add `handlePutSettings` |
 | `internal/server/dto.go` | Create | All request/response DTO structs |
 | `internal/server/series.go` | Create | Series CRUD + derived-status computation |
 | `internal/server/episodes.go` | Create | Episode list, scan, encode-enqueue, retry, delete |
@@ -194,7 +194,7 @@ And add the import `"github.com/modbender/ssanime-gui/internal/anilist"` to main
 - [ ] **Step 3: Build to confirm wiring compiles**
 
 ```bash
-cd D:/Projects/gui/ssanime-gui && go build ./...
+go build ./...
 ```
 
 Expected: compile errors only for undefined handler methods (not import errors). If import errors appear, fix the import block in main.go.
@@ -202,7 +202,6 @@ Expected: compile errors only for undefined handler methods (not import errors).
 - [ ] **Step 4: Commit**
 
 ```bash
-cd D:/Projects/gui/ssanime-gui
 git add internal/server/server.go cmd/ssanime/main.go
 git commit -m "feat: extend Handler struct with registry/anilist/extMgr and wire all route groups"
 ```
@@ -589,7 +588,7 @@ func (rb *RingBuffer) Lines(limit int) []string {
 - [ ] **Step 3: Build to verify no syntax errors**
 
 ```bash
-cd D:/Projects/gui/ssanime-gui && go build ./internal/server/...
+go build ./internal/server/...
 ```
 
 Expected: errors only about undefined handler functions (not yet written). No import or syntax errors.
@@ -597,7 +596,6 @@ Expected: errors only about undefined handler functions (not yet written). No im
 - [ ] **Step 4: Commit**
 
 ```bash
-cd D:/Projects/gui/ssanime-gui
 git add internal/server/dto.go internal/server/middleware.go
 git commit -m "feat: add server DTOs, parseID helper, and RingBuffer for logs"
 ```
@@ -1121,7 +1119,7 @@ func episodeToDetail(ep store.Episode, outputs []store.EncodedOutput) EpisodeDet
 - [ ] **Step 3: Build**
 
 ```bash
-cd D:/Projects/gui/ssanime-gui && go build ./internal/server/...
+go build ./internal/server/...
 ```
 
 Expected: only errors about remaining unimplemented handlers. No errors in series.go or dto.go.
@@ -1129,7 +1127,6 @@ Expected: only errors about remaining unimplemented handlers. No errors in serie
 - [ ] **Step 4: Commit**
 
 ```bash
-cd D:/Projects/gui/ssanime-gui
 git add internal/server/series.go internal/server/episodes.go internal/server/uuid.go
 git commit -m "feat: add series CRUD handlers with derived-status computation"
 ```
@@ -1303,7 +1300,7 @@ func torrentToResult(t *source.AnimeTorrent) TorrentSearchResult {
 // their status to 'queued'. The download queue and encode queue pick them up
 // on their next scan tick. If a profileID is provided it is written to
 // episode.profile_id; resolutions override is stored as a note (the encode
-// queue reads profile output_resolutions — per-request override requires a
+// queue reads profile output_resolutions â€” per-request override requires a
 // temporary profile, which is deferred; for now the body's resolutions field
 // is validated but the profile's output_resolutions is authoritative).
 func (h *Handler) handleBulkEncode(w http.ResponseWriter, r *http.Request) {
@@ -1337,7 +1334,7 @@ func (h *Handler) handleBulkEncode(w http.ResponseWriter, r *http.Request) {
 					ID:     eid,
 					Status: ep.Status, // no-op for status; profile update below
 				})
-				// We update via the full status setter — profile_id is set on CreateEpisode,
+				// We update via the full status setter â€” profile_id is set on CreateEpisode,
 				// not via a standalone query. Use SetEpisodeStatus to kick the queue and
 				// accept that profile changes flow through separately (YAGNI: no separate
 				// SetEpisodeProfile query needed until the UI exposes per-episode profile edits).
@@ -1435,7 +1432,7 @@ var _ = strconv.Itoa
 - [ ] **Step 2: Build**
 
 ```bash
-cd D:/Projects/gui/ssanime-gui && go build ./internal/server/...
+go build ./internal/server/...
 ```
 
 Expected: errors only for remaining handlers (feeds, profiles, etc.).
@@ -1443,7 +1440,6 @@ Expected: errors only for remaining handlers (feeds, profiles, etc.).
 - [ ] **Step 3: Commit**
 
 ```bash
-cd D:/Projects/gui/ssanime-gui
 git add internal/server/episodes.go
 git commit -m "feat: add episode list, scan, bulk-encode, single-encode, retry, delete handlers"
 ```
@@ -2285,10 +2281,10 @@ func (h *Handler) handleGetLogs(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-- [ ] **Step 9: Build — should be clean now**
+- [ ] **Step 9: Build â€” should be clean now**
 
 ```bash
-cd D:/Projects/gui/ssanime-gui && go build ./...
+go build ./...
 ```
 
 Expected: zero errors. If the `extension.ExtTypeTorrent` reference causes a compile error (it's a package-level const), replace `_ = extension.ExtTypeTorrent` with `_ = h.extMgr` in extensions.go.
@@ -2296,7 +2292,6 @@ Expected: zero errors. If the `extension.ExtTypeTorrent` reference causes a comp
 - [ ] **Step 10: Commit**
 
 ```bash
-cd D:/Projects/gui/ssanime-gui
 git add internal/server/feeds.go internal/server/profiles.go internal/server/handlers.go \
         internal/server/queue.go internal/server/stats.go internal/server/search.go \
         internal/server/extensions.go internal/server/logs.go
@@ -2503,7 +2498,7 @@ func TestCreateAndResolveProfile(t *testing.T) {
 	}
 	newID := int(idFloat)
 
-	// Resolve it — should inherit everything from builtin except CRF=22.0
+	// Resolve it â€” should inherit everything from builtin except CRF=22.0
 	rec2 := getJSON(t, srv, "/api/profiles/"+itoa(newID)+"/resolved")
 	if rec2.Code != http.StatusOK {
 		t.Fatalf("resolve: status=%d body=%s", rec2.Code, rec2.Body.String())
@@ -2690,15 +2685,15 @@ Also add `"strconv"` import since it's used in itoa.
 - [ ] **Step 2: Run the tests**
 
 ```bash
-cd D:/Projects/gui/ssanime-gui && go test ./internal/server/... -v -count=1 -timeout 60s
+go test ./internal/server/... -v -count=1 -timeout 60s
 ```
 
-Expected: all tests PASS. Fix any compilation errors — common ones are missing `strconv` import in the test file or a method signature mismatch.
+Expected: all tests PASS. Fix any compilation errors â€” common ones are missing `strconv` import in the test file or a method signature mismatch.
 
 - [ ] **Step 3: Run the full test suite to verify no regressions**
 
 ```bash
-cd D:/Projects/gui/ssanime-gui && go test ./... -timeout 120s
+go test ./... -timeout 120s
 ```
 
 Expected: all 77 pre-existing tests still pass plus the new server tests.
@@ -2706,7 +2701,6 @@ Expected: all 77 pre-existing tests still pass plus the new server tests.
 - [ ] **Step 4: Commit**
 
 ```bash
-cd D:/Projects/gui/ssanime-gui
 git add internal/server/handlers_test.go
 git commit -m "test: add handler integration tests covering all major endpoints and bulk-encode flow"
 ```
@@ -2720,7 +2714,7 @@ This task verifies the gate: build, vet, and smoke-curl the running daemon.
 - [ ] **Step 1: go vet**
 
 ```bash
-cd D:/Projects/gui/ssanime-gui && go vet ./...
+go vet ./...
 ```
 
 Expected: no output (zero findings).
@@ -2728,7 +2722,7 @@ Expected: no output (zero findings).
 - [ ] **Step 2: go build**
 
 ```bash
-cd D:/Projects/gui/ssanime-gui && go build -o ssanime-test.exe ./cmd/ssanime/
+go build -o ssanime-test.exe ./cmd/ssanime/
 ```
 
 Expected: `ssanime-test.exe` produced with no errors.
@@ -2736,7 +2730,6 @@ Expected: `ssanime-test.exe` produced with no errors.
 - [ ] **Step 3: Start daemon in background and smoke-curl**
 
 ```bash
-cd D:/Projects/gui/ssanime-gui
 ./ssanime-test.exe &
 sleep 3
 curl -s http://localhost:8080/api/stats | python -m json.tool
@@ -2772,7 +2765,6 @@ Remove-Item ssanime-test.exe
 - [ ] **Step 6: Final commit**
 
 ```bash
-cd D:/Projects/gui/ssanime-gui
 git add -A
 git commit -m "chore: clean up after smoke test"
 ```
@@ -2820,14 +2812,15 @@ git commit -m "chore: clean up after smoke test"
 | Live smoke curl | Task 7 |
 
 **Type consistency check:**
-- `episodeToDetail` defined once in `episodes.go` — used by `series.go`, `queue.go`. No duplication.
-- `torrentToResult` defined once in `episodes.go` — used by `search.go`. No duplication.
-- `derivedStatus` defined once in `series.go` — used internally. No duplication.
-- `toInt64` defined in `series.go` — used by `stats.go`. Both in same package; no conflict.
-- `boolToInt64` defined in `middleware.go` — used across all handler files. One definition.
-- `mustUUID` defined in `uuid.go` — used by all create handlers.
-- `parseID` defined in `middleware.go` — used by all `/{id}` handlers.
-- `RingBuffer` defined in `middleware.go` — used by `logs.go` via `h.logs`.
+- `episodeToDetail` defined once in `episodes.go` â€” used by `series.go`, `queue.go`. No duplication.
+- `torrentToResult` defined once in `episodes.go` â€” used by `search.go`. No duplication.
+- `derivedStatus` defined once in `series.go` â€” used internally. No duplication.
+- `toInt64` defined in `series.go` â€” used by `stats.go`. Both in same package; no conflict.
+- `boolToInt64` defined in `middleware.go` â€” used across all handler files. One definition.
+- `mustUUID` defined in `uuid.go` â€” used by all create handlers.
+- `parseID` defined in `middleware.go` â€” used by all `/{id}` handlers.
+- `RingBuffer` defined in `middleware.go` â€” used by `logs.go` via `h.logs`.
 - `ResolvedProfileResponse` fields match `encode.Resolved` field names exactly.
-- `PatchProfileRequest = CreateProfileRequest` type alias — all fields are pointers; PATCH semantics work because nil = no change.
-- `itoa` defined only in `handlers_test.go` — test-only helper, no conflict.
+- `PatchProfileRequest = CreateProfileRequest` type alias â€” all fields are pointers; PATCH semantics work because nil = no change.
+- `itoa` defined only in `handlers_test.go` â€” test-only helper, no conflict.
+
