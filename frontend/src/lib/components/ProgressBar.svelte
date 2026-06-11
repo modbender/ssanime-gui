@@ -3,7 +3,7 @@
     value = 0,
     max = 100,
     class: cls = '',
-    color = 'bg-[var(--accent)]',
+    color = 'bg-[var(--accent-text)]',
   }: {
     value?: number
     max?: number

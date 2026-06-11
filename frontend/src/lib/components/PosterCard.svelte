@@ -68,7 +68,7 @@
     <!-- top-right flags -->
     <div class="absolute top-2 right-2 flex flex-col gap-1.5">
       {#if series.subscribed}
-        <span class="w-6 h-6 bg-[var(--accent)] shadow-lg flex items-center justify-center" title="Subscribed">
+        <span class="w-6 h-6 bg-[var(--accent-text)] shadow-lg flex items-center justify-center" title="Subscribed">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.25"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </span>
       {/if}
@@ -93,7 +93,7 @@
     {#if live}
       <div class="absolute inset-x-0 bottom-0 h-1 bg-black/40">
         <div
-          class="h-full {live.kind === 'encode' ? 'bg-[var(--color-info)]' : 'bg-[var(--accent)]'} transition-[width] duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]"
+          class="h-full {live.kind === 'encode' ? 'bg-[var(--color-info)]' : 'bg-[var(--accent-text)]'} transition-[width] duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]"
           style="width: {Math.max(2, Math.min(100, live.percent))}%"
         ></div>
       </div>
@@ -102,7 +102,7 @@
 
   <!-- meta -->
   <div class="mt-2.5 px-0.5 space-y-0.5">
-    <p class="text-[13px] font-medium leading-snug text-[var(--color-text)] line-clamp-1 transition-colors duration-200 group-hover:text-[var(--accent)]">
+    <p class="text-[13px] font-medium leading-snug text-[var(--color-text)] line-clamp-1 transition-colors duration-200 group-hover:text-[var(--accent-text)]">
       {title}
     </p>
     {#if series.space_saved_bytes > 0}

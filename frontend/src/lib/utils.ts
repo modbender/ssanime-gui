@@ -51,6 +51,94 @@ export function accentForeground(coverColor: string | null | undefined): string 
   return L > 0.6 ? '#0a0a0a' : '#ffffff'
 }
 
+/** sRGB → relative luminance (WCAG), shared by the accent-foreground heuristics. */
+function relativeLuminance(r: number, g: number, b: number): number {
+  const lin = [r, g, b].map((c) => {
+    const s = c / 255
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+}
+
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  const rn = r / 255, gn = g / 255, bn = b / 255
+  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn)
+  const d = max - min
+  let h = 0
+  if (d !== 0) {
+    if (max === rn) h = ((gn - bn) / d) % 6
+    else if (max === gn) h = (bn - rn) / d + 2
+    else h = (rn - gn) / d + 4
+    h *= 60
+    if (h < 0) h += 360
+  }
+  const l = (max + min) / 2
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1))
+  return [h, s, l]
+}
+
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  const c = (1 - Math.abs(2 * l - 1)) * s
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+  const m = l - c / 2
+  let r = 0, g = 0, b = 0
+  if (h < 60) [r, g, b] = [c, x, 0]
+  else if (h < 120) [r, g, b] = [x, c, 0]
+  else if (h < 180) [r, g, b] = [0, c, x]
+  else if (h < 240) [r, g, b] = [0, x, c]
+  else if (h < 300) [r, g, b] = [x, 0, c]
+  else [r, g, b] = [c, 0, x]
+  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)]
+}
+
+/** Minimum relative luminance an accent must clear to stay legible as TEXT on the
+ *  near-black app surfaces. ~0.18 corresponds to roughly a 4.5:1 contrast against
+ *  the #0b0b0c page bg; the default violet (#7c6af0, L≈0.22) already clears it. */
+const ACCENT_TEXT_MIN_L = 0.18
+
+/**
+ * Legibility-clamped accent for FOREGROUND use (accent-colored text, thin lines,
+ * small dots/pips, rings, count chips) drawn directly on the app's near-black
+ * surfaces. Preserves the accent's hue but lifts very DARK covers (navy,
+ * near-black, deep maroon) until they clear a minimum perceived luminance, so
+ * they don't vanish against the dark UI. Light/normal accents pass through
+ * unchanged — only genuinely dark ones get raised.
+ */
+export function accentText(coverColor: string | null | undefined): string {
+  const hex = resolveAccent(coverColor)
+  let h = hex.replace('#', '')
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('')
+  const n = parseInt(h, 16)
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255
+
+  if (relativeLuminance(r, g, b) >= ACCENT_TEXT_MIN_L) {
+    return `#${h}`
+  }
+
+  const [hue, sat0, l0] = rgbToHsl(r, g, b)
+  // Very-low-saturation darks (near-black) would lift toward muddy grey; floor
+  // saturation so the lifted result still reads as a tinted accent.
+  const sat = Math.max(sat0, 0.35)
+  // Raise lightness in small steps until the luminance clears the threshold,
+  // capping at a bright-but-not-white ceiling.
+  let l = l0
+  for (let i = 0; i < 40 && l < 0.82; i++) {
+    ;[r, g, b] = hslToRgb(hue, sat, l)
+    if (relativeLuminance(r, g, b) >= ACCENT_TEXT_MIN_L) break
+    l += 0.02
+  }
+  // Ensure a sane floor even if the loop bailed early.
+  if (l < 0.62) l = 0.62
+  ;[r, g, b] = hslToRgb(hue, sat, l)
+  return `#${[r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('')}`
+}
+
+/** The "r g b" channel string for the legibility-clamped accent (mirrors
+ *  hexToRgbChannels) so it can drive rgb(var(--accent-text-rgb) / α) uses. */
+export function accentTextRgb(coverColor: string | null | undefined): string {
+  return hexToRgbChannels(accentText(coverColor))
+}
+
 export function formatBytes(bytes: number | null | undefined): string {
   if (bytes == null || bytes === 0) return '0 B'
   const k = 1024

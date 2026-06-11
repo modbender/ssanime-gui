@@ -3,7 +3,7 @@
   import type { DiscoveryItem } from '$lib/api'
   import Button from '$lib/components/Button.svelte'
   import Spinner from '$lib/components/Spinner.svelte'
-  import { resolveAccent, hexToRgbChannels, accentForeground, titleCase } from '$lib/utils'
+  import { resolveAccent, hexToRgbChannels, accentForeground, accentText, accentTextRgb, titleCase } from '$lib/utils'
   import { rememberPreview, trackedAnilistIds } from '$lib/discovery.svelte'
 
   let {
@@ -24,6 +24,8 @@
   const accent = $derived(resolveAccent(featured?.cover_color))
   const accentRgb = $derived(hexToRgbChannels(featured?.cover_color))
   const accentFg = $derived(accentForeground(featured?.cover_color))
+  const accentTxt = $derived(accentText(featured?.cover_color))
+  const accentTxtRgb = $derived(accentTextRgb(featured?.cover_color))
 
   const title = $derived(featured ? featured.english_title || featured.romaji_title : '')
   const banner = $derived(featured?.banner_image || featured?.cover_image || null)
@@ -54,7 +56,7 @@
 {#if featured}
   <section
     class="relative w-full overflow-hidden flex items-end min-h-[72vh] shrink-0"
-    style="--accent: {accent}; --accent-rgb: {accentRgb}; --accent-fg: {accentFg};"
+    style="--accent: {accent}; --accent-rgb: {accentRgb}; --accent-fg: {accentFg}; --accent-text: {accentTxt}; --accent-text-rgb: {accentTxtRgb};"
   >
     <!-- Banner layer -->
     <div class="absolute inset-0">
@@ -92,7 +94,7 @@
         <!-- eyebrow -->
         <div class="flex items-center gap-2 mb-4">
           <span class="inline-flex items-center gap-1.5 bg-white/5 ring-1 ring-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-dim)]">
-            <span class="w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
+            <span class="w-1.5 h-1.5 rounded-full bg-[var(--accent-text)]"></span>
             Trending now
           </span>
         </div>
@@ -161,7 +163,7 @@
               aria-label={`Show featured ${i + 1}`}
               onclick={() => (index = i)}
               class="h-1.5 rounded-full transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] {i === index
-                ? 'w-7 bg-[var(--accent)]'
+                ? 'w-7 bg-[var(--accent-text)]'
                 : 'w-1.5 bg-white/25 hover:bg-white/40'}"
             ></button>
           {/each}
