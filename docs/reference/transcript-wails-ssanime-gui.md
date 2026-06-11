@@ -1,8 +1,8 @@
 # Reference: Wails + Nuxt 4 `ssanime-gui` — Development History (Mined Transcript)
 
-Source transcript: `C:\Users\Neo\.claude\projects\D--Projects-wails-ssanime-gui\3e1e598e-6fba-461e-afa1-5672938ae177.jsonl`
-Original workspace: `D:\Projects\wails\ssanime-gui` (now abandoned).
-Successor: daemon-first Go + Svelte rewrite at `D:\Projects\gui\ssanime-gui`.
+Source: the development transcript.
+Original workspace: a prior local Wails attempt (now abandoned).
+Successor: the daemon-first Go + Svelte rewrite in this repo.
 
 This document captures what the old Wails build contained, what was decided, what hurt, and what to carry forward into the rewrite. It is reconstructed from a relatively short session (≈189 events): the bulk of the *code* already existed before the transcript; the session itself was (1) a `/init` codebase analysis producing a `CLAUDE.md`, and (2) a research conversation comparing stacks and probing Wails build constraints. The abandonment decision is implied by the research thread, not narrated as a dramatic blow-up.
 
