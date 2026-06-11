@@ -77,9 +77,4 @@
       </Link>
     {/each}
   </nav>
-
-  <!-- Version footer -->
-  <div class="mt-4 text-[9px] font-medium tracking-wider text-[var(--color-faint)] [writing-mode:vertical-rl] rotate-180 select-none">
-    v0.1
-  </div>
 </aside>
