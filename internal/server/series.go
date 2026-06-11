@@ -69,6 +69,45 @@ func derivedStatus(airingStatus *string, episodeCount *int64, episodeTotal, epis
 	}
 }
 
+// rowToProgress builds a SeriesProgress wire row from a ListSeriesWithProgress
+// row. derivedStatus computes the automatic status; a manual user_status
+// override is carried alongside so the frontend can render the right badge and
+// bucket the series. Used by the Library grid, the Downloads grouping, and the
+// tracked-home endpoint so the mapping lives in one place.
+func rowToProgress(row store.ListSeriesWithProgressRow) SeriesProgress {
+	src := toInt64(row.SourceBytesTotal)
+	enc := toInt64(row.EncodedBytesTotal)
+	ds := derivedStatus(row.AiringStatus, row.EpisodeCount, row.EpisodeTotal, row.EpisodeArchived)
+	return SeriesProgress{
+		ID:                row.ID,
+		UUID:              row.Uuid,
+		Title:             row.Title,
+		FeedTitle:         row.FeedTitle,
+		SeasonNumber:      row.SeasonNumber,
+		Subscribed:        row.Subscribed == 1,
+		Favorite:          row.Favorite == 1,
+		AiringStatus:      row.AiringStatus,
+		DerivedStatus:     ds,
+		UserStatus:        row.UserStatus,
+		PosterPath:        row.PosterPath,
+		CoverImageURL:     row.CoverImageUrl,
+		BannerImageURL:    row.BannerImageUrl,
+		CoverColor:        row.CoverColor,
+		AnilistID:         row.AnilistID,
+		RomajiTitle:       row.RomajiTitle,
+		EnglishTitle:      row.EnglishTitle,
+		Format:            row.Format,
+		EpisodeCount:      row.EpisodeCount,
+		EpisodeTotal:      row.EpisodeTotal,
+		EpisodeArchived:   row.EpisodeArchived,
+		SourceBytesTotal:  src,
+		EncodedBytesTotal: enc,
+		SpaceSavedBytes:   src - enc,
+		AddedAt:           row.AddedAt,
+		ModifiedAt:        row.ModifiedAt,
+	}
+}
+
 // toInt64 safely converts an interface{} returned by sqlc aggregate columns.
 func toInt64(v interface{}) int64 {
 	switch x := v.(type) {
@@ -100,50 +139,20 @@ func (h *Handler) handleListSeries(w http.ResponseWriter, r *http.Request) {
 
 	out := make([]SeriesProgress, 0, len(rows))
 	for _, row := range rows {
-		src := toInt64(row.SourceBytesTotal)
-		enc := toInt64(row.EncodedBytesTotal)
-		ds := derivedStatus(row.AiringStatus, row.EpisodeCount, row.EpisodeTotal, row.EpisodeArchived)
-
 		if filterSubscribed && row.Subscribed != 1 {
 			continue
 		}
 		if filterFavorite && row.Favorite != 1 {
 			continue
 		}
-		if filterStatus != "" && ds != filterStatus {
+		p := rowToProgress(row)
+		if filterStatus != "" && p.DerivedStatus != filterStatus {
 			continue
 		}
 		if filterQ != "" && !strings.Contains(strings.ToLower(row.Title), filterQ) {
 			continue
 		}
-
-		out = append(out, SeriesProgress{
-			ID:                row.ID,
-			UUID:              row.Uuid,
-			Title:             row.Title,
-			FeedTitle:         row.FeedTitle,
-			SeasonNumber:      row.SeasonNumber,
-			Subscribed:        row.Subscribed == 1,
-			Favorite:          row.Favorite == 1,
-			AiringStatus:      row.AiringStatus,
-			DerivedStatus:     ds,
-			PosterPath:        row.PosterPath,
-			CoverImageURL:     row.CoverImageUrl,
-			BannerImageURL:    row.BannerImageUrl,
-			CoverColor:        row.CoverColor,
-			AnilistID:         row.AnilistID,
-			RomajiTitle:       row.RomajiTitle,
-			EnglishTitle:      row.EnglishTitle,
-			Format:            row.Format,
-			EpisodeCount:      row.EpisodeCount,
-			EpisodeTotal:      row.EpisodeTotal,
-			EpisodeArchived:   row.EpisodeArchived,
-			SourceBytesTotal:  src,
-			EncodedBytesTotal: enc,
-			SpaceSavedBytes:   src - enc,
-			AddedAt:           row.AddedAt,
-			ModifiedAt:        row.ModifiedAt,
-		})
+		out = append(out, p)
 	}
 	WriteJSON(w, http.StatusOK, out)
 }
@@ -194,6 +203,7 @@ func (h *Handler) handleGetSeries(w http.ResponseWriter, r *http.Request) {
 		Favorite:         series.Favorite == 1,
 		AiringStatus:     series.AiringStatus,
 		DerivedStatus:    ds,
+		UserStatus:       series.UserStatus,
 		PosterPath:       series.PosterPath,
 		CoverImageURL:    series.CoverImageUrl,
 		BannerImageURL:   series.BannerImageUrl,

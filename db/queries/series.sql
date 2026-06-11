@@ -108,5 +108,10 @@ UPDATE series SET favorite = ?, modified_at = unixepoch() WHERE id = ?;
 -- name: SetSeriesAiringStatus :exec
 UPDATE series SET airing_status = ?, modified_at = unixepoch() WHERE id = ?;
 
+-- SetSeriesUserStatus sets the manual override: NULL re-engages full automation,
+-- 'paused'/'dropped' make the series' feed dormant (the poller gate skips it).
+-- name: SetSeriesUserStatus :exec
+UPDATE series SET user_status = ?, modified_at = unixepoch() WHERE id = ?;
+
 -- name: DeleteSeries :exec
 DELETE FROM series WHERE id = ?;

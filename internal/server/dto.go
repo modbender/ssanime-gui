@@ -95,6 +95,7 @@ type SeriesProgress struct {
 	Favorite          bool    `json:"favorite"`
 	AiringStatus      *string `json:"airing_status"`
 	DerivedStatus     string  `json:"derived_status"`
+	UserStatus        *string `json:"user_status"`
 	PosterPath        *string `json:"poster_path"`
 	CoverImageURL     *string `json:"cover_image_url"`
 	BannerImageURL    *string `json:"banner_image_url"`
@@ -125,6 +126,7 @@ type SeriesDetail struct {
 	Favorite         bool            `json:"favorite"`
 	AiringStatus     *string         `json:"airing_status"`
 	DerivedStatus    string          `json:"derived_status"`
+	UserStatus       *string         `json:"user_status"`
 	PosterPath       *string         `json:"poster_path"`
 	CoverImageURL    *string         `json:"cover_image_url"`
 	BannerImageURL   *string         `json:"banner_image_url"`
@@ -367,4 +369,90 @@ type CreateExtensionRepoRequest struct {
 
 type LogsResponse struct {
 	Lines []string `json:"lines"`
+}
+
+// ---- Discovery (home) ----
+
+// DiscoveryItem is one AniList media card on the discovery home. Image fields are
+// "" when not on the CSP allowlist (frontend shows a placeholder).
+type DiscoveryItem struct {
+	AnilistID    int    `json:"anilist_id"`
+	RomajiTitle  string `json:"romaji_title"`
+	EnglishTitle string `json:"english_title"`
+	Format       string `json:"format"`
+	Status       string `json:"status"`
+	EpisodeCount *int   `json:"episode_count"`
+	CoverImage   string `json:"cover_image"`
+	BannerImage  string `json:"banner_image"`
+	CoverColor   string `json:"cover_color"`
+	Season       string `json:"season"`
+	SeasonYear   *int   `json:"season_year"`
+	IsAdult      bool   `json:"is_adult"`
+}
+
+// DiscoveryRow is one home carousel: a feed key + title + its items. An empty
+// items slice tells the frontend to hide the row.
+type DiscoveryRow struct {
+	Key   string          `json:"key"`
+	Title string          `json:"title"`
+	Items []DiscoveryItem `json:"items"`
+}
+
+// DiscoveryResponse is the full discovery payload (all rows in one call). The
+// hero is rows.find(key=='trending').items[0..n] on the frontend.
+type DiscoveryResponse struct {
+	Rows []DiscoveryRow `json:"rows"`
+}
+
+// ---- Tracked (home "Currently downloading" + Downloads grid) ----
+
+// TrackedResponse buckets tracked series by status for the home + Downloads grid.
+type TrackedResponse struct {
+	InProgress []SeriesProgress `json:"in_progress"`
+	Completed  []SeriesProgress `json:"completed"`
+	Paused     []SeriesProgress `json:"paused"`
+	Dropped    []SeriesProgress `json:"dropped"`
+}
+
+// ---- Track / status override ----
+
+// TrackRequest is the "Download & track" body.
+type TrackRequest struct {
+	AnilistID int64 `json:"anilist_id"`
+}
+
+// TrackResponse is returned by POST /api/track (201 create, 200 idempotent).
+type TrackResponse struct {
+	Series   SeriesProgress `json:"series"`
+	SeriesID int64          `json:"series_id"`
+	FeedID   int64          `json:"feed_id"`
+}
+
+// SeriesStatusResponse wraps a single series for the pause/drop/resume endpoints.
+type SeriesStatusResponse struct {
+	Series SeriesProgress `json:"series"`
+}
+
+// ---- Available episodes (on-demand source check) ----
+
+// AvailableEpisode is one source-available, not-yet-downloaded episode.
+type AvailableEpisode struct {
+	Number     int    `json:"number"`
+	Title      string `json:"title"`
+	SourceURL  string `json:"source_url"`
+	Size       *int64 `json:"size"`
+	Resolution string `json:"resolution"`
+}
+
+// AvailableResponse is the GET /api/series/{id}/available payload.
+type AvailableResponse struct {
+	Episodes []AvailableEpisode `json:"episodes"`
+}
+
+// DownloadAvailableRequest is the POST /api/series/{id}/available/download body:
+// a source-found episode the user chose to download while the series was paused.
+type DownloadAvailableRequest struct {
+	SourceURL  string `json:"source_url"`
+	Number     int    `json:"number"`
+	Resolution string `json:"resolution"`
 }
