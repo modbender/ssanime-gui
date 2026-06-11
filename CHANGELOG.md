@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.0](https://github.com/modbender/ssanime-gui/compare/v0.2.0...v0.3.0) (2026-06-11)
+
+
+### Features
+
+* discovery feed cache + automatic/manual tracking API ([3ef6d16](https://github.com/modbender/ssanime-gui/commit/3ef6d169b2b514a1044d757ff301462a7f53c24e))
+* discovery-first home with automatic + manual tracking ([1e4a2c1](https://github.com/modbender/ssanime-gui/commit/1e4a2c1e0a10f9bdc03ea54b1096fe4366a1bb29))
+* discovery-first home with automatic/manual tracking UI ([8fad35e](https://github.com/modbender/ssanime-gui/commit/8fad35ec7531ebae386d4b5dbca141018aabcd6a))
+* full series detail page + global de-rounding ([00f2cac](https://github.com/modbender/ssanime-gui/commit/00f2cac9c8d2f04c9b580e84f2f29e733696adb5))
+* full series detail page with AniList + ani.zip metadata ([72d85f2](https://github.com/modbender/ssanime-gui/commit/72d85f2ef0d3c49b57171cdbcaaed37f1d334317))
+
+
+### Bug Fixes
+
+* absolute asset base so nested-route hard loads work ([4db5d7d](https://github.com/modbender/ssanime-gui/commit/4db5d7de2558e96c2c66db3578418d81f8d46db5))
+* allow data: fonts in CSP so the bundled UI font loads ([7905b3c](https://github.com/modbender/ssanime-gui/commit/7905b3cd6e83a34148154fb4051c6c127432d80b))
+* CSP fonts + disable macOS leg + SignPath docs ([359fa4b](https://github.com/modbender/ssanime-gui/commit/359fa4b793c869fa74ec26867db09f1866f3b661))
+
 ## [0.2.0](https://github.com/modbender/ssanime-gui/compare/v0.1.1...v0.2.0) (2026-06-10)
 
 
