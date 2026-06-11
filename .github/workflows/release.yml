@@ -36,7 +36,12 @@ jobs:
       # One OS failing must not abort the others — each leg uploads independently.
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        os:
+          - windows-latest
+          - ubuntu-latest
+          # - macos-latest  # disabled: needs an Apple Developer account ($99/yr)
+          #   to sign + notarize; an unsigned .dmg is Gatekeeper-blocked for users.
+          #   Re-enable this line (and add Apple signing secrets) when available.
     runs-on: ${{ matrix.os }}
     steps:
       # Check out the tag being released so the build matches that release's source.

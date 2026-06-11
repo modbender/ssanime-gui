@@ -184,12 +184,42 @@ Verified against the Tauri v2 Windows signing docs
 
 | Option | ~Cost / yr | SmartScreen | Notes |
 |---|---|---|---|
-| **Azure Trusted Signing** (formerly Azure Code Signing) | ~$120 ($10/mo) | Builds reputation like OV | Modern cloud route. No physical token; Microsoft validates your identity. Cheapest path to a real signature. Signs via a custom `signCommand` (e.g. `trusted-signing-cli`). |
+| **SignPath Foundation** (free, OSS) | **Free** | OV — builds reputation over time | Free code signing for open-source projects. GPL-3.0 qualifies; a single maintainer may be sole author/reviewer/approver. CI-native (no token) but a **trusted-build round-trip**: CI uploads the unsigned bundle, SignPath verifies + you approve, signed bundle comes back. Manual approval per release; one-time application review. |
+| **Azure Trusted Signing** (formerly Azure Code Signing) | ~$120 ($10/mo) | OV — builds reputation | Modern cloud route, no physical token. **Individual** enrollment is currently US/Canada only; identity validated by Microsoft. Signs inline via a custom `signCommand` (`trusted-signing-cli`). Certs are ~3-day; signatures **must** be RFC3161-timestamped. |
 | **OV (Organization Validation) cert** | ~$200–400 | Builds reputation over time | Now stored on a hardware token / HSM (CA/B Forum rule since 2023), which complicates CI — you can't just upload a `.pfx`. |
 | **EV (Extended Validation) cert** | ~$300–600 | Trusted immediately | Hardware-token-bound; hardest to automate in CI. Use a cloud HSM or self-hosted signer. |
 
-For a single maintainer wanting CI-friendly signing without a physical token,
-**Azure Trusted Signing is the recommended route**.
+No affordable/free path grants *instant* SmartScreen trust — that needs an **EV**
+cert, which none of the CI-friendly routes offer. SignPath and Azure both issue
+**OV** certs whose reputation accrues as users download the signed installer;
+signing still removes the hard "unknown publisher" block immediately.
+
+**Recommended: SignPath Foundation (free, OSS) first; Azure Trusted Signing as the
+paid fallback** (especially if outside US/Canada eligibility or if SignPath's manual
+approval gate is unwanted).
+
+### SignPath Foundation (recommended — free for OSS)
+
+[SignPath Foundation](https://signpath.org/) signs OSS releases for free. ssanime-gui
+qualifies on paper (OSI license GPL-3.0, public repo, free distribution, no
+proprietary components; a single maintainer may act as sole author/reviewer/approver).
+It's a **trusted-build** service, so unlike Azure it signs *after* `tauri-action`
+produces the bundles, not via `signCommand`:
+
+1. Apply at <https://signpath.org/apply> (link the repo + GPL-3.0). Expect a one-time
+   manual review (turnaround not published — apply ahead of a release).
+2. In the SignPath dashboard create a project, an artifact configuration (the NSIS +
+   MSI bundles), and a signing policy (e.g. `release-signing`).
+3. Add repo secrets `SIGNPATH_API_TOKEN` (submitter token) and `SIGNPATH_ORGANIZATION_ID`.
+4. On the `windows-latest` leg, between `build tauri installers` and the upload step,
+   add `signpath/github-action-submit-signing-request@v1` (uploads the unsigned
+   bundles, waits for your approval, downloads the signed ones back into the bundle
+   tree so the existing upload step attaches the signed installers). First run blocks
+   on manual approval in the SignPath dashboard.
+
+For a single maintainer wanting CI-friendly signing without a physical token and
+without paying, **SignPath is the recommended route**; Azure Trusted Signing below is
+the inline (`signCommand`) paid alternative.
 
 ### Where the config goes
 

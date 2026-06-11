@@ -102,7 +102,13 @@ jobs:
       # so a transient failure on (say) macOS still ships the Windows + Linux assets.
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        os:
+          - windows-latest
+          - ubuntu-latest
+          # - macos-latest  # disabled: needs an Apple Developer account ($99/yr)
+          #   to sign + notarize; an unsigned .dmg is Gatekeeper-blocked for users.
+          #   The mac leg also did not produce a usable .dmg in CI. Re-enable this
+          #   line (and add Apple signing secrets) when a Developer account exists.
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
