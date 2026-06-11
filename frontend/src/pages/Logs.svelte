@@ -116,7 +116,7 @@
       <select
         id="log-level-filter"
         bind:value={filterLevel}
-        class="h-8 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs text-[var(--color-text)] focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
+        class="h-8 border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs text-[var(--color-text)] focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
       >
         <option value="">All levels</option>
         <option value="debug">Debug</option>
@@ -166,7 +166,7 @@
       <div class="text-[var(--color-error)] px-6 sm:px-10 py-3">{error}</div>
     {:else if filtered.length === 0}
       <div class="flex flex-col items-center justify-center gap-3 py-20 text-center px-6">
-        <div class="w-12 h-12 rounded-xl bg-white/[0.04] ring-1 ring-white/10 flex items-center justify-center text-[var(--color-faint)]">
+        <div class="w-12 h-12 bg-white/[0.04] ring-1 ring-white/10 flex items-center justify-center text-[var(--color-faint)]">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
             <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
@@ -178,7 +178,7 @@
     {:else}
       <div class="px-4 sm:px-6 py-2">
         {#each filtered as line (line.key)}
-          <div class="flex gap-3 py-px hover:bg-white/[0.025] px-2 rounded group">
+          <div class="flex gap-3 py-px hover:bg-white/[0.025] px-2 group">
             {#if line.ts}
               <span class="text-[var(--color-faint)] shrink-0 select-none w-20 tabular-nums">{formatTs(line.ts)}</span>
             {/if}

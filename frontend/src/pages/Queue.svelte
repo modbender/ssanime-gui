@@ -55,7 +55,7 @@
     <div class="flex items-baseline gap-2.5">
       <h1 class="text-[15px] font-semibold tracking-tight">Queue</h1>
       {#if !loading && totalItems > 0}
-        <span class="text-xs font-medium tabular-nums px-2 py-0.5 rounded-full bg-[rgb(var(--accent-rgb)/0.14)] text-[var(--color-accent)]">{totalItems} active</span>
+        <span class="text-xs font-medium tabular-nums px-2 py-0.5 bg-[rgb(var(--accent-rgb)/0.14)] text-[var(--color-accent)]">{totalItems} active</span>
       {/if}
     </div>
     <Button variant="outline" size="sm" onclick={load} disabled={loading} title="Refresh queue">
@@ -81,7 +81,7 @@
     {:else if totalItems === 0}
       <!-- Empty state -->
       <div class="flex flex-col items-center justify-center gap-4 py-24 text-center">
-        <div class="w-14 h-14 rounded-2xl bg-white/[0.04] ring-1 ring-white/10 flex items-center justify-center text-[var(--color-faint)]">
+        <div class="w-14 h-14 bg-white/[0.04] ring-1 ring-white/10 flex items-center justify-center text-[var(--color-faint)]">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" aria-hidden="true">
             <path d="M4 6h16M4 10h16M4 14h16M4 18h16" stroke-linecap="round"/>
           </svg>
@@ -100,7 +100,7 @@
             <h2 class="text-[13px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">Downloading</h2>
             <span class="text-xs font-medium tabular-nums text-[var(--color-muted)]">{downloading.length}</span>
           </div>
-          <div class="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)]">
+          <div class="overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface)]">
             <ul class="divide-y divide-[var(--color-border)]/60">
               {#each downloading as ep (ep.id)}
                 {@const prog = downloadProgress(ep)}
@@ -113,7 +113,7 @@
                       </p>
                       <div class="flex items-center gap-2 mt-1 flex-wrap">
                         {#if ep.episode_no != null}
-                          <span class="rounded-md bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-[var(--color-border)] text-[var(--color-text-dim)]">E{String(ep.episode_no).padStart(2, '0')}</span>
+                          <span class="bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-[var(--color-border)] text-[var(--color-text-dim)]">E{String(ep.episode_no).padStart(2, '0')}</span>
                         {/if}
                         {#if ep.release_group}
                           <span class="text-[var(--color-muted)] text-xs">[{ep.release_group}]</span>
@@ -152,7 +152,7 @@
             <h2 class="text-[13px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">Encoding</h2>
             <span class="text-xs font-medium tabular-nums text-[var(--color-muted)]">{encoding.length}</span>
           </div>
-          <div class="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)]">
+          <div class="overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface)]">
             <ul class="divide-y divide-[var(--color-border)]/60">
               {#each encoding as ep (ep.id)}
                 {@const prog = encodeProgress(ep)}
@@ -165,7 +165,7 @@
                       </p>
                       <div class="flex items-center gap-2 mt-1 flex-wrap">
                         {#if ep.episode_no != null}
-                          <span class="rounded-md bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-[var(--color-border)] text-[var(--color-text-dim)]">E{String(ep.episode_no).padStart(2, '0')}</span>
+                          <span class="bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-[var(--color-border)] text-[var(--color-text-dim)]">E{String(ep.episode_no).padStart(2, '0')}</span>
                         {/if}
                         {#if prog}
                           <span class="text-[var(--color-muted)] text-xs tabular-nums">{prog.resolution}p</span>
@@ -197,7 +197,7 @@
                     <div class="flex gap-1 mt-3 flex-wrap">
                       {#each ep.outputs as out (out.id)}
                         <span
-                          class="rounded-md bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[11px] font-medium tabular-nums ring-1 ring-[var(--color-border)] {statusColor(out.status)}"
+                          class="bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[11px] font-medium tabular-nums ring-1 ring-[var(--color-border)] {statusColor(out.status)}"
                           title={out.error_message ?? out.status}
                         >
                           {out.resolution}p

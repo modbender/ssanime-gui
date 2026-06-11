@@ -44,7 +44,7 @@
     tabindex="0"
     onclick={open}
     onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open() } }}
-    class="relative aspect-[2/3] w-full cursor-pointer rounded-[var(--radius-card)] overflow-hidden bg-[var(--color-surface-2)] ring-1 ring-white/[0.06]
+    class="relative aspect-[2/3] w-full cursor-pointer overflow-hidden bg-[var(--color-surface-2)] ring-1 ring-white/[0.06]
            transition-[transform,box-shadow] duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]
            group-hover:-translate-y-1.5 group-hover:shadow-[0_22px_45px_-18px_rgba(0,0,0,0.85)] group-hover:ring-white/15"
     aria-label={`Open ${title}`}
@@ -70,14 +70,14 @@
 
     <!-- tracked check (top-right) -->
     {#if tracked}
-      <span class="absolute top-2 right-2 w-6 h-6 rounded-full bg-[var(--color-success)] shadow-lg flex items-center justify-center" title="Tracking">
+      <span class="absolute top-2 right-2 w-6 h-6 bg-[var(--color-success)] shadow-lg flex items-center justify-center" title="Tracking">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#062018" stroke-width="2.75"><path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </span>
     {/if}
 
     <!-- format tag (top-left) -->
     {#if item.format}
-      <span class="absolute top-2 left-2 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/85 backdrop-blur-sm ring-1 ring-white/10">
+      <span class="absolute top-2 left-2 bg-black/55 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/85 backdrop-blur-sm ring-1 ring-white/10">
         {titleCase(item.format)}
       </span>
     {/if}
@@ -85,7 +85,7 @@
     <!-- hover CTA: Download & track -->
     <div class="absolute inset-x-0 bottom-0 p-2 translate-y-1 opacity-0 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-y-0 group-hover:opacity-100">
       {#if tracked}
-        <div class="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--color-success)]/90 text-[12px] font-semibold text-[#062018]">
+        <div class="flex h-8 w-full items-center justify-center gap-1.5 bg-[var(--color-success)]/90 text-[12px] font-semibold text-[#062018]">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           Tracking
         </div>
@@ -94,7 +94,7 @@
           type="button"
           onclick={track}
           disabled={tracking}
-          class="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--accent)] text-[12px] font-semibold text-white shadow-[0_4px_18px_-6px_rgb(var(--accent-rgb)/0.8)] transition-[filter,transform] duration-200 hover:brightness-110 active:scale-[0.97] disabled:opacity-70 disabled:active:scale-100 cursor-pointer"
+          class="flex h-8 w-full items-center justify-center gap-1.5 bg-[var(--accent)] text-[12px] font-semibold text-white shadow-[0_4px_18px_-6px_rgb(var(--accent-rgb)/0.8)] transition-[filter,transform] duration-200 hover:brightness-110 active:scale-[0.97] disabled:opacity-70 disabled:active:scale-100 cursor-pointer"
         >
           {#if tracking}
             <Spinner size={13} />

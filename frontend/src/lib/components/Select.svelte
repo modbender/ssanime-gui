@@ -23,7 +23,7 @@
   {disabled}
   onchange={onchange}
   class={cn(
-    'w-full h-9 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm text-[var(--color-text)]',
+    'w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm text-[var(--color-text)]',
     'transition-colors duration-200 focus:outline-none focus:border-[var(--accent)] disabled:opacity-50 cursor-pointer',
     cls,
   )}

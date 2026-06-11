@@ -36,10 +36,11 @@
   --color-error: #f87171;
   --color-info: #60a5fa;
 
-  /* Radii — concentric scale */
-  --radius-card: 0.875rem;
-  --radius-lg: 1.25rem;
-  --radius-xl: 1.75rem;
+  /* Radii — squared off (user preference: no rounded corners). Kept as vars so any
+     stray rounded-[var(--radius-*)] utilities resolve to 0 rather than 404. */
+  --radius-card: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
 
   /* Easing */
   --ease-fluid: cubic-bezier(0.32, 0.72, 0, 1);

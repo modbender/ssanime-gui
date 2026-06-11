@@ -32,7 +32,7 @@
   <a
     href="/"
     onclick={() => { currentPath = '/' }}
-    class="group relative mb-6 w-10 h-10 rounded-xl bg-white/[0.04] ring-1 ring-white/10 flex items-center justify-center transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:scale-105"
+    class="group relative mb-6 w-10 h-10 bg-white/[0.04] ring-1 ring-white/10 flex items-center justify-center transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:scale-105"
     aria-label="ssanime — home"
   >
     <div class="w-5 h-5 [&_svg]:w-full [&_svg]:h-full">
@@ -54,7 +54,7 @@
         onclick={() => { currentPath = item.href }}
       >
         <span
-          class="group relative flex items-center justify-center w-11 h-11 rounded-xl transition-[background,color,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] {active
+          class="group relative flex items-center justify-center w-11 h-11 transition-[background,color,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] {active
             ? 'bg-[var(--accent-soft)] text-[var(--color-text)]'
             : 'text-[var(--color-muted)] hover:bg-white/5 hover:text-[var(--color-text)]'}"
         >
@@ -69,7 +69,7 @@
 
           <!-- hover tooltip -->
           <span
-            class="pointer-events-none absolute left-[120%] top-1/2 -translate-y-1/2 translate-x-1 whitespace-nowrap rounded-lg bg-[var(--color-elevated)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-text)] ring-1 ring-white/10 shadow-xl opacity-0 transition-all duration-200 ease-out group-hover:opacity-100 group-hover:translate-x-0 z-30"
+            class="pointer-events-none absolute left-[120%] top-1/2 -translate-y-1/2 translate-x-1 whitespace-nowrap bg-[var(--color-elevated)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-text)] ring-1 ring-white/10 shadow-xl opacity-0 transition-all duration-200 ease-out group-hover:opacity-100 group-hover:translate-x-0 z-30"
           >
             {item.label}
           </span>

@@ -90,7 +90,7 @@
       <div class="max-w-2xl animate-fade-up">
         <!-- eyebrow -->
         <div class="flex items-center gap-2 mb-4">
-          <span class="inline-flex items-center gap-1.5 rounded-full bg-white/5 ring-1 ring-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-dim)]">
+          <span class="inline-flex items-center gap-1.5 bg-white/5 ring-1 ring-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-dim)]">
             <span class="w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
             Trending now
           </span>
@@ -107,16 +107,16 @@
         <!-- meta chips -->
         <div class="mt-5 flex flex-wrap items-center gap-2">
           {#if featured.format}
-            <span class="inline-flex items-center rounded-full bg-white/[0.06] ring-1 ring-white/10 px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)]">{titleCase(featured.format)}</span>
+            <span class="inline-flex items-center bg-white/[0.06] ring-1 ring-white/10 px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)]">{titleCase(featured.format)}</span>
           {/if}
           {#if featured.status}
-            <span class="inline-flex items-center rounded-full bg-white/[0.06] ring-1 ring-white/10 px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)]">{titleCase(featured.status)}</span>
+            <span class="inline-flex items-center bg-white/[0.06] ring-1 ring-white/10 px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)]">{titleCase(featured.status)}</span>
           {/if}
           {#if featured.season_year}
-            <span class="inline-flex items-center rounded-full bg-white/[0.06] ring-1 ring-white/10 px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)]">{titleCase(featured.season)} {featured.season_year}</span>
+            <span class="inline-flex items-center bg-white/[0.06] ring-1 ring-white/10 px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)]">{titleCase(featured.season)} {featured.season_year}</span>
           {/if}
           {#if featured.episode_count}
-            <span class="inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)] tabular-nums">
+            <span class="inline-flex items-center gap-1.5 bg-white/[0.06] ring-1 ring-white/10 px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)] tabular-nums">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18" stroke-linecap="round"/></svg>
               {featured.episode_count} episodes
             </span>
