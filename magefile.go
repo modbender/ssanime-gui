@@ -27,7 +27,24 @@ const (
 	cmdPkg     = "./cmd/ssanime"
 	binBase    = "ssanime"
 	sidecarDir = "desktop/src-tauri/binaries"
+	versionPkg = "github.com/modbender/ssanime-gui/internal/version"
 )
+
+// versionLDFlags builds the two -X linker flags that stamp the binary's version
+// and commit. Version comes from git-describe (tag-aware, falling back to the
+// commit-ish or "dev"); commit is the short SHA. Both tolerate a non-git
+// environment so the build never fails just because git is missing.
+func versionLDFlags() string {
+	ver, err := sh.Output("git", "describe", "--tags", "--always", "--dirty")
+	if err != nil || ver == "" {
+		ver = "dev"
+	}
+	sha, err := sh.Output("git", "rev-parse", "--short", "HEAD")
+	if err != nil {
+		sha = ""
+	}
+	return fmt.Sprintf("-X %s.Version=%s -X %s.Commit=%s", versionPkg, ver, versionPkg, sha)
+}
 
 // The systray binds AppKit via cgo on macOS only; Windows & Linux use the
 // pure-Go systray path, so they build cgo-free.
@@ -91,7 +108,8 @@ func inDir(dir string, fn func() error) error {
 // On Windows -> ssanime.exe (no console window).
 func Server() error {
 	fmt.Println("building daemon for", runtime.GOOS+"/"+runtime.GOARCH, "->", daemonOut())
-	return goBuild(hostBuildEnv(), hostLDFlags(), daemonOut())
+	ld := hostLDFlags() + " " + versionLDFlags()
+	return goBuild(hostBuildEnv(), ld, daemonOut())
 }
 
 // Frontend builds the Svelte SPA. Its Vite config emits to internal/server/dist,
@@ -116,7 +134,8 @@ func Sidecar() error {
 		out += ".exe"
 	}
 	fmt.Println("building sidecar ->", out)
-	return goBuild(hostBuildEnv(), hostLDFlags(), out)
+	ld := hostLDFlags() + " " + versionLDFlags()
+	return goBuild(hostBuildEnv(), ld, out)
 }
 
 // Tauri builds the native desktop app. Depends on Frontend (embedded SPA) and

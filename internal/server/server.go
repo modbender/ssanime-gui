@@ -98,6 +98,7 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 
 		api.Get("/healthz", h.handleHealthz)
 		api.Get("/ping", h.handlePing)
+		api.Get("/version", h.handleVersion)
 		api.Get("/events", h.handleEvents)
 		api.Get("/settings", h.handleGetSettings)
 		api.Put("/settings", h.handlePutSettings)

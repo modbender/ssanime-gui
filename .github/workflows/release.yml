@@ -111,7 +111,9 @@ jobs:
         run: |
           $env:GOOS = "windows"
           $env:GOARCH = "amd64"
-          go build -ldflags "-H=windowsgui -s -w" -o desktop/src-tauri/binaries/ssanime-x86_64-pc-windows-msvc.exe ./cmd/ssanime
+          $ver = git describe --tags --always --dirty
+          $sha = git rev-parse --short HEAD
+          go build -ldflags "-H=windowsgui -s -w -X github.com/modbender/ssanime-gui/internal/version.Version=$ver -X github.com/modbender/ssanime-gui/internal/version.Commit=$sha" -o desktop/src-tauri/binaries/ssanime-x86_64-pc-windows-msvc.exe ./cmd/ssanime
 
       # 2b. Build the Go sidecar (Linux). cgo-free (pure-Go systray).
       - name: build sidecar (linux)
@@ -121,7 +123,9 @@ jobs:
           GOARCH: amd64
           CGO_ENABLED: "0"
         run: |
-          go build -ldflags "-s -w" -o desktop/src-tauri/binaries/ssanime-x86_64-unknown-linux-gnu ./cmd/ssanime
+          VER=$(git describe --tags --always --dirty)
+          SHA=$(git rev-parse --short HEAD)
+          go build -ldflags "-s -w -X github.com/modbender/ssanime-gui/internal/version.Version=$VER -X github.com/modbender/ssanime-gui/internal/version.Commit=$SHA" -o desktop/src-tauri/binaries/ssanime-x86_64-unknown-linux-gnu ./cmd/ssanime
 
       # 2c. Build the Go sidecar (macOS, Apple Silicon). macos-latest is arm64.
       #     CGO_ENABLED=1 because the macOS systray (fyne.io/systray) needs cgo.
@@ -132,7 +136,9 @@ jobs:
           GOARCH: arm64
           CGO_ENABLED: "1"
         run: |
-          go build -ldflags "-s -w" -o desktop/src-tauri/binaries/ssanime-aarch64-apple-darwin ./cmd/ssanime
+          VER=$(git describe --tags --always --dirty)
+          SHA=$(git rev-parse --short HEAD)
+          go build -ldflags "-s -w -X github.com/modbender/ssanime-gui/internal/version.Version=$VER -X github.com/modbender/ssanime-gui/internal/version.Commit=$SHA" -o desktop/src-tauri/binaries/ssanime-aarch64-apple-darwin ./cmd/ssanime
 
       # 3. Build the Tauri app installers in BUILD-ONLY mode (tagName/releaseName/
       #    releaseId omitted) so tauri-action does not create a second release. We
