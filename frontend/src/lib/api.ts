@@ -259,6 +259,11 @@ export interface LogsResponse {
   lines: string[]
 }
 
+export interface VersionInfo {
+  version: string
+  commit: string
+}
+
 // ---- Discovery + tracking (discovery-first home) ----
 
 export interface DiscoveryItem {
@@ -422,6 +427,7 @@ export const api = {
   getQueue: () => get<QueueSnapshot>('/queue'),
   getStats: () => get<StatsResponse>('/stats'),
   getLogs: () => get<LogsResponse>('/logs'),
+  getVersion: () => get<VersionInfo>('/version'),
 
   // Discovery + tracking (discovery-first home)
   getDiscovery: () => get<DiscoveryResponse>('/discovery'),

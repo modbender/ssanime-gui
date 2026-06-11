@@ -77,4 +77,48 @@
       </Link>
     {/each}
   </nav>
+
+  <!-- Bottom group: About + Sponsor -->
+  <div class="flex flex-col items-center gap-1.5 pt-1.5">
+    <Link to="/about" onclick={() => { currentPath = '/about' }}>
+      <span
+        class="group relative flex items-center justify-center w-11 h-11 transition-[background,color,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] {isActive('/about')
+          ? 'bg-[var(--accent-soft)] text-[var(--color-text)]'
+          : 'text-[var(--color-muted)] hover:bg-white/5 hover:text-[var(--color-text)]'}"
+      >
+        <span
+          class="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-full bg-[var(--accent)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] {isActive('/about') ? 'opacity-100' : 'opacity-0 -translate-x-1'}"
+        ></span>
+
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:scale-110">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4M12 8h.01" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+
+        <span
+          class="pointer-events-none absolute left-[120%] top-1/2 -translate-y-1/2 translate-x-1 whitespace-nowrap bg-[var(--color-elevated)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-text)] ring-1 ring-white/10 shadow-xl opacity-0 transition-all duration-200 ease-out group-hover:opacity-100 group-hover:translate-x-0 z-30"
+        >
+          About
+        </span>
+      </span>
+    </Link>
+
+    <a
+      href="https://github.com/sponsors/modbender"
+      target="_blank"
+      rel="noopener"
+      aria-label="Sponsor"
+      class="group relative flex items-center justify-center w-11 h-11 text-[var(--color-muted)] transition-[background,color,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-[#db61a2]/10 hover:text-[#db61a2]"
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:scale-110">
+        <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+
+      <span
+        class="pointer-events-none absolute left-[120%] top-1/2 -translate-y-1/2 translate-x-1 whitespace-nowrap bg-[var(--color-elevated)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-text)] ring-1 ring-white/10 shadow-xl opacity-0 transition-all duration-200 ease-out group-hover:opacity-100 group-hover:translate-x-0 z-30"
+      >
+        Sponsor
+      </span>
+    </a>
+  </div>
 </aside>

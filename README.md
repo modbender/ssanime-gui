@@ -118,9 +118,12 @@ For release packaging, CI configuration, and Windows/macOS code-signing options,
 
 ---
 
+## Disclaimer
+
+ssanime-gui does not provide, host, or distribute any media content. It is a tool for managing
+your own personal media library. Users are responsible for obtaining media through legal means and
+for complying with the laws of their jurisdiction.
+
 ## License
 
 GPL-3.0. See [LICENSE](LICENSE).
-
-This tool is for managing your own personal media library. You are responsible for ensuring that
-what you download complies with the laws of your jurisdiction.

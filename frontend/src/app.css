@@ -53,6 +53,7 @@
 :root {
   --accent: #7c6af0;
   --accent-rgb: 124 106 240;
+  --accent-fg: #ffffff;
 }
 
 * {
@@ -78,7 +79,7 @@ body {
 
 ::selection {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-fg);
 }
 
 /* Scrollbars — thin, surface-toned */

@@ -3,7 +3,7 @@
   import type { DiscoveryItem } from '$lib/api'
   import Button from '$lib/components/Button.svelte'
   import Spinner from '$lib/components/Spinner.svelte'
-  import { resolveAccent, hexToRgbChannels, titleCase } from '$lib/utils'
+  import { resolveAccent, hexToRgbChannels, accentForeground, titleCase } from '$lib/utils'
   import { rememberPreview, trackedAnilistIds } from '$lib/discovery.svelte'
 
   let {
@@ -23,6 +23,7 @@
 
   const accent = $derived(resolveAccent(featured?.cover_color))
   const accentRgb = $derived(hexToRgbChannels(featured?.cover_color))
+  const accentFg = $derived(accentForeground(featured?.cover_color))
 
   const title = $derived(featured ? featured.english_title || featured.romaji_title : '')
   const banner = $derived(featured?.banner_image || featured?.cover_image || null)
@@ -53,7 +54,7 @@
 {#if featured}
   <section
     class="relative w-full overflow-hidden flex items-end min-h-[72vh] shrink-0"
-    style="--accent: {accent}; --accent-rgb: {accentRgb};"
+    style="--accent: {accent}; --accent-rgb: {accentRgb}; --accent-fg: {accentFg};"
   >
     <!-- Banner layer -->
     <div class="absolute inset-0">

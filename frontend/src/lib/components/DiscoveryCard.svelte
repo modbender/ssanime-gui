@@ -1,7 +1,7 @@
 <script lang="ts">
   import { navigate } from 'svelte-routing'
   import type { DiscoveryItem } from '$lib/api'
-  import { resolveAccent, hexToRgbChannels, titleCase } from '$lib/utils'
+  import { resolveAccent, hexToRgbChannels, accentForeground, titleCase } from '$lib/utils'
   import { rememberPreview, trackedAnilistIds } from '$lib/discovery.svelte'
   import Spinner from '$lib/components/Spinner.svelte'
 
@@ -20,6 +20,7 @@
   const title = $derived(item.english_title || item.romaji_title)
   const accent = $derived(resolveAccent(item.cover_color))
   const accentRgb = $derived(hexToRgbChannels(item.cover_color))
+  const accentFg = $derived(accentForeground(item.cover_color))
   const tracked = $derived(trackedAnilistIds.has(item.anilist_id))
 
   function open() {
@@ -36,7 +37,7 @@
 
 <div
   class="group block text-left w-full"
-  style="--accent: {accent}; --accent-rgb: {accentRgb};"
+  style="--accent: {accent}; --accent-rgb: {accentRgb}; --accent-fg: {accentFg};"
 >
   <!-- Poster (clickable region; not a <button> so the CTA button can nest) -->
   <div
@@ -94,7 +95,7 @@
           type="button"
           onclick={track}
           disabled={tracking}
-          class="flex h-8 w-full items-center justify-center gap-1.5 bg-[var(--accent)] text-[12px] font-semibold text-white shadow-[0_4px_18px_-6px_rgb(var(--accent-rgb)/0.8)] transition-[filter,transform] duration-200 hover:brightness-110 active:scale-[0.97] disabled:opacity-70 disabled:active:scale-100 cursor-pointer"
+          class="flex h-8 w-full items-center justify-center gap-1.5 bg-[var(--accent)] text-[12px] font-semibold text-[var(--accent-fg)] shadow-[0_4px_18px_-6px_rgb(var(--accent-rgb)/0.8)] transition-[filter,transform] duration-200 hover:brightness-110 active:scale-[0.97] disabled:opacity-70 disabled:active:scale-100 cursor-pointer"
         >
           {#if tracking}
             <Spinner size={13} />

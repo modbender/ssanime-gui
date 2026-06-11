@@ -9,6 +9,7 @@
   import Profiles from './pages/Profiles.svelte'
   import Settings from './pages/Settings.svelte'
   import Logs from './pages/Logs.svelte'
+  import About from './pages/About.svelte'
   import { startSSE } from '$lib/sse.svelte'
 
   $effect(() => {
@@ -47,6 +48,9 @@
       </Route>
       <Route path="/logs">
         <Logs />
+      </Route>
+      <Route path="/about">
+        <About />
       </Route>
     </main>
   </div>
