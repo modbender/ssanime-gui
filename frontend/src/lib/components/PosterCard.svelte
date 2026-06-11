@@ -1,18 +1,42 @@
 <script lang="ts">
   import { navigate } from 'svelte-routing'
   import type { SeriesProgress } from '$lib/api'
-  import { derivedStatusColor, derivedStatusLabel, formatBytes } from '$lib/utils'
+  import { derivedStatusColor, derivedStatusLabel, formatBytes, trackedStatus } from '$lib/utils'
+  import { sseState } from '$lib/sse.svelte'
 
   let {
     series,
     width = '',
+    showProgress = false,
   }: {
     series: SeriesProgress
     /** optional fixed width, e.g. 'w-[150px]' for carousels; omit to fill grid cell */
     width?: string
+    /** when true, overlay live SSE download/encode progress for this series */
+    showProgress?: boolean
   } = $props()
 
   const title = $derived(series.english_title || series.romaji_title || series.title)
+  const status = $derived(trackedStatus(series))
+
+  // Live progress for the series' currently-active episode. SSE state is keyed by
+  // episode id; both payloads carry series_id, so we pick the most-advanced one.
+  const live = $derived.by(() => {
+    if (!showProgress) return null
+    let best: { kind: 'download' | 'encode'; percent: number } | null = null
+    for (const p of Object.values(sseState.downloadProgress)) {
+      if (p.series_id === series.id && !p.done) {
+        if (!best || p.percent > best.percent) best = { kind: 'download', percent: p.percent }
+      }
+    }
+    for (const p of Object.values(sseState.encodeProgress)) {
+      if (p.series_id === series.id && typeof p.percent === 'number') {
+        // encoding supersedes download in the pipeline → prefer it
+        best = { kind: 'encode', percent: p.percent }
+      }
+    }
+    return best
+  })
 </script>
 
 <button
@@ -57,13 +81,23 @@
 
     <!-- bottom overlay: status pill + ep count -->
     <div class="absolute inset-x-0 bottom-0 p-2.5 flex items-end justify-between gap-2">
-      <span class={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none tracking-tight backdrop-blur-sm ${derivedStatusColor(series.derived_status)}`}>
-        {derivedStatusLabel(series.derived_status)}
+      <span class={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none tracking-tight backdrop-blur-sm ${derivedStatusColor(status)}`}>
+        {derivedStatusLabel(status)}
       </span>
       <span class="text-[10px] font-semibold text-white/90 tabular-nums drop-shadow">
         {series.episode_archived}/{series.episode_total}
       </span>
     </div>
+
+    <!-- live progress strip (only on the Currently-downloading row) -->
+    {#if live}
+      <div class="absolute inset-x-0 bottom-0 h-1 bg-black/40">
+        <div
+          class="h-full {live.kind === 'encode' ? 'bg-[var(--color-info)]' : 'bg-[var(--accent)]'} transition-[width] duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]"
+          style="width: {Math.max(2, Math.min(100, live.percent))}%"
+        ></div>
+      </div>
+    {/if}
   </div>
 
   <!-- meta -->

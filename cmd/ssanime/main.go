@@ -36,6 +36,7 @@ import (
 	"github.com/modbender/ssanime-gui/internal/animedb"
 	"github.com/modbender/ssanime-gui/internal/binaries"
 	"github.com/modbender/ssanime-gui/internal/config"
+	"github.com/modbender/ssanime-gui/internal/discovery"
 	"github.com/modbender/ssanime-gui/internal/doh"
 	"github.com/modbender/ssanime-gui/internal/download"
 	"github.com/modbender/ssanime-gui/internal/encode"
@@ -319,6 +320,14 @@ func startDaemon(cfg *config.Config, logger *slog.Logger) (shutdown func(), dlQu
 	refresher.Start()
 	add(refresher.Stop)
 
+	// --- Discovery cache ---
+	// Hourly-refreshed AniList feeds (trending/seasonal/popular/genre) powering the
+	// discovery home. Serves a cache so page-loads cost zero AniList calls; on
+	// 429/network error it keeps the prior slice and retries next tick.
+	discoverySvc := discovery.New(anilistClient, logger)
+	discoverySvc.Start()
+	add(discoverySvc.Stop)
+
 	// --- Download queue ---
 	dlWorkers := 2
 	if set, err := st.Read().GetSettings(context.Background()); err == nil && set.ConcurrencyDownload > 0 {
@@ -377,6 +386,7 @@ func startDaemon(cfg *config.Config, logger *slog.Logger) (shutdown func(), dlQu
 			AnimeDB:   animeDB,
 			ExtMgr:    extManager,
 			Refresher: refresher,
+			Discovery: discoverySvc,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

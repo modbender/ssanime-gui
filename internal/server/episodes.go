@@ -169,8 +169,10 @@ func (h *Handler) handleBulkEncode(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	enqueued := 0
+	reengage := map[int64]struct{}{}
 	for _, eid := range req.EpisodeIDs {
-		if _, err := h.store.Read().GetEpisode(ctx, eid); errors.Is(err, sql.ErrNoRows) {
+		ep, err := h.store.Read().GetEpisode(ctx, eid)
+		if errors.Is(err, sql.ErrNoRows) {
 			continue // skip missing
 		} else if err != nil {
 			h.logger.Error("bulk encode: get episode", "id", eid, "err", err)
@@ -184,7 +186,12 @@ func (h *Handler) handleBulkEncode(w http.ResponseWriter, r *http.Request) {
 			h.logger.Error("bulk encode: set queued", "id", eid, "err", err)
 			continue
 		}
+		reengage[ep.SeriesID] = struct{}{}
 		enqueued++
+	}
+	// A manual download re-engages each affected series to Active.
+	for sid := range reengage {
+		h.reengageSeries(ctx, sid)
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]any{
@@ -228,8 +235,14 @@ func (h *Handler) handleRetryEpisode(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) enqueueEpisode(w http.ResponseWriter, ctx context.Context, id int64) {
-	if _, err := h.store.Read().GetEpisode(ctx, id); errors.Is(err, sql.ErrNoRows) {
+	ep, err := h.store.Read().GetEpisode(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
 		WriteError(w, http.StatusNotFound, "episode not found")
+		return
+	}
+	if err != nil {
+		h.logger.Error("enqueue episode: get", "id", id, "err", err)
+		WriteError(w, http.StatusInternalServerError, "failed to enqueue episode")
 		return
 	}
 	if err := h.store.Write().SetEpisodeStatus(ctx, store.SetEpisodeStatusParams{
@@ -240,7 +253,21 @@ func (h *Handler) enqueueEpisode(w http.ResponseWriter, ctx context.Context, id 
 		WriteError(w, http.StatusInternalServerError, "failed to enqueue episode")
 		return
 	}
+	// A manual download re-engages the series to Active: clear any Paused/Dropped
+	// override so background automation resumes for future episodes too.
+	h.reengageSeries(ctx, ep.SeriesID)
 	WriteJSON(w, http.StatusOK, map[string]any{"id": id, "status": "queued"})
+}
+
+// reengageSeries clears a series' manual user_status override (→ NULL) so a
+// manual episode download returns the series to fully-automatic. Best-effort:
+// a failure here doesn't fail the enqueue.
+func (h *Handler) reengageSeries(ctx context.Context, seriesID int64) {
+	if err := h.store.Write().SetSeriesUserStatus(ctx, store.SetSeriesUserStatusParams{
+		ID: seriesID, UserStatus: nil,
+	}); err != nil {
+		h.logger.Warn("re-engage series after manual download", "series_id", seriesID, "err", err)
+	}
 }
 
 func (h *Handler) handleDeleteEpisode(w http.ResponseWriter, r *http.Request) {

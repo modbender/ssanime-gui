@@ -1,30 +1,35 @@
 <script lang="ts">
   import { navigate } from 'svelte-routing'
-  import type { SeriesProgress } from '$lib/api'
+  import type { DiscoveryItem } from '$lib/api'
   import Button from '$lib/components/Button.svelte'
-  import { derivedStatusColor, derivedStatusLabel, resolveAccent, hexToRgbChannels } from '$lib/utils'
+  import Spinner from '$lib/components/Spinner.svelte'
+  import { resolveAccent, hexToRgbChannels, titleCase } from '$lib/utils'
+  import { rememberPreview, trackedAnilistIds } from '$lib/discovery.svelte'
 
   let {
-    items = [] as SeriesProgress[],
-    onToggleSubscribe,
+    items = [] as DiscoveryItem[],
+    onTrack,
+    trackingId = null,
   }: {
-    items: SeriesProgress[]
-    onToggleSubscribe?: (s: SeriesProgress) => void
+    items: DiscoveryItem[]
+    /** invoked on "Download & track"; parent owns the optimistic flow */
+    onTrack?: (item: DiscoveryItem) => void
+    /** anilist_id currently being tracked (spinner state), or null */
+    trackingId?: number | null
   } = $props()
 
   let index = $state(0)
   const featured = $derived(items[index] ?? null)
 
-  // cover_color → accent, with graceful violet fallback
   const accent = $derived(resolveAccent(featured?.cover_color))
-  const accentRgb = $derived(hexToRgbChannels(accent))
+  const accentRgb = $derived(hexToRgbChannels(featured?.cover_color))
 
-  const title = $derived(
-    featured ? (featured.english_title || featured.romaji_title || featured.title) : '',
-  )
-  const banner = $derived(featured?.banner_image_url || featured?.cover_image_url || null)
+  const title = $derived(featured ? featured.english_title || featured.romaji_title : '')
+  const banner = $derived(featured?.banner_image || featured?.cover_image || null)
+  const tracked = $derived(featured ? trackedAnilistIds.has(featured.anilist_id) : false)
+  const tracking = $derived(featured ? trackingId === featured.anilist_id : false)
 
-  // Autorotate when more than one featured series.
+  // Autorotate when more than one featured item.
   $effect(() => {
     if (items.length <= 1) return
     const id = setInterval(() => {
@@ -38,9 +43,10 @@
     if (index >= items.length) index = 0
   })
 
-  function fmtAiring(s: string | null): string | null {
-    if (!s) return null
-    return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+  function open() {
+    if (!featured) return
+    rememberPreview(featured)
+    navigate(`/series/anilist/${featured.anilist_id}`)
   }
 </script>
 
@@ -52,7 +58,7 @@
     <!-- Banner layer -->
     <div class="absolute inset-0">
       {#if banner}
-        {#key featured.id}
+        {#key featured.anilist_id}
           <img
             src={banner}
             alt=""
@@ -86,11 +92,8 @@
         <div class="flex items-center gap-2 mb-4">
           <span class="inline-flex items-center gap-1.5 rounded-full bg-white/5 ring-1 ring-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-dim)]">
             <span class="w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
-            Featured
+            Trending now
           </span>
-          {#if featured.feed_title}
-            <span class="text-[11px] text-[var(--color-muted)]">via {featured.feed_title}</span>
-          {/if}
         </div>
 
         <!-- title -->
@@ -104,48 +107,48 @@
         <!-- meta chips -->
         <div class="mt-5 flex flex-wrap items-center gap-2">
           {#if featured.format}
-            <span class="inline-flex items-center rounded-full bg-white/[0.06] ring-1 ring-white/10 px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)]">{featured.format}</span>
+            <span class="inline-flex items-center rounded-full bg-white/[0.06] ring-1 ring-white/10 px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)]">{titleCase(featured.format)}</span>
           {/if}
-          <span class={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium backdrop-blur-sm ${derivedStatusColor(featured.derived_status)}`}>
-            {derivedStatusLabel(featured.derived_status)}
-          </span>
-          {#if fmtAiring(featured.airing_status)}
-            <span class="inline-flex items-center rounded-full bg-white/[0.06] ring-1 ring-white/10 px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)]">{fmtAiring(featured.airing_status)}</span>
+          {#if featured.status}
+            <span class="inline-flex items-center rounded-full bg-white/[0.06] ring-1 ring-white/10 px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)]">{titleCase(featured.status)}</span>
           {/if}
-          <span class="inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)] tabular-nums">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18" stroke-linecap="round"/></svg>
-            {featured.episode_archived}/{featured.episode_total} archived
-          </span>
+          {#if featured.season_year}
+            <span class="inline-flex items-center rounded-full bg-white/[0.06] ring-1 ring-white/10 px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)]">{titleCase(featured.season)} {featured.season_year}</span>
+          {/if}
+          {#if featured.episode_count}
+            <span class="inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)] tabular-nums">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18" stroke-linecap="round"/></svg>
+              {featured.episode_count} episodes
+            </span>
+          {/if}
         </div>
 
         <!-- context line -->
         <p class="mt-4 text-sm leading-relaxed text-[var(--color-text-dim)] max-w-xl">
-          {#if featured.subscribed}
-            You're subscribed — new episodes auto-download and re-encode as they air.
-          {:else}
-            Subscribe to auto-fetch and durably re-encode every new episode into your library.
-          {/if}
+          Download &amp; track to auto-fetch and durably re-encode every episode into your library as it airs.
         </p>
 
         <!-- actions -->
         <div class="mt-7 flex items-center gap-2.5">
-          <Button size="lg" onclick={() => navigate(`/series/${featured.id}`)}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3v18l15-9z" fill="currentColor" stroke="none"/></svg>
-            View series
-          </Button>
-          <Button
-            size="lg"
-            variant={featured.subscribed ? 'secondary' : 'outline'}
-            onclick={() => onToggleSubscribe?.(featured)}
-          >
-            {#if featured.subscribed}
+          {#if tracked}
+            <Button size="lg" variant="secondary" onclick={open}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              Subscribed
-            {:else}
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              Subscribe
-            {/if}
-          </Button>
+              Tracking — view series
+            </Button>
+          {:else}
+            <Button size="lg" onclick={() => onTrack?.(featured)} disabled={tracking}>
+              {#if tracking}
+                <Spinner size={16} />
+                Tracking…
+              {:else}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Download &amp; track
+              {/if}
+            </Button>
+            <Button size="lg" variant="outline" onclick={open}>
+              View details
+            </Button>
+          {/if}
         </div>
       </div>
 

@@ -10,9 +10,11 @@ SELECT * FROM feeds ORDER BY added_at ASC;
 -- name: ListFeedsBySeries :many
 SELECT * FROM feeds WHERE series_id = ? ORDER BY added_at ASC;
 
--- ListFeedsDueForPoll returns enabled feeds whose series is subscribed and whose
--- derived status still permits polling (not completed/cancelled/not_aired), and
--- whose interval has elapsed. The completed/up_to_date split is computed in Go from
+-- ListFeedsDueForPoll returns enabled feeds whose series is subscribed, has no
+-- manual status override (user_status IS NULL - Paused/Dropped series are skipped
+-- so background automation never overrides a manual choice), and whose derived
+-- status still permits polling (not completed/cancelled/not_aired), and whose
+-- interval has elapsed. The completed/up_to_date split is computed in Go from
 -- airing_status + archive counts; this query enforces the cheap, durable filters.
 -- name: ListFeedsDueForPoll :many
 SELECT f.*
@@ -20,6 +22,7 @@ FROM feeds f
 JOIN series s ON s.id = f.series_id
 WHERE f.enabled = 1
   AND s.subscribed = 1
+  AND s.user_status IS NULL
   AND (s.airing_status IS NULL OR s.airing_status NOT IN ('CANCELLED', 'NOT_YET_RELEASED'))
   AND (
         f.last_checked_at IS NULL

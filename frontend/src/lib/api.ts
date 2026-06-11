@@ -47,6 +47,8 @@ export interface SeriesProgress {
   favorite: boolean
   airing_status: string | null
   derived_status: string
+  /** manual override layer: null = automatic, 'paused' | 'dropped' */
+  user_status: string | null
   poster_path: string | null
   cover_image_url: string | null
   banner_image_url: string | null
@@ -111,6 +113,8 @@ export interface SeriesDetail {
   favorite: boolean
   airing_status: string | null
   derived_status: string
+  /** manual override layer: null = automatic, 'paused' | 'dropped' */
+  user_status: string | null
   poster_path: string | null
   cover_image_url: string | null
   banner_image_url: string | null
@@ -255,6 +259,58 @@ export interface LogsResponse {
   lines: string[]
 }
 
+// ---- Discovery + tracking (discovery-first home) ----
+
+export interface DiscoveryItem {
+  anilist_id: number
+  romaji_title: string
+  english_title: string
+  format: string
+  status: string
+  episode_count: number | null
+  cover_image: string
+  banner_image: string
+  cover_color: string
+  season: string
+  season_year: number | null
+  is_adult: boolean
+}
+
+export interface DiscoveryRow {
+  key: string
+  title: string
+  items: DiscoveryItem[]
+}
+
+export interface DiscoveryResponse {
+  rows: DiscoveryRow[]
+}
+
+export interface TrackedResponse {
+  in_progress: SeriesProgress[]
+  completed: SeriesProgress[]
+  paused: SeriesProgress[]
+  dropped: SeriesProgress[]
+}
+
+export interface TrackResponse {
+  series: SeriesProgress
+  series_id: number
+  feed_id: number
+}
+
+export interface AvailableEpisode {
+  number: number
+  title: string
+  source_url: string
+  size: number | null
+  resolution: string
+}
+
+export interface AvailableResponse {
+  episodes: AvailableEpisode[]
+}
+
 // ---- API methods ----
 
 export const api = {
@@ -316,6 +372,17 @@ export const api = {
   getQueue: () => get<QueueSnapshot>('/queue'),
   getStats: () => get<StatsResponse>('/stats'),
   getLogs: () => get<LogsResponse>('/logs'),
+
+  // Discovery + tracking (discovery-first home)
+  getDiscovery: () => get<DiscoveryResponse>('/discovery'),
+  getTracked: () => get<TrackedResponse>('/tracked'),
+  trackSeries: (body: { anilist_id: number }) => post<TrackResponse>('/track', body),
+  pauseSeries: (id: number) => post<{ series: SeriesProgress }>(`/series/${id}/pause`, {}),
+  dropSeries: (id: number) => post<{ series: SeriesProgress }>(`/series/${id}/drop`, {}),
+  resumeSeries: (id: number) => post<{ series: SeriesProgress }>(`/series/${id}/resume`, {}),
+  getAvailable: (id: number) => get<AvailableResponse>(`/series/${id}/available`),
+  downloadAvailable: (id: number, body: { source_url: string; number: number; resolution?: string }) =>
+    post<EpisodeDetail>(`/series/${id}/available/download`, body),
 
   // Extensions
   listExtensionRepos: () => get<unknown[]>('/extension-repos'),

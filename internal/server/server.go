@@ -15,6 +15,7 @@ import (
 
 	"github.com/modbender/ssanime-gui/internal/anilist"
 	"github.com/modbender/ssanime-gui/internal/animedb"
+	"github.com/modbender/ssanime-gui/internal/discovery"
 	"github.com/modbender/ssanime-gui/internal/events"
 	"github.com/modbender/ssanime-gui/internal/extension"
 	"github.com/modbender/ssanime-gui/internal/source"
@@ -28,6 +29,12 @@ type MetadataRefresher interface {
 	RefreshSeries(ctx context.Context, id int64) (store.Series, error)
 }
 
+// DiscoveryProvider serves the cached discovery feeds for the home page. The
+// background *discovery.Service satisfies it; readers never trigger a live fetch.
+type DiscoveryProvider interface {
+	Snapshot() map[discovery.FeedKey][]anilist.Media
+}
+
 // Handler carries the shared dependencies every route needs and registers the
 // route table.
 type Handler struct {
@@ -39,6 +46,7 @@ type Handler struct {
 	animedb   *animedb.DB
 	extMgr    *extension.Manager
 	refresher MetadataRefresher
+	discovery DiscoveryProvider
 	logs      *RingBuffer
 }
 
@@ -49,6 +57,7 @@ type Config struct {
 	AnimeDB   *animedb.DB
 	ExtMgr    *extension.Manager
 	Refresher MetadataRefresher
+	Discovery DiscoveryProvider
 }
 
 // New builds the Handler and returns the fully wired http.Handler: REST + SSE
@@ -67,6 +76,7 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 		animedb:   cfg.AnimeDB,
 		extMgr:    cfg.ExtMgr,
 		refresher: cfg.Refresher,
+		discovery: cfg.Discovery,
 		logs:      ring,
 	}
 
@@ -89,6 +99,11 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 		api.Get("/queue", h.handleGetQueue)
 		api.Get("/logs", h.handleGetLogs)
 
+		// Discovery home + tracking
+		api.Get("/discovery", h.handleDiscovery)
+		api.Get("/tracked", h.handleGetTracked)
+		api.Post("/track", h.handleTrackSeries)
+
 		// Series
 		api.Route("/series", func(r chi.Router) {
 			r.Get("/", h.handleListSeries)
@@ -100,6 +115,11 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 				r.Get("/episodes", h.handleListEpisodes)
 				r.Post("/scan", h.handleScanEpisodes)
 				r.Post("/refresh", h.handleRefreshSeries)
+				r.Get("/available", h.handleAvailableEpisodes)
+				r.Post("/available/download", h.handleDownloadAvailable)
+				r.Post("/pause", h.handlePauseSeries)
+				r.Post("/drop", h.handleDropSeries)
+				r.Post("/resume", h.handleResumeSeries)
 			})
 		})
 

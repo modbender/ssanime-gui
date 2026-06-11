@@ -65,10 +65,14 @@ export function derivedStatusColor(status: string): string {
   switch (status) {
     case 'completed': return 'bg-green-500/15 text-green-300 border-green-500/30'
     case 'airing': return 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+    case 'active': return 'bg-blue-500/15 text-blue-300 border-blue-500/30'
     case 'up_to_date': return 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
     case 'incomplete': return 'bg-yellow-500/15 text-yellow-300 border-yellow-500/30'
     case 'not_aired': return 'bg-gray-500/15 text-gray-400 border-gray-500/30'
     case 'cancelled': return 'bg-red-500/15 text-red-300 border-red-500/30'
+    case 'paused': return 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+    case 'dropped': return 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+    case 'error': return 'bg-red-500/15 text-red-300 border-red-500/30'
     default: return 'bg-gray-500/15 text-gray-400 border-gray-500/30'
   }
 }
@@ -77,10 +81,36 @@ export function derivedStatusLabel(status: string): string {
   const map: Record<string, string> = {
     completed: 'Completed',
     airing: 'Airing',
+    active: 'Active',
     up_to_date: 'Up to date',
     incomplete: 'Incomplete',
     not_aired: 'Not aired',
     cancelled: 'Cancelled',
+    paused: 'Paused',
+    dropped: 'Dropped',
+    error: 'Error',
   }
   return map[status] ?? status
+}
+
+/**
+ * The user-facing status of a tracked series, honoring the manual override
+ * layer (user_status) over the automatic derived_status. A series with a
+ * manual override (paused/dropped) shows that; otherwise the derived status.
+ */
+export function trackedStatus(s: {
+  user_status?: string | null
+  derived_status: string
+}): string {
+  if (s.user_status === 'paused' || s.user_status === 'dropped') return s.user_status
+  return s.derived_status
+}
+
+/** Format an AniList media format/status token (UPPER_SNAKE) for display. */
+export function titleCase(s: string | null | undefined): string {
+  if (!s) return ''
+  return s
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
 }
