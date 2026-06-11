@@ -9,7 +9,9 @@ export default defineConfig({
     tailwindcss(),
     svelte(),
   ],
-  base: './',
+  // Absolute base: the daemon serves the SPA at /; a relative base breaks
+  // asset resolution on hard-loads of nested routes like /series/anilist/:id.
+  base: '/',
   build: {
     outDir: path.resolve(__dirname, '../internal/server/dist'),
     emptyOutDir: true,
