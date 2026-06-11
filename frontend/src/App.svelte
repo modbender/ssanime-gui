@@ -1,7 +1,8 @@
 <script lang="ts">
   import { Router, Route } from 'svelte-routing'
   import Sidebar from '$lib/components/Sidebar.svelte'
-  import Library from './pages/Library.svelte'
+  import Home from './pages/Home.svelte'
+  import Downloads from './pages/Downloads.svelte'
   import SeriesDetail from './pages/SeriesDetail.svelte'
   import Queue from './pages/Queue.svelte'
   import Feeds from './pages/Feeds.svelte'
@@ -21,7 +22,13 @@
     <Sidebar />
     <main class="flex-1 overflow-hidden flex flex-col min-w-0">
       <Route path="/">
-        <Library />
+        <Home />
+      </Route>
+      <Route path="/downloads">
+        <Downloads />
+      </Route>
+      <Route path="/series/anilist/:anilistId" let:params>
+        <SeriesDetail anilistId={params.anilistId} />
       </Route>
       <Route path="/series/:id" let:params>
         <SeriesDetail id={params.id} />

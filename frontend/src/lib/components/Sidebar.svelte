@@ -5,6 +5,7 @@
 
   const navItems = [
     { href: '/', label: 'Home', icon: 'M3 10.5 12 3l9 7.5M5 9v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9' },
+    { href: '/downloads', label: 'Downloads', icon: 'M12 3v12m0 0 4-4m-4 4-4-4M5 21h14' },
     { href: '/queue', label: 'Queue', icon: 'M4 7h16M4 12h16M4 17h10' },
     { href: '/feeds', label: 'Auto-downloader', icon: 'M5 5a14 14 0 0 1 14 14M5 12a7 7 0 0 1 7 7M6.5 18.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0Z' },
     { href: '/profiles', label: 'Encode profiles', icon: 'M12 3 4 7v6c0 5 3.5 7.5 8 8.5 4.5-1 8-3.5 8-8.5V7l-8-4Z' },
