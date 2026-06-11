@@ -24,6 +24,16 @@ func parseID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	return id, true
 }
 
+// parseAnilistID extracts the {id} URL parameter as an int (an AniList id, not a
+// series row id). Returns false and a 400 if missing or not a positive integer.
+func parseAnilistID(w http.ResponseWriter, r *http.Request) (int, bool) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return 0, false
+	}
+	return int(id), true
+}
+
 // boolToInt64 converts Go bool to the SQLite integer sqlc uses for boolean cols.
 func boolToInt64(b bool) int64 {
 	if b {

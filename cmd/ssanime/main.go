@@ -34,6 +34,7 @@ import (
 
 	"github.com/modbender/ssanime-gui/internal/anilist"
 	"github.com/modbender/ssanime-gui/internal/animedb"
+	"github.com/modbender/ssanime-gui/internal/anizip"
 	"github.com/modbender/ssanime-gui/internal/binaries"
 	"github.com/modbender/ssanime-gui/internal/config"
 	"github.com/modbender/ssanime-gui/internal/discovery"
@@ -381,12 +382,14 @@ func startDaemon(cfg *config.Config, logger *slog.Logger) (shutdown func(), dlQu
 	srv := &http.Server{
 		Addr: fmt.Sprintf("127.0.0.1:%d", cfg.Port),
 		Handler: server.New(st, hub, logger, server.Config{
-			Registry:  registry,
-			Anilist:   anilistClient,
-			AnimeDB:   animeDB,
-			ExtMgr:    extManager,
-			Refresher: refresher,
-			Discovery: discoverySvc,
+			Registry:      registry,
+			Anilist:       anilistClient,
+			AnimeDB:       animeDB,
+			ExtMgr:        extManager,
+			Refresher:     refresher,
+			Discovery:     discoverySvc,
+			AnilistDetail: anilistClient,
+			Anizip:        anizip.New(),
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

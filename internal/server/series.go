@@ -416,6 +416,13 @@ func (h *Handler) handleRefreshSeries(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusServiceUnavailable, "AniList unavailable or rate-limited; existing metadata kept")
 		return
 	}
+	// Bust the durable detail cache too, so the Refresh button refreshes both
+	// metadata layers (the series row and the AniList+ani.zip detail payload).
+	if updated.AnilistID != nil {
+		if derr := h.store.Write().DeleteAnilistDetailCache(r.Context(), *updated.AnilistID); derr != nil {
+			h.logger.Error("refresh series: bust detail cache", "anilist_id", *updated.AnilistID, "err", derr)
+		}
+	}
 	WriteJSON(w, http.StatusOK, updated)
 }
 

@@ -4,6 +4,12 @@
 
 package store
 
+type AnilistDetailCache struct {
+	AnilistID int64  `json:"anilist_id"`
+	Payload   string `json:"payload"`
+	FetchedAt int64  `json:"fetched_at"`
+}
+
 type DownloadClient struct {
 	ID        int64   `json:"id"`
 	Uuid      string  `json:"uuid"`

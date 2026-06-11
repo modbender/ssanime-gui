@@ -311,6 +311,53 @@ export interface AvailableResponse {
   episodes: AvailableEpisode[]
 }
 
+// ---- Full AniList detail (series detail page) ----
+
+export interface AnilistDetailEpisode {
+  number: number
+  title: string | null
+  thumbnail: string | null
+  air_date: string | null
+  overview: string | null
+  runtime_min: number | null
+}
+
+export interface AnilistRelatedEntry {
+  anilist_id: number
+  relation_type?: string
+  title_english: string | null
+  title_romaji: string | null
+  cover_image: string
+  cover_color: string | null
+  format: string | null
+  status: string | null
+}
+
+export interface AnilistDetail {
+  anilist_id: number
+  title_english: string | null
+  title_romaji: string | null
+  cover_image: string | null
+  cover_color: string | null
+  banner_image: string | null
+  format: string | null
+  airing_status: string | null
+  description: string
+  genres: string[]
+  average_score: number | null
+  studio: string | null
+  source_material: string | null
+  season: string | null
+  season_year: number | null
+  duration_min: number | null
+  episode_count: number | null
+  next_airing: { episode: number; airing_at: number } | null
+  trailer: { site: string; video_id: string; thumbnail: string } | null
+  episodes: AnilistDetailEpisode[]
+  relations: AnilistRelatedEntry[]
+  recommendations: AnilistRelatedEntry[]
+}
+
 // ---- API methods ----
 
 export const api = {
@@ -341,6 +388,9 @@ export const api = {
   encodeEpisode: (id: number) => post<null>(`/episodes/${id}/encode`),
   retryEpisode: (id: number) => post<null>(`/episodes/${id}/retry`),
   deleteEpisode: (id: number) => del<null>(`/episodes/${id}`),
+
+  // AniList full detail (cover/genres/episodes/relations/recommendations)
+  getAnilistDetail: (id: number) => get<AnilistDetail>(`/anilist/${id}/detail`),
 
   // Search
   searchAnilist: (q: string) => get<AnilistSearchResult[]>(`/search/anilist?q=${encodeURIComponent(q)}`),

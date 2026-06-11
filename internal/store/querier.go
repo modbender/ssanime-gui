@@ -26,6 +26,7 @@ type Querier interface {
 	CreateFeed(ctx context.Context, arg CreateFeedParams) (Feed, error)
 	CreateScreenshot(ctx context.Context, arg CreateScreenshotParams) (Screenshot, error)
 	CreateSeries(ctx context.Context, arg CreateSeriesParams) (Series, error)
+	DeleteAnilistDetailCache(ctx context.Context, anilistID int64) error
 	DeleteDownloadClient(ctx context.Context, id int64) error
 	DeleteEncodeProfile(ctx context.Context, id int64) error
 	DeleteEncodedOutput(ctx context.Context, id int64) error
@@ -36,6 +37,7 @@ type Querier interface {
 	DeleteScreenshot(ctx context.Context, id int64) error
 	DeleteScreenshotsByEpisode(ctx context.Context, episodeID int64) error
 	DeleteSeries(ctx context.Context, id int64) error
+	GetAnilistDetailCache(ctx context.Context, anilistID int64) (AnilistDetailCache, error)
 	GetDefaultDownloadClient(ctx context.Context) (DownloadClient, error)
 	GetDownloadClient(ctx context.Context, id int64) (DownloadClient, error)
 	GetEncodeProfile(ctx context.Context, id int64) (EncodeProfile, error)
@@ -147,6 +149,7 @@ type Querier interface {
 	// so a sparse response never blanks a previously-populated column.
 	UpdateSeriesMetadata(ctx context.Context, arg UpdateSeriesMetadataParams) error
 	UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (Setting, error)
+	UpsertAnilistDetailCache(ctx context.Context, arg UpsertAnilistDetailCacheParams) error
 	UpsertExtensionByExtID(ctx context.Context, arg UpsertExtensionByExtIDParams) (Extension, error)
 }
 

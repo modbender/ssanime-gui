@@ -7,20 +7,29 @@
     type Profile,
     type DiscoveryItem,
     type AvailableEpisode,
+    type AnilistDetail,
+    type AnilistDetailEpisode,
+    type AnilistRelatedEntry,
   } from '$lib/api'
   import Button from '$lib/components/Button.svelte'
   import Modal from '$lib/components/Modal.svelte'
   import Spinner from '$lib/components/Spinner.svelte'
   import ProgressBar from '$lib/components/ProgressBar.svelte'
+  import Carousel from '$lib/components/Carousel.svelte'
+  import DiscoveryCard from '$lib/components/DiscoveryCard.svelte'
   import {
     statusColor,
     derivedStatusColor,
     derivedStatusLabel,
     formatBytes,
+    formatDate,
     resolveAccent,
     hexToRgbChannels,
     trackedStatus,
     titleCase,
+    relativeTime,
+    isFuture,
+    countdown,
   } from '$lib/utils'
   import { sseState } from '$lib/sse.svelte'
   import { getPreview, markTracked } from '$lib/discovery.svelte'
@@ -39,9 +48,16 @@
   let loading = $state(true)
   let error = $state('')
 
-  // ---- Untracked preview ----
+  // ---- Untracked preview (instant-paint hint only) ----
   let preview = $state<DiscoveryItem | null>(null)
   let tracking = $state(false)
+
+  // ---- Full AniList detail (best-effort enrichment) ----
+  let detail = $state<AnilistDetail | null>(null)
+  let detailLoading = $state(false)
+
+  // ---- Synopsis expand ----
+  let synopsisExpanded = $state(false)
 
   // ---- Manual status actions ----
   let statusBusy = $state(false)
@@ -62,6 +78,22 @@
   let scanning = $state(false)
   let refreshing = $state(false)
 
+  // The anilist id to fetch /detail for, in either mode.
+  const detailAnilistId = $derived(series?.anilist_id ?? numAnilist ?? null)
+
+  async function loadDetail(anilist: number) {
+    detailLoading = true
+    try {
+      detail = await api.getAnilistDetail(anilist)
+    } catch (e: any) {
+      // Best-effort: a tracked series still renders from its pipeline rows.
+      // For an untracked preview with no other data, surface the error.
+      if (numId == null && !preview) error = e.message || 'Could not load this title.'
+    } finally {
+      detailLoading = false
+    }
+  }
+
   async function loadTracked() {
     if (numId == null) return
     loading = true; error = ''
@@ -73,22 +105,31 @@
       encodeProfileId = series?.default_profile_id ?? null
     } catch (e: any) { error = e.message }
     finally { loading = false }
+    if (series?.anilist_id != null) loadDetail(series.anilist_id)
   }
 
   function loadPreview() {
     if (numAnilist == null) return
     loading = true; error = ''
+    // Instant-paint hint from the discovery cache (optional, not required).
     preview = getPreview(numAnilist)
-    // No GET-by-anilist-id in the contract; the discovery cache is the source.
-    if (!preview) {
-      error = 'This title is no longer in the discovery cache. Open it from the home page.'
-    }
     loading = false
+    loadDetail(numAnilist)
   }
 
+  // Re-run whenever the route param changes (e.g. relation/recommendation nav).
+  let lastKey = $state('')
   $effect(() => {
+    const key = numId != null ? `id:${numId}` : numAnilist != null ? `al:${numAnilist}` : ''
+    if (key === lastKey) return
+    lastKey = key
+    // Reset transient state so navigating between titles doesn't leak.
+    detail = null; preview = null; series = null; error = ''
+    available = []; availableChecked = false; synopsisExpanded = false
+    selected = new Set()
     if (numId != null) loadTracked()
     else if (numAnilist != null) loadPreview()
+    else loading = false
   })
 
   // ---- Track flow (untracked → tracked) ----
@@ -102,7 +143,6 @@
     } catch (e: any) {
       const msg = String(e?.message ?? '').toLowerCase()
       if (msg.includes('already') || msg.includes('exist')) {
-        // Idempotent: backend may not return the id in the error; bounce home to re-resolve.
         markTracked(anilist)
         navigate('/downloads')
       } else {
@@ -165,12 +205,13 @@
   }
 
   // ---- Encode (existing) ----
+  const pipelineEpisodes = $derived(series?.episodes ?? [])
   const allSelected = $derived(
-    series?.episodes.length ? selected.size === series.episodes.length : false
+    pipelineEpisodes.length ? selected.size === pipelineEpisodes.length : false,
   )
   function toggleAll() {
     if (allSelected) selected = new Set()
-    else selected = new Set(series!.episodes.map((e) => e.id))
+    else selected = new Set(pipelineEpisodes.map((e) => e.id))
   }
   function toggleEpisode(epId: number) {
     const s = new Set(selected)
@@ -199,6 +240,7 @@
     try {
       await api.refreshSeries(numId)
       await loadTracked()
+      if (series?.anilist_id != null) await loadDetail(series.anilist_id)
     } catch (e: any) {
       alert(e.message || 'AniList is rate-limited right now — existing metadata kept. Try again shortly.')
     } finally { refreshing = false }
@@ -227,24 +269,43 @@
     return sseState.episodeStatus[ep.id] ?? ep.status
   }
 
+  function openTrailer() {
+    if (!detail?.trailer) return
+    const vid = detail.trailer.video_id
+    const url = detail.trailer.site?.toLowerCase().includes('dailymotion')
+      ? `https://www.dailymotion.com/video/${vid}`
+      : `https://www.youtube.com/watch?v=${vid}`
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
   // ---- Presentation (works for both modes) ----
-  const accent = $derived(resolveAccent(series?.cover_color ?? preview?.cover_color))
-  const accentRgb = $derived(hexToRgbChannels(series?.cover_color ?? preview?.cover_color))
+  const accent = $derived(
+    resolveAccent(series?.cover_color ?? preview?.cover_color ?? detail?.cover_color),
+  )
+  const accentRgb = $derived(
+    hexToRgbChannels(series?.cover_color ?? preview?.cover_color ?? detail?.cover_color),
+  )
 
   const title = $derived(
     series
       ? series.english_title || series.romaji_title || series.title
       : preview
         ? preview.english_title || preview.romaji_title
-        : '',
+        : detail
+          ? detail.title_english || detail.title_romaji || `AniList #${detail.anilist_id}`
+          : '',
   )
-  const romaji = $derived(series?.romaji_title ?? preview?.romaji_title ?? null)
+  const romaji = $derived(series?.romaji_title ?? preview?.romaji_title ?? detail?.title_romaji ?? null)
   const banner = $derived(
     series?.banner_image_url || series?.cover_image_url ||
-    preview?.banner_image || preview?.cover_image || null,
+    preview?.banner_image || preview?.cover_image ||
+    detail?.banner_image || detail?.cover_image || null,
   )
-  const cover = $derived(series?.cover_image_url ?? preview?.cover_image ?? null)
-  const format = $derived(series?.format ?? (preview ? titleCase(preview.format) : null))
+  const cover = $derived(series?.cover_image_url ?? preview?.cover_image ?? detail?.cover_image ?? null)
+  const format = $derived(
+    series?.format ??
+    (preview ? titleCase(preview.format) : detail?.format ? titleCase(detail.format) : null),
+  )
 
   const archivedCount = $derived(
     series ? series.episodes.filter((e) => e.status === 'archived').length : 0,
@@ -259,6 +320,132 @@
     if (!s) return null
     return titleCase(s)
   }
+
+  // ---- About strip pairs ----
+  interface AboutPair { label: string; value: string }
+  const aboutPairs = $derived.by<AboutPair[]>(() => {
+    if (!detail) return []
+    const pairs: AboutPair[] = []
+    if (detail.average_score) pairs.push({ label: 'Score', value: `${detail.average_score}%` })
+    if (detail.studio) pairs.push({ label: 'Studio', value: detail.studio })
+    if (detail.source_material) pairs.push({ label: 'Source', value: titleCase(detail.source_material) })
+    if (detail.season || detail.season_year) {
+      pairs.push({ label: 'Season', value: `${titleCase(detail.season ?? '')}${detail.season && detail.season_year ? ' ' : ''}${detail.season_year ?? ''}`.trim() })
+    }
+    if (detail.duration_min) pairs.push({ label: 'Duration', value: `${detail.duration_min} min` })
+    if (detail.episode_count) pairs.push({ label: 'Episodes', value: String(detail.episode_count) })
+    if (detail.next_airing) {
+      const cd = countdown(detail.next_airing.airing_at)
+      if (cd) pairs.push({ label: 'Next', value: `Ep ${detail.next_airing.episode} in ${cd}` })
+    }
+    return pairs
+  })
+
+  // ---- Unified episode grid (merge metadata + pipeline + source) ----
+  interface MergedEpisode {
+    key: string
+    number: number | null
+    title: string | null
+    thumbnail: string | null
+    /** ISO date string (ani.zip) or unix-seconds (pipeline published_at). */
+    airDate: string | number | null
+    overview: string | null
+    pipeline: EpisodeDetail | null
+    source: AvailableEpisode | null
+  }
+
+  const mergedEpisodes = $derived.by<MergedEpisode[]>(() => {
+    const byNumber = new Map<number, MergedEpisode>()
+    const specials: MergedEpisode[] = []
+
+    // 1) metadata layer
+    for (const m of detail?.episodes ?? []) {
+      const e: MergedEpisode = {
+        key: `m${m.number}`,
+        number: m.number,
+        title: m.title,
+        thumbnail: m.thumbnail,
+        airDate: m.air_date,
+        overview: m.overview,
+        pipeline: null,
+        source: null,
+      }
+      byNumber.set(m.number, e)
+    }
+
+    // 2) pipeline layer (tracked) — pipeline truth wins for status display.
+    for (const p of pipelineEpisodes) {
+      if (p.episode_no == null) {
+        specials.push({
+          key: `p${p.id}`,
+          number: null,
+          title: p.title,
+          thumbnail: null,
+          airDate: p.published_at ?? null,
+          overview: null,
+          pipeline: p,
+          source: null,
+        })
+        continue
+      }
+      const existing = byNumber.get(p.episode_no)
+      if (existing) {
+        existing.pipeline = p
+        if (!existing.title && p.title) existing.title = p.title
+      } else {
+        byNumber.set(p.episode_no, {
+          key: `p${p.id}`,
+          number: p.episode_no,
+          title: p.title,
+          thumbnail: null,
+          airDate: p.published_at ?? null,
+          overview: null,
+          pipeline: p,
+          source: null,
+        })
+      }
+    }
+
+    // 3) source layer (tracked, on-demand) — light up matching cards.
+    for (const a of available) {
+      const existing = byNumber.get(a.number)
+      if (existing) {
+        existing.source = a
+      } else {
+        byNumber.set(a.number, {
+          key: `s${a.number}`,
+          number: a.number,
+          title: a.title || null,
+          thumbnail: null,
+          airDate: null,
+          overview: null,
+          pipeline: null,
+          source: a,
+        })
+      }
+    }
+
+    const numbered = [...byNumber.values()].sort((x, y) => (x.number ?? 0) - (y.number ?? 0))
+    return [...numbered, ...specials]
+  })
+
+  // ---- Relations / recommendations → DiscoveryItem shape for DiscoveryCard ----
+  function toDiscoveryItem(r: AnilistRelatedEntry): DiscoveryItem {
+    return {
+      anilist_id: r.anilist_id,
+      romaji_title: r.title_romaji ?? '',
+      english_title: r.title_english ?? '',
+      format: r.format ?? '',
+      status: r.status ?? '',
+      episode_count: null,
+      cover_image: r.cover_image,
+      banner_image: r.cover_image,
+      cover_color: r.cover_color ?? '',
+      season: '',
+      season_year: null,
+      is_adult: false,
+    }
+  }
 </script>
 
 <div class="flex h-full flex-col overflow-y-auto">
@@ -266,12 +453,17 @@
     <div class="flex flex-1 items-center justify-center text-[var(--color-muted)]">
       <Spinner size={30} />
     </div>
-  {:else if error}
+  {:else if error && !series && !preview && !detail}
     <div class="flex flex-1 flex-col items-center justify-center gap-4 text-center px-6">
       <p class="text-sm text-[var(--color-error)]">{error}</p>
-      <Button variant="outline" onclick={() => navigate('/')}>Back to home</Button>
+      <div class="flex items-center gap-2">
+        {#if numAnilist != null}
+          <Button onclick={() => loadDetail(numAnilist)}>Retry</Button>
+        {/if}
+        <Button variant="outline" onclick={() => navigate('/')}>Back to home</Button>
+      </div>
     </div>
-  {:else if series || preview}
+  {:else if series || preview || detail}
     <!-- ─── Cinematic header ─────────────────────────────────────── -->
     <section
       class="relative w-full shrink-0 overflow-hidden"
@@ -320,7 +512,7 @@
         <div class="flex flex-col gap-6 sm:flex-row sm:items-end sm:gap-7 animate-fade-up">
           <!-- Poster -->
           <div class="shrink-0">
-            <div class="w-32 sm:w-44 overflow-hidden rounded-[var(--radius-card)] ring-1 ring-white/10 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.85)]">
+            <div class="w-32 sm:w-44 overflow-hidden ring-1 ring-white/10 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.85)]">
               {#if cover}
                 <img src={cover} alt={title} class="aspect-[2/3] w-full object-cover" />
               {:else}
@@ -337,7 +529,7 @@
             <!-- eyebrow -->
             <div class="mb-3 flex items-center gap-2">
               {#if series}
-                <span class="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-dim)] ring-1 ring-white/10">
+                <span class="inline-flex items-center gap-1.5 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-dim)] ring-1 ring-white/10">
                   <span class="h-1.5 w-1.5 rounded-full bg-[var(--accent)]"></span>
                   Season {series.season_number}
                 </span>
@@ -345,7 +537,7 @@
                   <span class="text-[11px] text-[var(--color-muted)]">via {series.feed_title}</span>
                 {/if}
               {:else}
-                <span class="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-dim)] ring-1 ring-white/10">
+                <span class="inline-flex items-center gap-1.5 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-dim)] ring-1 ring-white/10">
                   <span class="h-1.5 w-1.5 rounded-full bg-[var(--accent)]"></span>
                   Discovery
                 </span>
@@ -363,28 +555,28 @@
             <!-- meta chips -->
             <div class="mt-5 flex flex-wrap items-center gap-2">
               {#if series && status}
-                <span class={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium backdrop-blur-sm ${derivedStatusColor(status)}`}>
+                <span class={`inline-flex items-center border px-2.5 py-1 text-[11px] font-medium backdrop-blur-sm ${derivedStatusColor(status)}`}>
                   {derivedStatusLabel(status)}
                 </span>
               {/if}
               {#if format}
-                <span class="inline-flex items-center rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)] ring-1 ring-white/10">{format}</span>
+                <span class="inline-flex items-center bg-white/[0.06] px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)] ring-1 ring-white/10">{format}</span>
               {/if}
               {#if series && fmtAiring(series.airing_status)}
-                <span class="inline-flex items-center rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)] ring-1 ring-white/10">{fmtAiring(series.airing_status)}</span>
-              {:else if preview && preview.status}
-                <span class="inline-flex items-center rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)] ring-1 ring-white/10">{titleCase(preview.status)}</span>
+                <span class="inline-flex items-center bg-white/[0.06] px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)] ring-1 ring-white/10">{fmtAiring(series.airing_status)}</span>
+              {:else if preview?.status || detail?.airing_status}
+                <span class="inline-flex items-center bg-white/[0.06] px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)] ring-1 ring-white/10">{titleCase(preview?.status || detail?.airing_status || '')}</span>
               {/if}
-              {#if (series?.episode_count ?? preview?.episode_count)}
-                <span class="inline-flex items-center rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)] ring-1 ring-white/10">{series?.episode_count ?? preview?.episode_count} episodes</span>
+              {#if (series?.episode_count ?? preview?.episode_count ?? detail?.episode_count)}
+                <span class="inline-flex items-center bg-white/[0.06] px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)] ring-1 ring-white/10">{series?.episode_count ?? preview?.episode_count ?? detail?.episode_count} episodes</span>
               {/if}
               {#if series}
-                <span class="inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] font-medium tabular-nums text-[var(--color-text-dim)] ring-1 ring-white/10">
+                <span class="inline-flex items-center gap-1.5 bg-white/[0.06] px-2.5 py-1 text-[11px] font-medium tabular-nums text-[var(--color-text-dim)] ring-1 ring-white/10">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18" stroke-linecap="round"/></svg>
                   {archivedCount}/{totalCount} archived
                 </span>
               {:else if preview && preview.season_year}
-                <span class="inline-flex items-center rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)] ring-1 ring-white/10">{titleCase(preview.season)} {preview.season_year}</span>
+                <span class="inline-flex items-center bg-white/[0.06] px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)] ring-1 ring-white/10">{titleCase(preview.season)} {preview.season_year}</span>
               {/if}
             </div>
 
@@ -392,6 +584,17 @@
             <div class="mt-6 flex flex-wrap items-center gap-2">
               {#if preview && !series}
                 <!-- Untracked: the single tracked-series creation path -->
+                <Button onclick={() => track(numAnilist!)} disabled={tracking}>
+                  {#if tracking}
+                    <Spinner size={14}/>
+                    Tracking…
+                  {:else}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Download &amp; track
+                  {/if}
+                </Button>
+              {:else if !series && numAnilist != null}
+                <!-- Untracked, no preview hint yet (detail-only paint) -->
                 <Button onclick={() => track(numAnilist!)} disabled={tracking}>
                   {#if tracking}
                     <Spinner size={14}/>
@@ -446,6 +649,13 @@
                   </Button>
                 {/if}
               {/if}
+
+              {#if detail?.trailer}
+                <Button variant="outline" onclick={openTrailer} title="Open trailer on YouTube">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>
+                  Trailer
+                </Button>
+              {/if}
             </div>
 
             {#if series && isManual}
@@ -458,165 +668,283 @@
       </div>
     </section>
 
-    {#if series}
-      <!-- ─── Available episodes (on-demand source check) ──────────── -->
-      <section class="px-6 sm:px-10 pt-2">
-        <div class="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)]">
-          <div class="flex items-center gap-3 border-b border-[var(--color-border)] px-4 py-3 sm:px-5">
-            <span class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">Available at source</span>
-            {#if availableChecked}
-              <span class="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-semibold tabular-nums text-[var(--color-text-dim)]">{available.length}</span>
+    <!-- ─── Synopsis ─────────────────────────────────────────────── -->
+    <section class="px-6 sm:px-10 pt-6">
+      {#if detail}
+        {#if detail.description}
+          <p class="max-w-3xl text-sm leading-relaxed text-[var(--color-text-dim)] {synopsisExpanded ? '' : 'line-clamp-4'}">
+            {detail.description}
+          </p>
+          <button
+            type="button"
+            class="mt-1.5 text-xs font-semibold text-[var(--accent)] hover:brightness-125 transition"
+            onclick={() => (synopsisExpanded = !synopsisExpanded)}
+          >
+            {synopsisExpanded ? 'Show less' : 'Show more'}
+          </button>
+        {/if}
+      {:else if detailLoading}
+        <div class="max-w-3xl space-y-2">
+          <div class="h-3 w-full bg-white/[0.05] animate-pulse"></div>
+          <div class="h-3 w-[92%] bg-white/[0.05] animate-pulse"></div>
+          <div class="h-3 w-[96%] bg-white/[0.05] animate-pulse"></div>
+          <div class="h-3 w-[60%] bg-white/[0.05] animate-pulse"></div>
+        </div>
+      {/if}
+    </section>
+
+    <!-- ─── Genre chips ──────────────────────────────────────────── -->
+    {#if detail?.genres?.length}
+      <section class="px-6 sm:px-10 pt-5">
+        <div class="flex flex-wrap gap-2">
+          {#each detail.genres as g (g)}
+            <span class="inline-flex items-center bg-white/[0.05] px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-dim)] ring-1 ring-white/[0.08]">{g}</span>
+          {/each}
+        </div>
+      </section>
+    {/if}
+
+    <!-- ─── About strip ──────────────────────────────────────────── -->
+    {#if aboutPairs.length}
+      <section class="px-6 sm:px-10 pt-6">
+        <div class="flex flex-wrap gap-x-8 gap-y-3">
+          {#each aboutPairs as pair (pair.label)}
+            <div class="min-w-0">
+              <div class="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">{pair.label}</div>
+              <div class="mt-0.5 text-sm font-medium text-[var(--color-text)] tabular-nums">{pair.value}</div>
+            </div>
+          {/each}
+        </div>
+      </section>
+    {:else if detailLoading}
+      <section class="px-6 sm:px-10 pt-6">
+        <div class="flex flex-wrap gap-x-8 gap-y-3">
+          {#each Array(5) as _, i (i)}
+            <div class="space-y-1.5">
+              <div class="h-2.5 w-14 bg-white/[0.05] animate-pulse"></div>
+              <div class="h-3.5 w-20 bg-white/[0.05] animate-pulse"></div>
+            </div>
+          {/each}
+        </div>
+      </section>
+    {/if}
+
+    <!-- ─── Unified episode grid ─────────────────────────────────── -->
+    <section class="px-6 sm:px-10 pt-8">
+      <!-- section header -->
+      <div class="mb-4 flex items-center gap-3">
+        <h2 class="text-[15px] font-semibold tracking-tight text-[var(--color-text)]">Episodes</h2>
+        {#if mergedEpisodes.length}
+          <span class="text-xs font-medium text-[var(--color-muted)] tabular-nums">{mergedEpisodes.length}</span>
+        {/if}
+
+        {#if series}
+          <div class="ml-auto flex items-center gap-2">
+            {#if pipelineEpisodes.length}
+              <Button variant="ghost" size="sm" onclick={toggleAll}>
+                {allSelected ? 'Clear' : 'Select all'}
+              </Button>
             {/if}
-            <Button variant="ghost" size="sm" class="ml-auto" onclick={loadAvailable} disabled={availableLoading}>
+            <Button variant="secondary" size="sm" onclick={loadAvailable} disabled={availableLoading}>
               {#if availableLoading}<Spinner size={13}/>{:else}
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" stroke-linecap="round" stroke-linejoin="round"/></svg>
               {/if}
               {availableChecked ? 'Re-check source' : 'Check source'}
             </Button>
           </div>
+        {/if}
+      </div>
 
-          {#if !availableChecked}
-            <p class="px-5 py-6 text-sm text-[var(--color-muted)]">Run a one-time source check to list episodes available but not yet downloaded — works even while paused or dropped.</p>
-          {:else if available.length === 0}
-            <p class="px-5 py-6 text-sm text-[var(--color-muted)]">No new episodes at the source right now.</p>
-          {:else}
-            <ul class="divide-y divide-[var(--color-border)]/60">
-              {#each available as ep (ep.source_url)}
-                <li class="flex items-center gap-3 px-4 py-3 sm:px-5">
-                  <span class="shrink-0 rounded-lg bg-[var(--color-surface-2)] px-2 py-1 text-[11px] font-semibold tabular-nums text-[var(--color-text-dim)] ring-1 ring-[var(--color-border)]">
-                    E{String(ep.number).padStart(2, '0')}
-                  </span>
-                  <div class="min-w-0 flex-1">
-                    <span class="block truncate text-sm text-[var(--color-text)]">{ep.title || `Episode ${ep.number}`}</span>
-                    <span class="text-xs text-[var(--color-muted)] tabular-nums">
-                      {ep.resolution}{#if ep.size} · {formatBytes(ep.size)}{/if}
-                    </span>
-                  </div>
-                  <Button
-                    size="sm"
-                    onclick={() => downloadAvailable(ep)}
-                    disabled={downloadingEp === ep.source_url}
-                  >
-                    {#if downloadingEp === ep.source_url}<Spinner size={12}/>{:else}
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    {/if}
-                    Download
-                  </Button>
-                </li>
-              {/each}
-            </ul>
-          {/if}
-        </div>
-      </section>
-
-      <!-- ─── Episode list (pipeline) ──────────────────────────────── -->
-      <section class="px-6 sm:px-10 pt-8 pb-16">
-        <div class="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)]">
-          <div class="sticky top-0 z-10 flex items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 px-4 py-3 backdrop-blur-md sm:px-5">
-            <input
-              type="checkbox"
-              checked={allSelected}
-              onchange={toggleAll}
-              class="h-4 w-4 shrink-0 cursor-pointer rounded border-[var(--color-border-strong)] accent-[var(--accent)]"
-              aria-label="Select all episodes"
-            />
-            <span class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">Episode</span>
-            {#if selected.size > 0}
-              <span class="rounded-full bg-[rgb(var(--accent-rgb)/0.16)] px-2 py-0.5 text-[10px] font-semibold tabular-nums text-[var(--accent)]">{selected.size} selected</span>
-            {/if}
-            <span class="ml-auto hidden text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)] sm:inline">Status</span>
-            <span class="hidden w-28 text-right text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)] sm:inline">Outputs</span>
+      {#if mergedEpisodes.length === 0}
+        {#if detailLoading}
+          <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {#each Array(6) as _, i (i)}
+              <div class="flex gap-3 border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5">
+                <div class="aspect-video w-40 shrink-0 bg-white/[0.05] animate-pulse"></div>
+                <div class="min-w-0 flex-1 space-y-2 py-1">
+                  <div class="h-3 w-[70%] bg-white/[0.05] animate-pulse"></div>
+                  <div class="h-2.5 w-full bg-white/[0.04] animate-pulse"></div>
+                  <div class="h-2.5 w-[80%] bg-white/[0.04] animate-pulse"></div>
+                </div>
+              </div>
+            {/each}
           </div>
-
-          {#if series.episodes.length === 0}
-            <div class="flex flex-col items-center justify-center gap-4 px-6 py-20 text-center">
-              <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.04] text-[var(--color-faint)] ring-1 ring-white/10">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </div>
-              <div class="space-y-1.5">
-                <h2 class="text-base font-semibold tracking-tight">No episodes downloaded yet</h2>
-                <p class="max-w-sm text-sm text-[var(--color-muted)]">The auto-downloader will grab new episodes as they air. Or check the source above and download one now.</p>
-              </div>
+        {:else}
+          <div class="flex flex-col items-center justify-center gap-4 border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-16 text-center">
+            <div class="flex h-14 w-14 items-center justify-center bg-white/[0.04] text-[var(--color-faint)] ring-1 ring-white/10">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </div>
-          {:else}
-            <ul class="divide-y divide-[var(--color-border)]/60">
-              {#each series.episodes as ep (ep.id)}
-                {@const progress = getEpisodeProgress(ep)}
-                {@const epStatus = liveStatus(ep)}
-                {@const isSelected = selected.has(ep.id)}
-                <li
-                  class="group flex items-center gap-3 px-4 py-3 transition-colors duration-200 sm:px-5
-                    {isSelected ? 'bg-[rgb(var(--accent-rgb)/0.07)]' : 'hover:bg-white/[0.025]'}"
+            <div class="space-y-1.5">
+              <h3 class="text-base font-semibold tracking-tight">No episodes yet</h3>
+              <p class="max-w-sm text-sm text-[var(--color-muted)]">
+                {#if series}The auto-downloader will grab new episodes as they air. Or run a source check above.{:else}Episode data will appear once it's available.{/if}
+              </p>
+            </div>
+          </div>
+        {/if}
+      {:else}
+        <ul class="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {#each mergedEpisodes as ep (ep.key)}
+            {@const p = ep.pipeline}
+            {@const progress = p ? getEpisodeProgress(p) : null}
+            {@const epStatus = p ? liveStatus(p) : null}
+            {@const future = isFuture(ep.airDate)}
+            {@const isSelected = p ? selected.has(p.id) : false}
+            <li
+              class="group relative flex gap-3 border bg-[var(--color-surface)] p-2.5 transition-colors duration-200
+                {isSelected ? 'border-[var(--accent)] bg-[rgb(var(--accent-rgb)/0.06)]' : 'border-[var(--color-border)] hover:border-[var(--color-border-strong)]'}
+                {future ? 'opacity-55' : ''}"
+            >
+              <!-- thumbnail -->
+              <div class="relative aspect-video w-40 shrink-0 overflow-hidden bg-[var(--color-surface-2)]">
+                <!-- tinted placeholder (always rendered; the image layers on top when present) -->
+                <div
+                  class="absolute inset-0 z-0 flex items-center justify-center"
+                  style="background: radial-gradient(120% 120% at 50% 0%, rgb(var(--accent-rgb) / 0.28), var(--color-surface-2));"
                 >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onchange={() => toggleEpisode(ep.id)}
-                    class="h-4 w-4 shrink-0 cursor-pointer rounded border-[var(--color-border-strong)] accent-[var(--accent)]"
-                    aria-label={`Select episode ${ep.episode_no ?? ep.title ?? ep.id}`}
-                  />
-                  <span class="shrink-0 rounded-lg bg-[var(--color-surface-2)] px-2 py-1 text-[11px] font-semibold tabular-nums text-[var(--color-text-dim)] ring-1 ring-[var(--color-border)]">
-                    {ep.episode_no != null ? `E${String(ep.episode_no).padStart(2, '0')}` : 'SP'}
+                  <span class="text-lg font-bold tabular-nums text-white/70">
+                    {ep.number != null ? `E${String(ep.number).padStart(2, '0')}` : 'SP'}
                   </span>
-                  <div class="min-w-0 flex-1">
-                    <div class="flex items-baseline gap-2">
-                      <span class="truncate text-sm text-[var(--color-text)]">{ep.title ?? `Episode ${ep.episode_no ?? ''}`}</span>
-                      {#if ep.release_group}
-                        <span class="hidden shrink-0 text-xs text-[var(--color-muted)] sm:inline">[{ep.release_group}]</span>
-                      {/if}
-                      {#if ep.source_size}
-                        <span class="hidden shrink-0 text-xs tabular-nums text-[var(--color-faint)] sm:inline">{formatBytes(ep.source_size)}</span>
-                      {/if}
+                </div>
+
+                {#if ep.thumbnail}
+                  <img
+                    src={ep.thumbnail}
+                    alt=""
+                    loading="lazy"
+                    class="relative z-[1] h-full w-full object-cover"
+                    onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                  />
+                {/if}
+
+                <!-- selection checkbox (tracked, pipeline-backed only) -->
+                {#if series && p}
+                  <label class="absolute left-1.5 top-1.5 z-10 flex cursor-pointer items-center">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onchange={() => toggleEpisode(p.id)}
+                      class="h-4 w-4 cursor-pointer border-[var(--color-border-strong)] bg-black/50 accent-[var(--accent)]"
+                      aria-label={`Select episode ${ep.number ?? ep.title ?? ''}`}
+                    />
+                  </label>
+                {/if}
+              </div>
+
+              <!-- body -->
+              <div class="flex min-w-0 flex-1 flex-col py-0.5">
+                <div class="flex items-baseline gap-2">
+                  <span class="shrink-0 text-[11px] font-bold tabular-nums text-[var(--color-text-dim)]">
+                    {ep.number != null ? `E${String(ep.number).padStart(2, '0')}` : 'SP'}
+                  </span>
+                  <span class="truncate text-sm font-medium text-[var(--color-text)]">
+                    {ep.title || (ep.number != null ? `Episode ${ep.number}` : 'Special')}
+                  </span>
+                </div>
+
+                {#if ep.overview}
+                  <p class="mt-1 line-clamp-2 text-xs leading-relaxed text-[var(--color-muted)]">{ep.overview}</p>
+                {/if}
+
+                <!-- live progress (pipeline) -->
+                {#if progress && 'percent' in progress}
+                  <div class="mt-2 flex items-center gap-2">
+                    <ProgressBar value={progress.percent} max={100} class="flex-1" />
+                    <span class="shrink-0 text-[10px] font-medium tabular-nums text-[var(--color-muted)]">{Math.round(progress.percent)}%</span>
+                  </div>
+                {/if}
+
+                {#if epStatus === 'error' && p?.error_message}
+                  <p class="mt-1 truncate text-xs text-[var(--color-error)]" title={p.error_message}>{p.error_message}</p>
+                {/if}
+
+                <!-- footer row: air date / status / outputs / actions -->
+                <div class="mt-auto flex items-center gap-2 pt-2">
+                  {#if future}
+                    <span class="text-[11px] font-medium text-[var(--color-muted)]">airs {typeof ep.airDate === 'number' ? formatDate(ep.airDate) : ep.airDate}</span>
+                  {:else if ep.airDate}
+                    <span class="text-[11px] text-[var(--color-faint)]">{relativeTime(ep.airDate)}</span>
+                  {/if}
+
+                  {#if p && epStatus}
+                    <span class="text-[11px] font-medium {statusColor(epStatus)}">{epStatus}</span>
+                  {/if}
+
+                  <!-- output resolution chips -->
+                  {#if p?.outputs?.length}
+                    <div class="flex flex-wrap gap-1">
+                      {#each p.outputs as out (out.id)}
+                        <span
+                          class="bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] font-medium tabular-nums ring-1 ring-[var(--color-border)] {statusColor(out.status)}"
+                          title={out.error_message ?? out.status}
+                        >{out.resolution}p</span>
+                      {/each}
                     </div>
-                    {#if progress && 'percent' in progress}
-                      <div class="mt-2 flex items-center gap-2">
-                        <ProgressBar value={progress.percent} max={100} class="flex-1" />
-                        <span class="shrink-0 text-[10px] font-medium tabular-nums text-[var(--color-muted)]">{Math.round(progress.percent)}%</span>
-                      </div>
-                    {/if}
-                    {#if epStatus === 'error' && ep.error_message}
-                      <p class="mt-1 truncate text-xs text-[var(--color-error)]" title={ep.error_message}>{ep.error_message}</p>
-                    {/if}
-                  </div>
-                  <span class="shrink-0 text-xs font-medium {statusColor(epStatus)}">{epStatus}</span>
-                  <div class="hidden w-28 flex-wrap justify-end gap-1 sm:flex">
-                    {#each ep.outputs as out (out.id)}
-                      <span
-                        class="rounded-md bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[11px] font-medium tabular-nums ring-1 ring-[var(--color-border)] {statusColor(out.status)}"
-                        title={out.error_message ?? out.status}
+                  {/if}
+
+                  <div class="ml-auto flex items-center gap-1.5">
+                    {#if series && ep.source}
+                      <Button
+                        size="sm"
+                        onclick={() => downloadAvailable(ep.source!)}
+                        disabled={downloadingEp === ep.source.source_url}
+                        title={`${ep.source.resolution}${ep.source.size ? ' · ' + formatBytes(ep.source.size) : ''}`}
                       >
-                        {out.resolution}p
-                      </span>
-                    {/each}
-                  </div>
-                  <div class="flex w-7 shrink-0 justify-end">
-                    {#if epStatus === 'error'}
+                        {#if downloadingEp === ep.source.source_url}<Spinner size={12}/>{:else}
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        {/if}
+                        Download
+                      </Button>
+                    {/if}
+                    {#if p && epStatus === 'error'}
                       <Button
                         variant="ghost"
                         size="icon"
                         class="h-7 w-7"
-                        onclick={() => api.retryEpisode(ep.id).then(() => loadTracked())}
+                        onclick={() => api.retryEpisode(p.id).then(() => loadTracked())}
                         title="Retry episode"
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25"><path d="M1 4v6h6M23 20v-6h-6" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" stroke-linecap="round" stroke-linejoin="round"/></svg>
                       </Button>
                     {/if}
                   </div>
-                </li>
-              {/each}
-            </ul>
-          {/if}
-        </div>
+                </div>
+              </div>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </section>
+
+    <!-- ─── Relations ────────────────────────────────────────────── -->
+    {#if detail?.relations?.length}
+      <section class="px-6 sm:px-10 pt-10">
+        <Carousel title="Relations" count={detail.relations.length}>
+          {#each detail.relations as r (r.anilist_id + ':' + (r.relation_type ?? ''))}
+            <div class="w-[150px] shrink-0 snap-start">
+              {#if r.relation_type}
+                <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">{titleCase(r.relation_type)}</div>
+              {/if}
+              <DiscoveryCard item={toDiscoveryItem(r)} />
+            </div>
+          {/each}
+        </Carousel>
       </section>
-    {:else if preview}
-      <!-- Untracked: a short call-to-action panel under the hero -->
-      <section class="px-6 sm:px-10 pb-16">
-        <div class="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-8 text-center sm:px-8">
-          <p class="mx-auto max-w-md text-sm text-[var(--color-muted)]">
-            Not tracked yet. Hit <span class="font-medium text-[var(--color-text)]">Download &amp; track</span> to create the series, subscribe to its feed, and let the pipeline auto-fetch and re-encode every episode.
-          </p>
-        </div>
+    {/if}
+
+    <!-- ─── Recommendations ──────────────────────────────────────── -->
+    {#if detail?.recommendations?.length}
+      <section class="px-6 sm:px-10 pt-10 pb-16">
+        <Carousel title="Recommendations" count={detail.recommendations.length}>
+          {#each detail.recommendations as r (r.anilist_id)}
+            <div class="w-[150px] shrink-0 snap-start">
+              <DiscoveryCard item={toDiscoveryItem(r)} />
+            </div>
+          {/each}
+        </Carousel>
       </section>
+    {:else}
+      <div class="pb-16"></div>
     {/if}
   {/if}
 </div>
@@ -637,7 +965,7 @@
       <select
         id="encode-profile"
         bind:value={encodeProfileId}
-        class="h-9 w-full cursor-pointer rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] transition-colors focus:border-[var(--accent)] focus:outline-none"
+        class="h-9 w-full cursor-pointer border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] transition-colors focus:border-[var(--accent)] focus:outline-none"
       >
         <option value={null}>Default profile</option>
         {#each profiles as p (p.id)}
@@ -654,7 +982,7 @@
           <button
             type="button"
             aria-pressed={on}
-            class="rounded-xl border px-3.5 py-1.5 text-sm font-medium transition-colors duration-200
+            class="border px-3.5 py-1.5 text-sm font-medium transition-colors duration-200
               {on
                 ? 'border-[var(--accent)] bg-[rgb(var(--accent-rgb)/0.15)] text-[var(--color-text)]'
                 : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]'}"
