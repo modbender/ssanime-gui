@@ -31,6 +31,26 @@ export function resolveAccent(coverColor: string | null | undefined): string {
   return DEFAULT_ACCENT
 }
 
+/**
+ * Pick a readable foreground (#0a0a0a near-black or #ffffff white) for text
+ * placed on a solid accent fill. Resolves the accent the same way the rest of
+ * the UI does, computes WCAG relative luminance, and returns dark text only for
+ * genuinely light accents (e.g. Dr. STONE's cream cover). Falls back to white
+ * for the default violet accent.
+ */
+export function accentForeground(coverColor: string | null | undefined): string {
+  const hex = resolveAccent(coverColor)
+  let h = hex.replace('#', '')
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('')
+  const n = parseInt(h, 16)
+  const channels = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => {
+    const s = c / 255
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+  })
+  const L = 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+  return L > 0.6 ? '#0a0a0a' : '#ffffff'
+}
+
 export function formatBytes(bytes: number | null | undefined): string {
   if (bytes == null || bytes === 0) return '0 B'
   const k = 1024

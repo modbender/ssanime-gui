@@ -26,7 +26,7 @@
 
   const variantClasses: Record<Variant, string> = {
     default:
-      'bg-[var(--accent)] text-white shadow-[0_4px_18px_-6px_rgb(var(--accent-rgb)/0.7)] hover:brightness-110',
+      'bg-[var(--accent)] text-[var(--accent-fg)] shadow-[0_4px_18px_-6px_rgb(var(--accent-rgb)/0.7)] hover:brightness-110',
     secondary:
       'bg-[var(--color-surface-2)] text-[var(--color-text)] border border-[var(--color-border)] hover:bg-[var(--color-surface-3)] hover:border-[var(--color-border-strong)]',
     ghost: 'text-[var(--color-text-dim)] hover:bg-white/5 hover:text-[var(--color-text)]',

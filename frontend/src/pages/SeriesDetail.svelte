@@ -25,6 +25,7 @@
     formatDate,
     resolveAccent,
     hexToRgbChannels,
+    accentForeground,
     trackedStatus,
     titleCase,
     relativeTime,
@@ -285,6 +286,9 @@
   const accentRgb = $derived(
     hexToRgbChannels(series?.cover_color ?? preview?.cover_color ?? detail?.cover_color),
   )
+  const accentFg = $derived(
+    accentForeground(series?.cover_color ?? preview?.cover_color ?? detail?.cover_color),
+  )
 
   const title = $derived(
     series
@@ -467,7 +471,7 @@
     <!-- ─── Cinematic header ─────────────────────────────────────── -->
     <section
       class="relative w-full shrink-0 overflow-hidden"
-      style="--accent: {accent}; --accent-rgb: {accentRgb};"
+      style="--accent: {accent}; --accent-rgb: {accentRgb}; --accent-fg: {accentFg};"
     >
       <!-- Banner layer -->
       <div class="absolute inset-0">
