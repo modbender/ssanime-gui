@@ -103,7 +103,7 @@
   {:else if total === 0}
     <!-- Nothing tracked yet — point to discovery, never the old "add your first series" -->
     <div class="flex flex-1 flex-col items-center justify-center gap-5 px-6 text-center">
-      <div class="w-16 h-16 rounded-2xl bg-white/[0.04] ring-1 ring-white/10 flex items-center justify-center text-[var(--color-faint)]">
+      <div class="w-16 h-16 bg-white/[0.04] ring-1 ring-white/10 flex items-center justify-center text-[var(--color-faint)]">
         <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
       <div class="space-y-1.5">

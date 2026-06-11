@@ -106,6 +106,73 @@ export function trackedStatus(s: {
   return s.derived_status
 }
 
+/**
+ * Coerce an air-date value into epoch milliseconds. Accepts a unix-seconds
+ * number, an ISO date string ("2012-04-09"), or null. Returns null if unusable.
+ */
+function toEpochMs(value: string | number | null | undefined): number | null {
+  if (value == null || value === '') return null
+  if (typeof value === 'number') return value * 1000
+  const ms = Date.parse(value)
+  return Number.isNaN(ms) ? null : ms
+}
+
+/** True when the given air date is still in the future. */
+export function isFuture(value: string | number | null | undefined): boolean {
+  const ms = toEpochMs(value)
+  return ms != null && ms > Date.now()
+}
+
+/**
+ * Human relative time for an air date — "3 days ago", "in 2 days", "today".
+ * Accepts unix-seconds, an ISO date string, or null (→ '').
+ */
+export function relativeTime(value: string | number | null | undefined): string {
+  const ms = toEpochMs(value)
+  if (ms == null) return ''
+  const diff = ms - Date.now()
+  const future = diff > 0
+  const abs = Math.abs(diff)
+  const min = 60_000, hour = 3_600_000, day = 86_400_000
+  if (abs < hour) {
+    const m = Math.max(1, Math.round(abs / min))
+    return future ? `in ${m} min` : `${m} min ago`
+  }
+  if (abs < day) {
+    const h = Math.round(abs / hour)
+    return future ? `in ${h}h` : `${h}h ago`
+  }
+  const d = Math.round(abs / day)
+  if (d < 30) {
+    const unit = d === 1 ? 'day' : 'days'
+    return future ? `in ${d} ${unit}` : `${d} ${unit} ago`
+  }
+  const mo = Math.round(d / 30)
+  if (mo < 12) {
+    const unit = mo === 1 ? 'month' : 'months'
+    return future ? `in ${mo} ${unit}` : `${mo} ${unit} ago`
+  }
+  const y = Math.round(d / 365)
+  const unit = y === 1 ? 'year' : 'years'
+  return future ? `in ${y} ${unit}` : `${y} ${unit} ago`
+}
+
+/**
+ * Compact countdown to a future unix-seconds timestamp — "3d 14h", "14h 30m",
+ * "30m". Returns '' once the moment has passed.
+ */
+export function countdown(unixSeconds: number | null | undefined): string {
+  if (unixSeconds == null) return ''
+  let secs = unixSeconds - Math.floor(Date.now() / 1000)
+  if (secs <= 0) return ''
+  const d = Math.floor(secs / 86_400); secs -= d * 86_400
+  const h = Math.floor(secs / 3_600); secs -= h * 3_600
+  const m = Math.floor(secs / 60)
+  if (d > 0) return `${d}d ${h}h`
+  if (h > 0) return `${h}h ${m}m`
+  return `${m}m`
+}
+
 /** Format an AniList media format/status token (UPPER_SNAKE) for display. */
 export function titleCase(s: string | null | undefined): string {
   if (!s) return ''

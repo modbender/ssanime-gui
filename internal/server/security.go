@@ -22,7 +22,8 @@ const maxBodyBytes = 1 << 20
 // X-Frame-Options block framing; nosniff blocks MIME confusion.
 var securityHeaders = map[string]string{
 	"Content-Security-Policy": "default-src 'self'; " +
-		"img-src 'self' https://s4.anilist.co https://img.anili.st data:; " +
+		"img-src 'self' https://s4.anilist.co https://img.anili.st " +
+		"https://artworks.thetvdb.com https://img1.ak.crunchyroll.com https://i.ytimg.com data:; " +
 		"script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; " +
 		"connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
 	"X-Content-Type-Options": "nosniff",

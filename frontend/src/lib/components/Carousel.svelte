@@ -28,14 +28,14 @@
       <button
         onclick={() => scrollBy(-1)}
         aria-label="Scroll left"
-        class="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-white/5 transition-colors duration-200"
+        class="w-8 h-8 flex items-center justify-center text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-white/5 transition-colors duration-200"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <button
         onclick={() => scrollBy(1)}
         aria-label="Scroll right"
-        class="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-white/5 transition-colors duration-200"
+        class="w-8 h-8 flex items-center justify-center text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-white/5 transition-colors duration-200"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>

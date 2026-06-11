@@ -38,26 +38,30 @@ type DiscoveryProvider interface {
 // Handler carries the shared dependencies every route needs and registers the
 // route table.
 type Handler struct {
-	store     *store.Store
-	hub       *events.Hub
-	logger    *slog.Logger
-	registry  *source.Registry
-	anilist   *anilist.Client
-	animedb   *animedb.DB
-	extMgr    *extension.Manager
-	refresher MetadataRefresher
-	discovery DiscoveryProvider
-	logs      *RingBuffer
+	store         *store.Store
+	hub           *events.Hub
+	logger        *slog.Logger
+	registry      *source.Registry
+	anilist       *anilist.Client
+	animedb       *animedb.DB
+	extMgr        *extension.Manager
+	refresher     MetadataRefresher
+	discovery     DiscoveryProvider
+	anilistDetail AnilistDetailFetcher
+	anizip        AnizipFetcher
+	logs          *RingBuffer
 }
 
 // Config holds optional dependencies for server.New.
 type Config struct {
-	Registry  *source.Registry
-	Anilist   *anilist.Client
-	AnimeDB   *animedb.DB
-	ExtMgr    *extension.Manager
-	Refresher MetadataRefresher
-	Discovery DiscoveryProvider
+	Registry      *source.Registry
+	Anilist       *anilist.Client
+	AnimeDB       *animedb.DB
+	ExtMgr        *extension.Manager
+	Refresher     MetadataRefresher
+	Discovery     DiscoveryProvider
+	AnilistDetail AnilistDetailFetcher
+	Anizip        AnizipFetcher
 }
 
 // New builds the Handler and returns the fully wired http.Handler: REST + SSE
@@ -68,16 +72,18 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 	}
 	ring := NewRingBuffer(500)
 	h := &Handler{
-		store:     st,
-		hub:       hub,
-		logger:    logger,
-		registry:  cfg.Registry,
-		anilist:   cfg.Anilist,
-		animedb:   cfg.AnimeDB,
-		extMgr:    cfg.ExtMgr,
-		refresher: cfg.Refresher,
-		discovery: cfg.Discovery,
-		logs:      ring,
+		store:         st,
+		hub:           hub,
+		logger:        logger,
+		registry:      cfg.Registry,
+		anilist:       cfg.Anilist,
+		animedb:       cfg.AnimeDB,
+		extMgr:        cfg.ExtMgr,
+		refresher:     cfg.Refresher,
+		discovery:     cfg.Discovery,
+		anilistDetail: cfg.AnilistDetail,
+		anizip:        cfg.Anizip,
+		logs:          ring,
 	}
 
 	r := chi.NewRouter()
@@ -103,6 +109,9 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 		api.Get("/discovery", h.handleDiscovery)
 		api.Get("/tracked", h.handleGetTracked)
 		api.Post("/track", h.handleTrackSeries)
+
+		// AniList detail (series page; tracked + untracked alike)
+		api.Get("/anilist/{id}/detail", h.handleAnilistDetail)
 
 		// Series
 		api.Route("/series", func(r chi.Router) {

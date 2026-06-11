@@ -99,10 +99,10 @@
       <div class="absolute inset-0 bg-gradient-to-br from-white/[0.04] to-transparent animate-pulse"></div>
       <div class="absolute inset-0 bg-gradient-to-t from-[var(--color-bg)] via-[var(--color-bg)]/50 to-transparent"></div>
       <div class="relative w-full px-6 sm:px-10 pt-32 pb-12 space-y-4">
-        <div class="h-3 w-28 rounded-full bg-white/[0.06] animate-pulse"></div>
-        <div class="h-12 w-2/3 max-w-xl rounded-lg bg-white/[0.06] animate-pulse"></div>
-        <div class="h-4 w-1/2 max-w-md rounded bg-white/[0.05] animate-pulse"></div>
-        <div class="h-11 w-44 rounded-xl bg-white/[0.06] animate-pulse"></div>
+        <div class="h-3 w-28 bg-white/[0.06] animate-pulse"></div>
+        <div class="h-12 w-2/3 max-w-xl bg-white/[0.06] animate-pulse"></div>
+        <div class="h-4 w-1/2 max-w-md bg-white/[0.05] animate-pulse"></div>
+        <div class="h-11 w-44 bg-white/[0.06] animate-pulse"></div>
       </div>
     </div>
   {:else if heroItems.length > 0}
@@ -145,7 +145,7 @@
         <!-- Discovery cache cold/unreachable AND nothing tracked: graceful, never the old empty state -->
         {#if inProgress.length === 0}
           <div class="flex flex-col items-center justify-center gap-3 py-24 text-center">
-            <div class="w-14 h-14 rounded-2xl bg-white/[0.04] ring-1 ring-white/10 flex items-center justify-center text-[var(--color-faint)]">
+            <div class="w-14 h-14 bg-white/[0.04] ring-1 ring-white/10 flex items-center justify-center text-[var(--color-faint)]">
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </div>
             <div class="space-y-1.5">

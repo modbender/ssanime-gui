@@ -35,13 +35,13 @@
   <div class="absolute inset-0 bg-black/75 backdrop-blur-md"></div>
 
   <!-- Panel: double-bezel — outer shell + inner core -->
-  <div class="relative w-full max-w-lg mx-4 rounded-[1.75rem] bg-white/[0.04] p-1.5 ring-1 ring-white/10 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.8)] animate-fade-up">
-    <div class="rounded-[calc(1.75rem-0.375rem)] bg-[var(--color-surface)] border border-[var(--color-border)] overflow-hidden">
+  <div class="relative w-full max-w-lg mx-4 bg-white/[0.04] p-1.5 ring-1 ring-white/10 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.8)] animate-fade-up">
+    <div class="bg-[var(--color-surface)] border border-[var(--color-border)] overflow-hidden">
       <div class="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)]">
         <h2 class="text-base font-semibold text-[var(--color-text)] tracking-tight">{title}</h2>
         <button
           onclick={close}
-          class="text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors duration-200 rounded-lg p-1 hover:bg-white/5"
+          class="text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors duration-200 p-1 hover:bg-white/5"
           aria-label="Close"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/></svg>

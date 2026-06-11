@@ -36,10 +36,10 @@
   }
 
   const sizeClasses: Record<Size, string> = {
-    sm: 'h-7 px-3 text-xs rounded-lg',
-    md: 'h-9 px-4 text-[13px] rounded-xl',
-    lg: 'h-11 px-6 text-sm rounded-xl',
-    icon: 'h-9 w-9 rounded-xl flex items-center justify-center',
+    sm: 'h-7 px-3 text-xs',
+    md: 'h-9 px-4 text-[13px]',
+    lg: 'h-11 px-6 text-sm',
+    icon: 'h-9 w-9 flex items-center justify-center',
   }
 </script>
 

@@ -112,30 +112,30 @@
       <div class="max-w-2xl space-y-6">
 
         <!-- Paths -->
-        <section class="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+        <section class="border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
           <div class="px-5 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface-2)]">
             <h2 class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">Paths</h2>
           </div>
           <div class="px-5 py-5 space-y-4">
             <div>
               <label for="s-download-root" class="mb-1.5 block text-sm font-medium text-[var(--color-text)]">Download root</label>
-              <input id="s-download-root" type="text" bind:value={form.download_root} placeholder="/mnt/downloads" class="w-full h-9 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] font-mono transition-colors duration-200 focus:outline-none focus:border-[var(--accent)] focus:bg-[var(--color-surface-2)]" />
+              <input id="s-download-root" type="text" bind:value={form.download_root} placeholder="/mnt/downloads" class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] font-mono transition-colors duration-200 focus:outline-none focus:border-[var(--accent)] focus:bg-[var(--color-surface-2)]" />
               <p class="text-xs text-[var(--color-muted)] mt-1">Where source files are saved during download.</p>
             </div>
             <div>
               <label for="s-encoded-root" class="mb-1.5 block text-sm font-medium text-[var(--color-text)]">Encoded root</label>
-              <input id="s-encoded-root" type="text" bind:value={form.encoded_root} placeholder="/mnt/archive" class="w-full h-9 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] font-mono transition-colors duration-200 focus:outline-none focus:border-[var(--accent)] focus:bg-[var(--color-surface-2)]" />
+              <input id="s-encoded-root" type="text" bind:value={form.encoded_root} placeholder="/mnt/archive" class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] font-mono transition-colors duration-200 focus:outline-none focus:border-[var(--accent)] focus:bg-[var(--color-surface-2)]" />
               <p class="text-xs text-[var(--color-muted)] mt-1">Where finished encoded files are archived.</p>
             </div>
             <div>
               <label for="s-naming" class="mb-1.5 block text-sm font-medium text-[var(--color-text)]">Naming template</label>
-              <input id="s-naming" type="text" bind:value={form.naming_template} placeholder={'${title}/S${season:02}E${ep:02}'} class="w-full h-9 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] font-mono transition-colors duration-200 focus:outline-none focus:border-[var(--accent)] focus:bg-[var(--color-surface-2)]" />
+              <input id="s-naming" type="text" bind:value={form.naming_template} placeholder={'${title}/S${season:02}E${ep:02}'} class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] font-mono transition-colors duration-200 focus:outline-none focus:border-[var(--accent)] focus:bg-[var(--color-surface-2)]" />
             </div>
           </div>
         </section>
 
         <!-- Post-encode cleanup -->
-        <section class="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+        <section class="border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
           <div class="px-5 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface-2)]">
             <h2 class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">Post-encode cleanup</h2>
           </div>
@@ -145,7 +145,7 @@
               <select
                 id="s-cleanup"
                 bind:value={form.cleanup_policy}
-                class="w-full h-9 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
+                class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
               >
                 {#each cleanupPolicies as p}
                   <option value={p.value}>{p.label}</option>
@@ -161,7 +161,7 @@
                   value={nullText(form.processed_dir)}
                   oninput={(e) => { form.processed_dir = textNull((e.target as HTMLInputElement).value) }}
                   placeholder="/mnt/processed"
-                  class="w-full h-9 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors font-mono"
+                  class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors font-mono"
                 />
               </div>
             {/if}
@@ -169,7 +169,7 @@
         </section>
 
         <!-- Concurrency -->
-        <section class="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+        <section class="border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
           <div class="px-5 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface-2)]">
             <h2 class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">Concurrency</h2>
           </div>
@@ -184,7 +184,7 @@
                   min="1"
                   max="10"
                   step="1"
-                  class="w-full h-9 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+                  class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--accent)] transition-colors"
                 />
               </div>
               <div>
@@ -196,7 +196,7 @@
                   min="1"
                   max="8"
                   step="1"
-                  class="w-full h-9 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+                  class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--accent)] transition-colors"
                 />
               </div>
             </div>
@@ -204,7 +204,7 @@
         </section>
 
         <!-- Encode defaults -->
-        <section class="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+        <section class="border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
           <div class="px-5 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface-2)]">
             <h2 class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">Encode defaults</h2>
           </div>
@@ -213,7 +213,7 @@
             <select
               id="s-default-profile"
               bind:value={form.default_profile_id}
-              class="w-full h-9 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
+              class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
             >
               <option value={null}>— none —</option>
               {#each profiles as p (p.id)}
@@ -224,7 +224,7 @@
         </section>
 
         <!-- Network -->
-        <section class="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+        <section class="border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
           <div class="px-5 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface-2)]">
             <h2 class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">Network</h2>
           </div>
@@ -238,15 +238,15 @@
                 min="1024"
                 max="65535"
                 step="1"
-                class="w-full h-9 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+                class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--accent)] transition-colors"
               />
               <p class="text-xs text-[var(--color-muted)] mt-1">Takes effect after restart.</p>
             </div>
             <label class="flex items-center gap-3 cursor-pointer">
               <div class="relative shrink-0">
                 <input type="checkbox" bind:checked={form.doh_enabled} class="sr-only" aria-label="Enable DNS-over-HTTPS" />
-                <div class="w-10 h-5 rounded-full transition-colors duration-200 {form.doh_enabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border-strong)]'}"></div>
-                <div class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform duration-200 {form.doh_enabled ? 'translate-x-5' : 'translate-x-0'}"></div>
+                <div class="w-10 h-5 transition-colors duration-200 {form.doh_enabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border-strong)]'}"></div>
+                <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white transition-transform duration-200 {form.doh_enabled ? 'translate-x-5' : 'translate-x-0'}"></div>
               </div>
               <div>
                 <span class="text-sm font-medium text-[var(--color-text)]">DNS-over-HTTPS (DoH)</span>
@@ -257,7 +257,7 @@
         </section>
 
         <!-- Download backend -->
-        <section class="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+        <section class="border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
           <div class="px-5 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface-2)]">
             <h2 class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">Download backend</h2>
           </div>
@@ -266,7 +266,7 @@
             <select
               id="s-backend"
               bind:value={form.download_backend}
-              class="w-full h-9 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
+              class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
             >
               {#each backendOptions as opt}
                 <option value={opt.value}>{opt.label}</option>
@@ -276,7 +276,7 @@
         </section>
 
         <!-- Binary paths -->
-        <section class="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+        <section class="border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
           <div class="px-5 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface-2)]">
             <h2 class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">Binary paths</h2>
           </div>
@@ -290,7 +290,7 @@
                 value={nullText(form.ffmpeg_path)}
                 oninput={(e) => { form.ffmpeg_path = textNull((e.target as HTMLInputElement).value) }}
                 placeholder="auto (managed)"
-                class="w-full h-9 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors font-mono"
+                class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors font-mono"
               />
             </div>
             <div>
@@ -301,7 +301,7 @@
                 value={nullText(form.ytdlp_path)}
                 oninput={(e) => { form.ytdlp_path = textNull((e.target as HTMLInputElement).value) }}
                 placeholder="auto (managed)"
-                class="w-full h-9 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors font-mono"
+                class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors font-mono"
               />
             </div>
           </div>
