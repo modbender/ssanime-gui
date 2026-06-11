@@ -1,7 +1,7 @@
 <script lang="ts">
   import { navigate } from 'svelte-routing'
   import type { DiscoveryItem } from '$lib/api'
-  import { resolveAccent, hexToRgbChannels, accentForeground, titleCase } from '$lib/utils'
+  import { resolveAccent, hexToRgbChannels, accentForeground, accentText, accentTextRgb, titleCase } from '$lib/utils'
   import { rememberPreview, trackedAnilistIds } from '$lib/discovery.svelte'
   import Spinner from '$lib/components/Spinner.svelte'
 
@@ -21,6 +21,8 @@
   const accent = $derived(resolveAccent(item.cover_color))
   const accentRgb = $derived(hexToRgbChannels(item.cover_color))
   const accentFg = $derived(accentForeground(item.cover_color))
+  const accentTxt = $derived(accentText(item.cover_color))
+  const accentTxtRgb = $derived(accentTextRgb(item.cover_color))
   const tracked = $derived(trackedAnilistIds.has(item.anilist_id))
 
   function open() {
@@ -37,7 +39,7 @@
 
 <div
   class="group block text-left w-full"
-  style="--accent: {accent}; --accent-rgb: {accentRgb}; --accent-fg: {accentFg};"
+  style="--accent: {accent}; --accent-rgb: {accentRgb}; --accent-fg: {accentFg}; --accent-text: {accentTxt}; --accent-text-rgb: {accentTxtRgb};"
 >
   <!-- Poster (clickable region; not a <button> so the CTA button can nest) -->
   <div
@@ -111,7 +113,7 @@
 
   <!-- meta -->
   <div class="mt-2.5 px-0.5 space-y-0.5">
-    <p class="text-[13px] font-medium leading-snug text-[var(--color-text)] line-clamp-1 transition-colors duration-200 group-hover:text-[var(--accent)]">
+    <p class="text-[13px] font-medium leading-snug text-[var(--color-text)] line-clamp-1 transition-colors duration-200 group-hover:text-[var(--accent-text)]">
       {title}
     </p>
     <p class="text-[11px] text-[var(--color-muted)] truncate">

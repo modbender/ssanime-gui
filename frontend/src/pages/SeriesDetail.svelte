@@ -26,6 +26,8 @@
     resolveAccent,
     hexToRgbChannels,
     accentForeground,
+    accentText,
+    accentTextRgb,
     trackedStatus,
     titleCase,
     relativeTime,
@@ -289,6 +291,12 @@
   const accentFg = $derived(
     accentForeground(series?.cover_color ?? preview?.cover_color ?? detail?.cover_color),
   )
+  const accentTxt = $derived(
+    accentText(series?.cover_color ?? preview?.cover_color ?? detail?.cover_color),
+  )
+  const accentTxtRgb = $derived(
+    accentTextRgb(series?.cover_color ?? preview?.cover_color ?? detail?.cover_color),
+  )
 
   const title = $derived(
     series
@@ -471,7 +479,7 @@
     <!-- ─── Cinematic header ─────────────────────────────────────── -->
     <section
       class="relative w-full shrink-0 overflow-hidden"
-      style="--accent: {accent}; --accent-rgb: {accentRgb}; --accent-fg: {accentFg};"
+      style="--accent: {accent}; --accent-rgb: {accentRgb}; --accent-fg: {accentFg}; --accent-text: {accentTxt}; --accent-text-rgb: {accentTxtRgb};"
     >
       <!-- Banner layer -->
       <div class="absolute inset-0">
@@ -534,7 +542,7 @@
             <div class="mb-3 flex items-center gap-2">
               {#if series}
                 <span class="inline-flex items-center gap-1.5 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-dim)] ring-1 ring-white/10">
-                  <span class="h-1.5 w-1.5 rounded-full bg-[var(--accent)]"></span>
+                  <span class="h-1.5 w-1.5 rounded-full bg-[var(--accent-text)]"></span>
                   Season {series.season_number}
                 </span>
                 {#if series.feed_title}
@@ -542,7 +550,7 @@
                 {/if}
               {:else}
                 <span class="inline-flex items-center gap-1.5 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-dim)] ring-1 ring-white/10">
-                  <span class="h-1.5 w-1.5 rounded-full bg-[var(--accent)]"></span>
+                  <span class="h-1.5 w-1.5 rounded-full bg-[var(--accent-text)]"></span>
                   Discovery
                 </span>
               {/if}
@@ -681,7 +689,7 @@
           </p>
           <button
             type="button"
-            class="mt-1.5 text-xs font-semibold text-[var(--accent)] hover:brightness-125 transition"
+            class="mt-1.5 text-xs font-semibold text-[var(--accent-text)] hover:brightness-125 transition"
             onclick={() => (synopsisExpanded = !synopsisExpanded)}
           >
             {synopsisExpanded ? 'Show less' : 'Show more'}
@@ -796,7 +804,7 @@
             {@const isSelected = p ? selected.has(p.id) : false}
             <li
               class="group relative flex gap-3 border bg-[var(--color-surface)] p-2.5 transition-colors duration-200
-                {isSelected ? 'border-[var(--accent)] bg-[rgb(var(--accent-rgb)/0.06)]' : 'border-[var(--color-border)] hover:border-[var(--color-border-strong)]'}
+                {isSelected ? 'border-[var(--accent-text)] bg-[rgb(var(--accent-rgb)/0.06)]' : 'border-[var(--color-border)] hover:border-[var(--color-border-strong)]'}
                 {future ? 'opacity-55' : ''}"
             >
               <!-- thumbnail -->
@@ -828,7 +836,7 @@
                       type="checkbox"
                       checked={isSelected}
                       onchange={() => toggleEpisode(p.id)}
-                      class="h-4 w-4 cursor-pointer border-[var(--color-border-strong)] bg-black/50 accent-[var(--accent)]"
+                      class="h-4 w-4 cursor-pointer border-[var(--color-border-strong)] bg-black/50 accent-[var(--accent-text)]"
                       aria-label={`Select episode ${ep.number ?? ep.title ?? ''}`}
                     />
                   </label>
@@ -969,7 +977,7 @@
       <select
         id="encode-profile"
         bind:value={encodeProfileId}
-        class="h-9 w-full cursor-pointer border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] transition-colors focus:border-[var(--accent)] focus:outline-none"
+        class="h-9 w-full cursor-pointer border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] transition-colors focus:border-[var(--accent-text)] focus:outline-none"
       >
         <option value={null}>Default profile</option>
         {#each profiles as p (p.id)}
@@ -988,7 +996,7 @@
             aria-pressed={on}
             class="border px-3.5 py-1.5 text-sm font-medium transition-colors duration-200
               {on
-                ? 'border-[var(--accent)] bg-[rgb(var(--accent-rgb)/0.15)] text-[var(--color-text)]'
+                ? 'border-[var(--accent-text)] bg-[rgb(var(--accent-rgb)/0.15)] text-[var(--color-text)]'
                 : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]'}"
             onclick={() => toggleResolution(res)}
           >{res}p</button>

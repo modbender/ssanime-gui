@@ -54,6 +54,11 @@
   --accent: #7c6af0;
   --accent-rgb: 124 106 240;
   --accent-fg: #ffffff;
+  /* Legibility-clamped accent for foreground use (text/lines/dots/pips) on the
+     near-black surfaces. Equals --accent by default; per-series overrides lift
+     dark covers so they stay visible. */
+  --accent-text: #7c6af0;
+  --accent-text-rgb: 124 106 240;
 }
 
 * {
@@ -111,7 +116,7 @@ body {
 
 /* Focus rings — accent, generous, only on keyboard */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-text);
   outline-offset: 2px;
 }
 

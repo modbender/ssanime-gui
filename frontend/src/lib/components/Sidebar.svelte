@@ -60,7 +60,7 @@
         >
           <!-- active indicator pip -->
           <span
-            class="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-full bg-[var(--accent)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] {active ? 'opacity-100' : 'opacity-0 -translate-x-1'}"
+            class="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-full bg-[var(--accent-text)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] {active ? 'opacity-100' : 'opacity-0 -translate-x-1'}"
           ></span>
 
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:scale-110">
@@ -87,7 +87,7 @@
           : 'text-[var(--color-muted)] hover:bg-white/5 hover:text-[var(--color-text)]'}"
       >
         <span
-          class="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-full bg-[var(--accent)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] {isActive('/about') ? 'opacity-100' : 'opacity-0 -translate-x-1'}"
+          class="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-full bg-[var(--accent-text)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] {isActive('/about') ? 'opacity-100' : 'opacity-0 -translate-x-1'}"
         ></span>
 
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:scale-110">
