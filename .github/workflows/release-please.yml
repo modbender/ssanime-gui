@@ -68,13 +68,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # release-please labels its open Release PR `autorelease: pending` (its
-          # default pending label). No PR with that label -> nothing to do, exit 0.
-          pr_sha="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open \
-            --label "autorelease: pending" --json headRefOid \
-            --jq '.[0].headRefOid // empty')"
+          # Find the open Release PR by its `release-please--` head-branch prefix
+          # via the pulls list (a direct --base connection filter, NOT search). We
+          # deliberately avoid `gh pr list --label`: that routes through GitHub's
+          # eventually-consistent *search* index, which lags the `autorelease:
+          # pending` label release-please adds moments earlier in this same job —
+          # the query then returns nothing, the check-runs never get created, and
+          # the PR is left permanently blocked. Branch/base filtering is immediately
+          # consistent, so there is no race.
+          pr_sha="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base main \
+            --json headRefName,headRefOid \
+            --jq 'map(select(.headRefName | startswith("release-please--")))[0].headRefOid // empty')"
           if [ -z "$pr_sha" ]; then
-            echo "No open release PR (autorelease: pending) — nothing to auto-pass."
+            echo "No open release PR — nothing to auto-pass."
             exit 0
           fi
           echo "Auto-passing backend/frontend check-runs for release PR head $pr_sha"
