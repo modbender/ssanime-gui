@@ -26,7 +26,7 @@ INSERT INTO episodes (
 ) VALUES (
     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
-RETURNING id, uuid, series_id, title, episode_no, source_kind, source_url, magnet, release_group, resolution, subtype, uncensored, bluray, published_at, status, source_path, source_size, profile_id, encoded_params_snapshot, downloaded_at, encoded_at, retry_count, error_message, added_at, modified_at
+RETURNING id, uuid, series_id, title, episode_no, source_kind, source_url, magnet, release_group, resolution, subtype, uncensored, bluray, published_at, status, source_path, source_size, profile_id, encoded_params_snapshot, downloaded_at, encoded_at, retry_count, error_message, added_at, modified_at, source_cleaned_at
 `
 
 type CreateEpisodeParams struct {
@@ -92,6 +92,7 @@ func (q *Queries) CreateEpisode(ctx context.Context, arg CreateEpisodeParams) (E
 		&i.ErrorMessage,
 		&i.AddedAt,
 		&i.ModifiedAt,
+		&i.SourceCleanedAt,
 	)
 	return i, err
 }
@@ -106,7 +107,7 @@ func (q *Queries) DeleteEpisode(ctx context.Context, id int64) error {
 }
 
 const getEpisode = `-- name: GetEpisode :one
-SELECT id, uuid, series_id, title, episode_no, source_kind, source_url, magnet, release_group, resolution, subtype, uncensored, bluray, published_at, status, source_path, source_size, profile_id, encoded_params_snapshot, downloaded_at, encoded_at, retry_count, error_message, added_at, modified_at FROM episodes WHERE id = ?
+SELECT id, uuid, series_id, title, episode_no, source_kind, source_url, magnet, release_group, resolution, subtype, uncensored, bluray, published_at, status, source_path, source_size, profile_id, encoded_params_snapshot, downloaded_at, encoded_at, retry_count, error_message, added_at, modified_at, source_cleaned_at FROM episodes WHERE id = ?
 `
 
 func (q *Queries) GetEpisode(ctx context.Context, id int64) (Episode, error) {
@@ -138,12 +139,13 @@ func (q *Queries) GetEpisode(ctx context.Context, id int64) (Episode, error) {
 		&i.ErrorMessage,
 		&i.AddedAt,
 		&i.ModifiedAt,
+		&i.SourceCleanedAt,
 	)
 	return i, err
 }
 
 const getEpisodeByUUID = `-- name: GetEpisodeByUUID :one
-SELECT id, uuid, series_id, title, episode_no, source_kind, source_url, magnet, release_group, resolution, subtype, uncensored, bluray, published_at, status, source_path, source_size, profile_id, encoded_params_snapshot, downloaded_at, encoded_at, retry_count, error_message, added_at, modified_at FROM episodes WHERE uuid = ?
+SELECT id, uuid, series_id, title, episode_no, source_kind, source_url, magnet, release_group, resolution, subtype, uncensored, bluray, published_at, status, source_path, source_size, profile_id, encoded_params_snapshot, downloaded_at, encoded_at, retry_count, error_message, added_at, modified_at, source_cleaned_at FROM episodes WHERE uuid = ?
 `
 
 func (q *Queries) GetEpisodeByUUID(ctx context.Context, uuid string) (Episode, error) {
@@ -175,6 +177,56 @@ func (q *Queries) GetEpisodeByUUID(ctx context.Context, uuid string) (Episode, e
 		&i.ErrorMessage,
 		&i.AddedAt,
 		&i.ModifiedAt,
+		&i.SourceCleanedAt,
+	)
+	return i, err
+}
+
+const getEpisodeWithSeries = `-- name: GetEpisodeWithSeries :one
+SELECT episodes.id, episodes.uuid, episodes.series_id, episodes.title, episodes.episode_no, episodes.source_kind, episodes.source_url, episodes.magnet, episodes.release_group, episodes.resolution, episodes.subtype, episodes.uncensored, episodes.bluray, episodes.published_at, episodes.status, episodes.source_path, episodes.source_size, episodes.profile_id, episodes.encoded_params_snapshot, episodes.downloaded_at, episodes.encoded_at, episodes.retry_count, episodes.error_message, episodes.added_at, episodes.modified_at, episodes.source_cleaned_at, series.title AS series_title
+FROM episodes
+JOIN series ON series.id = episodes.series_id
+WHERE episodes.id = ?
+`
+
+type GetEpisodeWithSeriesRow struct {
+	Episode     Episode `json:"episode"`
+	SeriesTitle string  `json:"series_title"`
+}
+
+// GetEpisodeWithSeries returns an episode joined with its series title so the
+// detail/queue DTOs can show the series name without a second query.
+func (q *Queries) GetEpisodeWithSeries(ctx context.Context, id int64) (GetEpisodeWithSeriesRow, error) {
+	row := q.db.QueryRowContext(ctx, getEpisodeWithSeries, id)
+	var i GetEpisodeWithSeriesRow
+	err := row.Scan(
+		&i.Episode.ID,
+		&i.Episode.Uuid,
+		&i.Episode.SeriesID,
+		&i.Episode.Title,
+		&i.Episode.EpisodeNo,
+		&i.Episode.SourceKind,
+		&i.Episode.SourceUrl,
+		&i.Episode.Magnet,
+		&i.Episode.ReleaseGroup,
+		&i.Episode.Resolution,
+		&i.Episode.Subtype,
+		&i.Episode.Uncensored,
+		&i.Episode.Bluray,
+		&i.Episode.PublishedAt,
+		&i.Episode.Status,
+		&i.Episode.SourcePath,
+		&i.Episode.SourceSize,
+		&i.Episode.ProfileID,
+		&i.Episode.EncodedParamsSnapshot,
+		&i.Episode.DownloadedAt,
+		&i.Episode.EncodedAt,
+		&i.Episode.RetryCount,
+		&i.Episode.ErrorMessage,
+		&i.Episode.AddedAt,
+		&i.Episode.ModifiedAt,
+		&i.Episode.SourceCleanedAt,
+		&i.SeriesTitle,
 	)
 	return i, err
 }
@@ -189,7 +241,7 @@ func (q *Queries) IncrementEpisodeRetry(ctx context.Context, id int64) error {
 }
 
 const listEpisodesBySeries = `-- name: ListEpisodesBySeries :many
-SELECT id, uuid, series_id, title, episode_no, source_kind, source_url, magnet, release_group, resolution, subtype, uncensored, bluray, published_at, status, source_path, source_size, profile_id, encoded_params_snapshot, downloaded_at, encoded_at, retry_count, error_message, added_at, modified_at FROM episodes WHERE series_id = ? ORDER BY episode_no ASC NULLS LAST, added_at ASC
+SELECT id, uuid, series_id, title, episode_no, source_kind, source_url, magnet, release_group, resolution, subtype, uncensored, bluray, published_at, status, source_path, source_size, profile_id, encoded_params_snapshot, downloaded_at, encoded_at, retry_count, error_message, added_at, modified_at, source_cleaned_at FROM episodes WHERE series_id = ? ORDER BY episode_no ASC NULLS LAST, added_at ASC
 `
 
 func (q *Queries) ListEpisodesBySeries(ctx context.Context, seriesID int64) ([]Episode, error) {
@@ -227,6 +279,7 @@ func (q *Queries) ListEpisodesBySeries(ctx context.Context, seriesID int64) ([]E
 			&i.ErrorMessage,
 			&i.AddedAt,
 			&i.ModifiedAt,
+			&i.SourceCleanedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -242,7 +295,7 @@ func (q *Queries) ListEpisodesBySeries(ctx context.Context, seriesID int64) ([]E
 }
 
 const listEpisodesByStatus = `-- name: ListEpisodesByStatus :many
-SELECT id, uuid, series_id, title, episode_no, source_kind, source_url, magnet, release_group, resolution, subtype, uncensored, bluray, published_at, status, source_path, source_size, profile_id, encoded_params_snapshot, downloaded_at, encoded_at, retry_count, error_message, added_at, modified_at FROM episodes WHERE status = ? ORDER BY added_at ASC
+SELECT id, uuid, series_id, title, episode_no, source_kind, source_url, magnet, release_group, resolution, subtype, uncensored, bluray, published_at, status, source_path, source_size, profile_id, encoded_params_snapshot, downloaded_at, encoded_at, retry_count, error_message, added_at, modified_at, source_cleaned_at FROM episodes WHERE status = ? ORDER BY added_at ASC
 `
 
 func (q *Queries) ListEpisodesByStatus(ctx context.Context, status string) ([]Episode, error) {
@@ -280,6 +333,7 @@ func (q *Queries) ListEpisodesByStatus(ctx context.Context, status string) ([]Ep
 			&i.ErrorMessage,
 			&i.AddedAt,
 			&i.ModifiedAt,
+			&i.SourceCleanedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -295,7 +349,7 @@ func (q *Queries) ListEpisodesByStatus(ctx context.Context, status string) ([]Ep
 }
 
 const listQueuedEpisodes = `-- name: ListQueuedEpisodes :many
-SELECT id, uuid, series_id, title, episode_no, source_kind, source_url, magnet, release_group, resolution, subtype, uncensored, bluray, published_at, status, source_path, source_size, profile_id, encoded_params_snapshot, downloaded_at, encoded_at, retry_count, error_message, added_at, modified_at FROM episodes WHERE status = 'queued' ORDER BY added_at ASC
+SELECT id, uuid, series_id, title, episode_no, source_kind, source_url, magnet, release_group, resolution, subtype, uncensored, bluray, published_at, status, source_path, source_size, profile_id, encoded_params_snapshot, downloaded_at, encoded_at, retry_count, error_message, added_at, modified_at, source_cleaned_at FROM episodes WHERE status = 'queued' ORDER BY added_at ASC
 `
 
 func (q *Queries) ListQueuedEpisodes(ctx context.Context) ([]Episode, error) {
@@ -333,6 +387,7 @@ func (q *Queries) ListQueuedEpisodes(ctx context.Context) ([]Episode, error) {
 			&i.ErrorMessage,
 			&i.AddedAt,
 			&i.ModifiedAt,
+			&i.SourceCleanedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -407,6 +462,22 @@ type MarkEpisodeEncodingParams struct {
 
 func (q *Queries) MarkEpisodeEncoding(ctx context.Context, arg MarkEpisodeEncodingParams) error {
 	_, err := q.db.ExecContext(ctx, markEpisodeEncoding, arg.EncodedParamsSnapshot, arg.ID)
+	return err
+}
+
+const markEpisodeSourceCleaned = `-- name: MarkEpisodeSourceCleaned :exec
+UPDATE episodes SET source_cleaned_at = ?, modified_at = unixepoch() WHERE id = ?
+`
+
+type MarkEpisodeSourceCleanedParams struct {
+	SourceCleanedAt *int64 `json:"source_cleaned_at"`
+	ID              int64  `json:"id"`
+}
+
+// MarkEpisodeSourceCleaned stamps the unix time the source files were deleted
+// under cleanup_policy=delete, so the UI can show "source cleaned up".
+func (q *Queries) MarkEpisodeSourceCleaned(ctx context.Context, arg MarkEpisodeSourceCleanedParams) error {
+	_, err := q.db.ExecContext(ctx, markEpisodeSourceCleaned, arg.SourceCleanedAt, arg.ID)
 	return err
 }
 

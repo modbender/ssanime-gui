@@ -150,9 +150,16 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 		// Episodes
 		api.Post("/encode", h.handleBulkEncode)
 		api.Route("/episodes/{id}", func(r chi.Router) {
+			r.Get("/", h.handleGetEpisode)
 			r.Post("/encode", h.handleEncodeEpisode)
 			r.Post("/retry", h.handleRetryEpisode)
+			r.Post("/reveal", h.handleRevealEpisodeSource)
 			r.Delete("/", h.handleDeleteEpisode)
+		})
+
+		// Encoded outputs: reveal an encoded file in the OS file explorer.
+		api.Route("/outputs/{id}", func(r chi.Router) {
+			r.Post("/reveal", h.handleRevealOutput)
 		})
 
 		// Search

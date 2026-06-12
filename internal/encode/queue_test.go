@@ -181,6 +181,49 @@ func TestQueueFansOutAndArchivesAllResolutions(t *testing.T) {
 	}
 }
 
+func TestQueueStampsSourceCleanedAtOnDelete(t *testing.T) {
+	st, dataDir := openTestStore(t)
+	id, _ := seedDownloadedEpisode(t, st, dataDir, ptr[int64](7))
+	updateEncodedRoot(t, st, filepath.Join(dataDir, "library"), "delete")
+
+	before := time.Now().Unix()
+	fe := &fakeEncoder{}
+	q := New(st, fe, nil, Options{Workers: 1, DataDir: dataDir})
+	q.Start()
+	defer q.Stop()
+
+	waitEpisodeStatus(t, st, id, "archived", 5*time.Second)
+
+	ep, err := st.Read().GetEpisode(context.Background(), id)
+	if err != nil {
+		t.Fatalf("GetEpisode: %v", err)
+	}
+	if ep.SourceCleanedAt == nil {
+		t.Fatal("source_cleaned_at should be stamped after delete cleanup")
+	}
+	if *ep.SourceCleanedAt < before {
+		t.Errorf("source_cleaned_at = %d, want >= %d", *ep.SourceCleanedAt, before)
+	}
+}
+
+func TestQueueKeepStampsNoCleanup(t *testing.T) {
+	st, dataDir := openTestStore(t)
+	id, _ := seedDownloadedEpisode(t, st, dataDir, ptr[int64](8))
+	updateEncodedRoot(t, st, filepath.Join(dataDir, "library"), "keep")
+
+	fe := &fakeEncoder{}
+	q := New(st, fe, nil, Options{Workers: 1, DataDir: dataDir})
+	q.Start()
+	defer q.Stop()
+
+	waitEpisodeStatus(t, st, id, "archived", 5*time.Second)
+
+	ep, _ := st.Read().GetEpisode(context.Background(), id)
+	if ep.SourceCleanedAt != nil {
+		t.Errorf("source_cleaned_at should be NULL under keep policy, got %v", ep.SourceCleanedAt)
+	}
+}
+
 func TestQueueKeepsOriginalOnOutputError(t *testing.T) {
 	st, dataDir := openTestStore(t)
 	id, srcDir := seedDownloadedEpisode(t, st, dataDir, ptr[int64](1))

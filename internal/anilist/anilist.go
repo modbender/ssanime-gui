@@ -47,6 +47,12 @@ type Media struct {
 	BannerImage  string   `json:"bannerImage"`
 	Synonyms     []string `json:"synonyms"`
 	IsAdult      bool     `json:"isAdult"`
+
+	// ClearLogoURL is a transparent series-logo URL sourced from ani.zip during
+	// discovery enrichment, not from AniList (which has no logo). It is "" unless
+	// enriched, and rides alongside the AniList fields so the cached feed can
+	// surface it to the home hero.
+	ClearLogoURL string `json:"-"`
 }
 
 // Client is a cached AniList GraphQL client. Safe for concurrent use.

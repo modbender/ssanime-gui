@@ -361,7 +361,8 @@ func startDaemon(cfg *config.Config, logger *slog.Logger) (shutdown func(), dlQu
 	// Hourly-refreshed AniList feeds (trending/seasonal/popular/genre) powering the
 	// discovery home. Serves a cache so page-loads cost zero AniList calls; on
 	// 429/network error it keeps the prior slice and retries next tick.
-	discoverySvc := discovery.New(anilistClient, logger)
+	discoverySvc := discovery.New(anilistClient, logger,
+		discovery.WithLogoFetcher(anizip.New()))
 	discoverySvc.Start()
 	add(discoverySvc.Stop)
 
