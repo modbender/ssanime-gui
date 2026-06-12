@@ -208,14 +208,24 @@ produces the bundles, not via `signCommand`:
 
 1. Apply at <https://signpath.org/apply> (link the repo + GPL-3.0). Expect a one-time
    manual review (turnaround not published — apply ahead of a release).
-2. In the SignPath dashboard create a project, an artifact configuration (the NSIS +
-   MSI bundles), and a signing policy (e.g. `release-signing`).
+2. In the SignPath dashboard create a project with slug **`ssanime-gui`**, an artifact
+   configuration (the NSIS + MSI bundles), and a signing policy with slug
+   **`release-signing`**. These slugs must match the `project-slug` /
+   `signing-policy-slug` already wired into `release-please.yml` — rename in the
+   workflow if you choose different slugs.
 3. Add repo secrets `SIGNPATH_API_TOKEN` (submitter token) and `SIGNPATH_ORGANIZATION_ID`.
-4. On the `windows-latest` leg, between `build tauri installers` and the upload step,
-   add `signpath/github-action-submit-signing-request@v1` (uploads the unsigned
-   bundles, waits for your approval, downloads the signed ones back into the bundle
-   tree so the existing upload step attaches the signed installers). First run blocks
-   on manual approval in the SignPath dashboard.
+
+The CI step is **already pre-wired** in `release-please.yml` (the `windows-latest` leg,
+between `build tauri installers` and the upload step): an `actions/upload-artifact` step
+followed by `signpath/github-action-submit-signing-request@v1`. Both are gated on
+`env.SIGNPATH_API_TOKEN != ''`, so they stay inert and the unsigned installers ship
+unchanged until the secrets above exist. Once the secrets are set, the next release
+uploads the unsigned bundles to SignPath, blocks on your manual approval in the
+dashboard, and writes the signed bundles back into the bundle tree so the existing
+upload step attaches the **signed** installers. The signed-file paths are untested
+until the first real signed release — verify them then. (The manual fallback in
+`release.yml` is not yet wired for signing; mirror these two steps there if you need a
+signed emergency build.)
 
 For a single maintainer wanting CI-friendly signing without a physical token and
 without paying, **SignPath is the recommended route**; Azure Trusted Signing below is
