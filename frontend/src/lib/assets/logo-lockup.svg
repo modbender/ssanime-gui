@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 48" fill="none">
+  <defs>
+    <linearGradient id="lg1" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#7c6af0"/>
+    </linearGradient>
+    <linearGradient id="lg2" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#c4b5fd"/>
+      <stop offset="100%" stop-color="#7c6af0"/>
+    </linearGradient>
+    <linearGradient id="lg3" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ddd6fe"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Mark (48×48 canvas, scaled to fit 40px square left-aligned) -->
+  <g transform="scale(0.4) translate(0,10)">
+    <!-- Outer chevron -->
+    <path d="M14 14 L62 50 L14 86" stroke="url(#lg1)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.45"/>
+    <!-- Middle chevron -->
+    <path d="M30 22 L66 50 L30 78" stroke="url(#lg2)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.72"/>
+    <!-- Inner chevron -->
+    <path d="M46 30 L70 50 L46 70" stroke="url(#lg3)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+
+  <!-- Wordmark: "ssanime" in tight geometric sans -->
+  <!-- Using path-based letterforms so no font dependency -->
+  <text
+    x="50"
+    y="31"
+    font-family="'Geist', 'SF Pro Display', 'Inter', system-ui, sans-serif"
+    font-size="19"
+    font-weight="600"
+    letter-spacing="-0.5"
+    fill="#e8e8f0"
+  >ssanime</text>
+</svg>

@@ -1,0 +1,193 @@
+name: Release (manual fallback)
+
+# Emergency / manual installer build. The PRIMARY release path is automatic:
+# release-please.yml opens a Release PR; merging it cuts the tag + GitHub Release
+# and builds/attaches the installers. This workflow exists only for the case where
+# a maintainer needs to (re)build and (re)attach the per-OS installers to an
+# EXISTING release by hand — e.g. a transient build failure on the automatic run.
+#
+# It does NOT trigger on tag push anymore (that would double-fire alongside
+# release-please's own tag). It runs only on manual dispatch against a tag whose
+# GitHub Release already exists, and uploads the installers to that release with
+# `gh release upload --clobber` (idempotent). It never creates a release.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to (re)build and attach installers to (e.g. v0.2.0). Its GitHub Release must already exist."
+        required: true
+        type: string
+
+# Cancel a superseded manual run for the same tag input.
+concurrency:
+  group: release-manual-${{ github.event.inputs.tag }}
+  cancel-in-progress: true
+
+# `gh release upload` needs write access to repo contents.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: release (${{ matrix.os }})
+    permissions:
+      contents: write
+    strategy:
+      # One OS failing must not abort the others — each leg uploads independently.
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - ubuntu-latest
+          # - macos-latest  # disabled: needs an Apple Developer account ($99/yr)
+          #   to sign + notarize; an unsigned .dmg is Gatekeeper-blocked for users.
+          #   Re-enable this line (and add Apple signing secrets) when available.
+    runs-on: ${{ matrix.os }}
+    steps:
+      # Check out the tag being released so the build matches that release's source.
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.inputs.tag }}
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # Tauri's bundler is built in Rust, so the host toolchain must be present.
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Cache the Rust build of the Tauri bundler crate between releases.
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      # Linux-only: Tauri v2 deps. ubuntu-latest is 24.04 (libwebkit2gtk-4.1).
+      # rpm = rpmbuild for .rpm; patchelf + file are needed by the AppImage bundler.
+      # libfuse2 is intentionally NOT installed (renamed to libfuse2t64 on 24.04);
+      # the build step uses APPIMAGE_EXTRACT_AND_RUN=1 instead (FUSE-free CI path).
+      # Verified against https://v2.tauri.app/start/prerequisites/.
+      - name: install linux tauri deps
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libsoup-3.0-dev \
+            libxdo-dev \
+            libssl-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            patchelf \
+            rpm
+
+      # --- Build order is load-bearing (see docs/distribution.md) -------------
+      # The Go daemon `go:embed`s internal/server/dist, so the SPA must be built
+      # and emitted there BEFORE the sidecar is compiled, and the sidecar must
+      # exist BEFORE Tauri bundles it.
+
+      # 1. Build the SPA -> frontend's build emits to internal/server/dist for
+      #    go:embed. Identical on every OS.
+      - name: build frontend
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+      # 2a. Build the Go sidecar (Windows). cgo-free; -H=windowsgui hides console.
+      - name: build sidecar (windows)
+        if: matrix.os == 'windows-latest'
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          $env:GOOS = "windows"
+          $env:GOARCH = "amd64"
+          $ver = git describe --tags --always --dirty
+          $sha = git rev-parse --short HEAD
+          go build -ldflags "-H=windowsgui -s -w -X github.com/modbender/ssanime-gui/internal/version.Version=$ver -X github.com/modbender/ssanime-gui/internal/version.Commit=$sha" -o desktop/src-tauri/binaries/ssanime-x86_64-pc-windows-msvc.exe ./cmd/ssanime
+
+      # 2b. Build the Go sidecar (Linux). cgo-free (pure-Go systray).
+      - name: build sidecar (linux)
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          GOOS: linux
+          GOARCH: amd64
+          CGO_ENABLED: "0"
+        run: |
+          VER=$(git describe --tags --always --dirty)
+          SHA=$(git rev-parse --short HEAD)
+          go build -ldflags "-s -w -X github.com/modbender/ssanime-gui/internal/version.Version=$VER -X github.com/modbender/ssanime-gui/internal/version.Commit=$SHA" -o desktop/src-tauri/binaries/ssanime-x86_64-unknown-linux-gnu ./cmd/ssanime
+
+      # 2c. Build the Go sidecar (macOS, Apple Silicon). macos-latest is arm64.
+      #     CGO_ENABLED=1 because the macOS systray (fyne.io/systray) needs cgo.
+      - name: build sidecar (macos)
+        if: matrix.os == 'macos-latest'
+        env:
+          GOOS: darwin
+          GOARCH: arm64
+          CGO_ENABLED: "1"
+        run: |
+          VER=$(git describe --tags --always --dirty)
+          SHA=$(git rev-parse --short HEAD)
+          go build -ldflags "-s -w -X github.com/modbender/ssanime-gui/internal/version.Version=$VER -X github.com/modbender/ssanime-gui/internal/version.Commit=$SHA" -o desktop/src-tauri/binaries/ssanime-aarch64-apple-darwin ./cmd/ssanime
+
+      # 3. Build the Tauri app installers in BUILD-ONLY mode (tagName/releaseName/
+      #    releaseId omitted) so tauri-action does not create a second release. We
+      #    upload to the existing release ourselves below. Pinned to @v0 per the
+      #    official Tauri v2 docs (https://v2.tauri.app/distribute/pipelines/github/).
+      #
+      #    UNSIGNED on all OSes (Windows SmartScreen / macOS Gatekeeper warnings).
+      #    To sign later, add the signing secrets as keys to the env: block below.
+      #    It already carries a real key (APPIMAGE_EXTRACT_AND_RUN) — never reduce it
+      #    to comments only (an empty env: is invalid, breaks the workflow). See
+      #    docs/distribution.md.
+      - name: build tauri installers
+        uses: tauri-apps/tauri-action@v0
+        env:
+          # FUSE-free AppImage packaging on the Linux leg; no-op elsewhere. See the
+          # release-please.yml build step for the rationale. Real key, not a comment.
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        with:
+          projectPath: desktop
+          # tagName/releaseName/releaseId intentionally omitted -> build-only.
+
+      # 4. Attach this OS's bundles to the EXISTING release for the dispatched tag.
+      #    --clobber overwrites prior assets so a re-run is idempotent.
+      - name: upload installers (windows)
+        if: matrix.os == 'windows-latest'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.event.inputs.tag }}"
+          $assets = @(
+            Get-ChildItem -Path desktop/target/release/bundle/nsis -Filter *.exe -ErrorAction SilentlyContinue
+            Get-ChildItem -Path desktop/target/release/bundle/msi  -Filter *.msi -ErrorAction SilentlyContinue
+          ) | ForEach-Object { $_.FullName }
+          if ($assets.Count -eq 0) { throw "no Windows installer artifacts found to upload" }
+          gh release upload $tag $assets --clobber
+
+      - name: upload installers (linux/macos)
+        if: matrix.os != 'windows-latest'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.tag }}
+        run: |
+          bundle="desktop/target/release/bundle"
+          mapfile -t assets < <(find "$bundle" \
+            \( -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o -name '*.dmg' \) \
+            -type f 2>/dev/null)
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "no installer artifacts found under $bundle to upload" >&2
+            exit 1
+          fi
+          printf 'uploading: %s\n' "${assets[@]}"
+          gh release upload "$TAG" "${assets[@]}" --clobber
