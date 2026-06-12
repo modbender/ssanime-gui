@@ -3,6 +3,7 @@
   import { api } from '$lib/api'
   import Modal from '$lib/components/Modal.svelte'
   import Button from '$lib/components/Button.svelte'
+  import { APP_NAME } from '$lib/app'
 
   let open = $state(false)
 
@@ -32,7 +33,7 @@
   }
 </script>
 
-<Modal bind:open title="Welcome to ssanime-gui">
+<Modal bind:open title="Welcome to {APP_NAME}">
   {#snippet footer()}
     <Button variant="ghost" onclick={dismiss}>Dismiss</Button>
     <Button onclick={goToExtensions}>

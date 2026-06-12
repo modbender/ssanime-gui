@@ -180,7 +180,7 @@
             <div class="px-5 py-10 text-center space-y-2">
               <p class="text-sm font-medium text-[var(--color-text)]">No repositories yet</p>
               <p class="text-sm text-[var(--color-muted)] max-w-md mx-auto">
-                Paste a repository index URL to fetch installable sources. ssanime-gui doesn't bundle
+                Paste a repository index URL to fetch installable sources. SSAnime doesn't bundle
                 or suggest any — add one you trust.
               </p>
               <div class="pt-2">
@@ -392,7 +392,7 @@
         class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] font-mono transition-colors duration-200 focus:outline-none focus:border-[var(--accent)] focus:bg-[var(--color-surface-2)]"
       />
       <p class="text-xs text-[var(--color-muted)] mt-1.5">
-        Paste a source repository's index URL. Sources are unaffiliated with ssanime-gui — add only
+        Paste a source repository's index URL. Sources are unaffiliated with SSAnime — add only
         ones you trust.
       </p>
     </div>

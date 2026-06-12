@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api, type VersionInfo } from '$lib/api'
+  import { APP_NAME } from '$lib/app'
   import logoMark from '$lib/assets/logo-mark.svg?raw'
 
   let version = $state<VersionInfo | null>(null)
@@ -56,7 +57,7 @@
             {@html logoMark}
           </div>
         </div>
-        <h2 class="mt-4 text-2xl font-extrabold tracking-tight text-[var(--color-text)]">ssanime</h2>
+        <h2 class="mt-4 text-2xl font-extrabold tracking-tight text-[var(--color-text)]">{APP_NAME}</h2>
         <p class="mt-1.5 text-sm text-[var(--color-text-dim)]">
           Local, UI-first anime download → encode → archive manager.
         </p>
@@ -79,7 +80,7 @@
 
       <!-- Description -->
       <p class="text-center text-sm leading-relaxed text-[var(--color-text-dim)]">
-        ssanime downloads anime from torrents and streaming sources, re-encodes every
+        SSAnime downloads anime from torrents and streaming sources, re-encodes every
         episode with ffmpeg into smaller permanent x265 files, and manages the resulting
         local library — auto-fetching new episodes as they air. It is free and
         open-source software, licensed under the
@@ -112,7 +113,7 @@
       <div class="border border-[var(--color-border)] bg-[var(--color-surface)] p-5 text-center">
         <p class="text-sm font-medium text-[var(--color-text)]">Support development</p>
         <p class="mt-1 text-[13px] text-[var(--color-muted)]">
-          ssanime is built in the open. If it saves you time, consider sponsoring its
+          SSAnime is built in the open. If it saves you time, consider sponsoring its
           continued development.
         </p>
         <a
