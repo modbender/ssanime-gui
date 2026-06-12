@@ -29,8 +29,18 @@
 
   const title = $derived(featured ? featured.english_title || featured.romaji_title : '')
   const banner = $derived(featured?.banner_image || featured?.cover_image || null)
+  const logo = $derived(featured?.clear_logo_url || '')
   const tracked = $derived(featured ? trackedAnilistIds.has(featured.anilist_id) : false)
   const tracking = $derived(featured ? trackingId === featured.anilist_id : false)
+
+  // A clearLogo PNG can 404; fall back to the text title when it does. Reset the
+  // flag whenever the slide changes so one bad logo doesn't suppress the next.
+  let logoFailed = $state(false)
+  $effect(() => {
+    void featured?.anilist_id
+    logoFailed = false
+  })
+  const showLogo = $derived(logo !== '' && !logoFailed)
 
   // Autorotate when more than one featured item.
   $effect(() => {
@@ -80,12 +90,12 @@
       {/if}
     </div>
 
-    <!-- Scrims: bottom fade into page, left fade for text legibility, accent tint -->
-    <div class="absolute inset-0 bg-gradient-to-t from-[var(--color-bg)] via-[var(--color-bg)]/55 to-transparent"></div>
-    <div class="absolute inset-0 bg-gradient-to-r from-[var(--color-bg)] via-[var(--color-bg)]/60 to-transparent"></div>
+    <!-- Logo-forward: keep ONLY a subtle bottom-up fade under the lower controls so the
+         chips/buttons/light logo stay legible. The banner art reads largely un-darkened.
+         A short solid baseline seams the hero into the page below it. -->
     <div
-      class="absolute inset-0 mix-blend-soft-light opacity-60"
-      style="background: radial-gradient(90% 120% at 10% 100%, rgb(var(--accent-rgb) / 0.55), transparent 60%);"
+      class="absolute inset-x-0 bottom-0 h-[50%]"
+      style="background: linear-gradient(to top, var(--color-bg) 0%, rgb(8 8 11 / 0.55) 28%, rgb(8 8 11 / 0.12) 60%, transparent 100%);"
     ></div>
 
     <!-- Content -->
@@ -99,12 +109,23 @@
           </span>
         </div>
 
-        <!-- title -->
-        <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.04] text-white drop-shadow-[0_2px_20px_rgba(0,0,0,0.6)]">
-          {title}
-        </h1>
-        {#if featured.romaji_title && featured.romaji_title !== title}
-          <p class="mt-1.5 text-sm text-[var(--color-text-dim)]">{featured.romaji_title}</p>
+        <!-- title: transparent clearLogo art when available, styled text otherwise -->
+        {#if showLogo}
+          {#key featured.anilist_id}
+            <img
+              src={logo}
+              alt={title}
+              onerror={() => (logoFailed = true)}
+              class="block w-auto max-w-[clamp(220px,42vw,560px)] max-h-[clamp(88px,18vh,168px)] object-contain object-left-bottom origin-left animate-fade-up drop-shadow-[0_4px_24px_rgba(0,0,0,0.55)]"
+            />
+          {/key}
+        {:else}
+          <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.04] text-white drop-shadow-[0_2px_20px_rgba(0,0,0,0.6)]">
+            {title}
+          </h1>
+          {#if featured.romaji_title && featured.romaji_title !== title}
+            <p class="mt-1.5 text-sm text-[var(--color-text-dim)]">{featured.romaji_title}</p>
+          {/if}
         {/if}
 
         <!-- meta chips -->

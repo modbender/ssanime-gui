@@ -26,12 +26,30 @@ const (
 	// fetchSpacing paces the sequential per-feed requests within one pass, keeping
 	// the burst well under AniList's ~30 req/min limit (~5-7 feeds => ~1.5s).
 	fetchSpacing = 250 * time.Millisecond
+	// heroFeed is the one feed whose top items power the home fullscreen hero, so
+	// only its top slides are enriched with a clearLogo (matching the frontend's
+	// rows.find(key=='trending')).
+	heroFeed = FeedKey("trending")
+	// heroEnrichCap bounds how many of the hero feed's leading items get a
+	// best-effort ani.zip logo lookup. The hero shows the top 6; the small extra
+	// margin covers rotation without fanning out across the whole catalog.
+	heroEnrichCap = 12
+	// logoLookupTimeout caps each per-id ani.zip lookup so a slow upstream never
+	// stalls a refresh pass; on timeout the item simply keeps an empty logo.
+	logoLookupTimeout = 4 * time.Second
 )
 
 // AniList is the subset of the anilist client the service needs, so tests can
 // swap in a fake that returns canned media (or a rate-limit error).
 type AniList interface {
 	ListByFeed(ctx context.Context, spec anilist.FeedSpec) ([]anilist.Media, error)
+}
+
+// LogoFetcher resolves a transparent series-logo URL for an AniList id (ani.zip
+// "Clearlogo"). The *anizip.Client satisfies it; tests stub it. It is optional —
+// when nil the service skips hero logo enrichment entirely.
+type LogoFetcher interface {
+	GetClearLogo(ctx context.Context, anilistID int) (string, error)
 }
 
 // FeedKey is the stable string identity of a discovery feed (the wire `key`).
@@ -78,6 +96,7 @@ type entry struct {
 // top-level recover per pass).
 type Service struct {
 	anilist  AniList
+	logos    LogoFetcher // optional; nil disables hero logo enrichment
 	logger   *slog.Logger
 	interval time.Duration
 
@@ -109,6 +128,17 @@ func WithClock(now func() time.Time) Option {
 	return func(s *Service) {
 		if now != nil {
 			s.now = now
+		}
+	}
+}
+
+// WithLogoFetcher enables best-effort clearLogo enrichment of the hero feed's
+// top items via the given fetcher (ani.zip). Without it, items keep an empty
+// ClearLogoURL and the hero falls back to text.
+func WithLogoFetcher(lf LogoFetcher) Option {
+	return func(s *Service) {
+		if lf != nil {
+			s.logos = lf
 		}
 	}
 }
@@ -217,10 +247,56 @@ func (s *Service) RefreshAll(ctx context.Context) {
 				"feed", f.Key, "spec", anilist.DescribeFeed(spec), "err", err)
 			continue
 		}
+		if f.Key == heroFeed {
+			s.enrichHeroLogos(ctx, media)
+		}
 		s.mu.Lock()
 		s.cache[f.Key] = entry{media: media, fetchedAt: s.now()}
 		s.mu.Unlock()
 	}
+}
+
+// enrichHeroLogos fills ClearLogoURL on the leading items of the hero feed
+// (capped at heroEnrichCap) via concurrent best-effort ani.zip lookups. It
+// mutates media in place. Every lookup is independent and failure-tolerant: a
+// timeout, error, or missing logo leaves that item's ClearLogoURL "" and never
+// fails the refresh. A no-op when no LogoFetcher is configured.
+func (s *Service) enrichHeroLogos(ctx context.Context, media []anilist.Media) {
+	if s.logos == nil {
+		return
+	}
+	n := len(media)
+	if n > heroEnrichCap {
+		n = heroEnrichCap
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		if media[i].ID <= 0 {
+			continue
+		}
+		wg.Add(1)
+		go func(item *anilist.Media) {
+			defer wg.Done()
+			defer func() {
+				// A panic in the fetcher must not take down the refresh goroutine.
+				if rec := recover(); rec != nil {
+					s.logger.Info("discovery: clearLogo lookup panicked",
+						"anilist_id", item.ID, "panic", rec)
+				}
+			}()
+			lctx, cancel := context.WithTimeout(ctx, logoLookupTimeout)
+			defer cancel()
+			logo, err := s.logos.GetClearLogo(lctx, item.ID)
+			if err != nil {
+				s.logger.Info("discovery: clearLogo lookup failed",
+					"anilist_id", item.ID, "err", err)
+				return
+			}
+			item.ClearLogoURL = logo
+		}(&media[i])
+	}
+	wg.Wait()
 }
 
 // Snapshot returns a copy of every cached feed slice keyed by feed key. Readers

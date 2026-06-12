@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -78,8 +79,18 @@ func New(opts ...Option) *Client {
 
 // rawResponse is the ani.zip mappings envelope. "episodes" is an object keyed by
 // episode number as a string; absolute-numbered specials use non-integer keys.
+// "images" is a flat array of artwork entries discriminated by coverType
+// (Banner|Poster|Fanart|Clearlogo|...), each a TVDB artwork URL.
 type rawResponse struct {
 	Episodes map[string]rawEpisode `json:"episodes"`
+	Images   []rawImage            `json:"images"`
+}
+
+// rawImage is one ani.zip artwork entry. coverType discriminates the artwork
+// kind ("Clearlogo" is the transparent series logo the home hero uses).
+type rawImage struct {
+	CoverType string `json:"coverType"`
+	URL       string `json:"url"`
 }
 
 // rawEpisode covers the field-name inconsistencies in ani.zip's payload: title
@@ -103,36 +114,65 @@ type rawEpisode struct {
 // error (the id simply has no ani.zip coverage). Network/HTTP errors propagate so
 // the caller can degrade to an AniList-only payload.
 func (c *Client) GetEpisodes(ctx context.Context, anilistID int) ([]Episode, error) {
+	raw, ok, err := c.fetchMappings(ctx, anilistID)
+	if err != nil || !ok {
+		return nil, err
+	}
+	return mapEpisodes(raw.Episodes), nil
+}
+
+// GetClearLogo fetches the mappings for one AniList id and returns the
+// transparent series logo URL (the "Clearlogo" artwork entry), passed through
+// safeImageURL so only allowlisted (CSP-pinned) hosts survive. A missing logo,
+// a non-allowlisted host, or a 404 mapping yields "" with no error; only
+// network/HTTP/decode failures propagate so the caller can degrade silently.
+func (c *Client) GetClearLogo(ctx context.Context, anilistID int) (string, error) {
+	raw, ok, err := c.fetchMappings(ctx, anilistID)
+	if err != nil || !ok {
+		return "", err
+	}
+	for _, img := range raw.Images {
+		if strings.EqualFold(img.CoverType, "Clearlogo") {
+			return safeImageURL(img.URL), nil
+		}
+	}
+	return "", nil
+}
+
+// fetchMappings GETs and decodes the ani.zip mappings envelope for one id. The
+// bool is false (with nil error) when the id has no mapping (HTTP 404), so
+// callers degrade to empty coverage; network/HTTP/decode errors propagate.
+func (c *Client) fetchMappings(ctx context.Context, anilistID int) (rawResponse, bool, error) {
 	u := c.endpoint + "?" + url.Values{"anilist_id": {strconv.Itoa(anilistID)}}.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return nil, err
+		return rawResponse{}, false, err
 	}
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("anizip: request: %w", err)
+		return rawResponse{}, false, fmt.Errorf("anizip: request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// 404 = no mapping for this id; treat as empty coverage, not an error.
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, nil
+		return rawResponse{}, false, nil
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxRespBytes))
 	if err != nil {
-		return nil, err
+		return rawResponse{}, false, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("anizip: status %s", resp.Status)
+		return rawResponse{}, false, fmt.Errorf("anizip: status %s", resp.Status)
 	}
 
 	var raw rawResponse
 	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, fmt.Errorf("anizip: decode: %w", err)
+		return rawResponse{}, false, fmt.Errorf("anizip: decode: %w", err)
 	}
-	return mapEpisodes(raw.Episodes), nil
+	return raw, true, nil
 }
 
 // mapEpisodes flattens the keyed episode object into a sorted slice, resolving

@@ -501,6 +501,11 @@ type DiscoveryItem struct {
 	Season       string `json:"season"`
 	SeasonYear   *int   `json:"season_year"`
 	IsAdult      bool   `json:"is_adult"`
+	// ClearLogoURL is a transparent series-logo URL (ani.zip "Clearlogo"), or ""
+	// when absent/unavailable. Only the hero feed's top items are enriched; other
+	// cards carry "". The frontend hero shows the logo instead of the text title
+	// when present.
+	ClearLogoURL string `json:"clear_logo_url"`
 }
 
 // DiscoveryRow is one home carousel: a feed key + title + its items. An empty

@@ -334,6 +334,8 @@ export interface DiscoveryItem {
   episode_count: number | null
   cover_image: string
   banner_image: string
+  /** transparent clearLogo PNG used as the hero title; "" when the series has no logo */
+  clear_logo_url: string
   cover_color: string
   season: string
   season_year: number | null

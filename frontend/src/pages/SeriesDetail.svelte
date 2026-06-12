@@ -466,6 +466,7 @@
       episode_count: null,
       cover_image: r.cover_image,
       banner_image: r.cover_image,
+      clear_logo_url: '',
       cover_color: r.cover_color ?? '',
       season: '',
       season_year: null,
