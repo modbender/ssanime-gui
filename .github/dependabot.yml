@@ -1,0 +1,32 @@
+version: 2
+updates:
+  # GitHub Actions: keep the workflow's action pins current. With major-tag pins
+  # (@v5), minor/patch — including security fixes — are absorbed silently; this
+  # opens a grouped PR when a newer version (typically a new major) lands, which
+  # then runs through the same CI gate before you merge it.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+
+  # Go modules.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go:
+        patterns: ["*"]
+    commit-message:
+      prefix: build
+
+# Not configured: the frontend (bun). Dependabot can't read bun.lock yet, so an
+# npm-ecosystem entry would bump package.json but leave the lockfile stale and
+# break CI's `bun install --frozen-lockfile`. Frontend deps are updated by hand.
+# The Tauri/Rust desktop (cargo) is omitted too — it isn't covered by CI, so its
+# bumps wouldn't be validated here.
