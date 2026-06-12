@@ -94,7 +94,7 @@ func TestSeedIdempotent(t *testing.T) {
 	}
 }
 
-func TestBuiltinExtensionsSeeded(t *testing.T) {
+func TestNoBuiltinExtensionsSeeded(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()
 
@@ -102,41 +102,81 @@ func TestBuiltinExtensionsSeeded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list extensions: %v", err)
 	}
-	if len(exts) != len(builtinExtensions) {
-		t.Fatalf("extension count = %d, want %d", len(exts), len(builtinExtensions))
+	if len(exts) != 0 {
+		t.Errorf("extension count = %d, want 0 (sourcing is extensions-only)", len(exts))
 	}
-	for _, want := range builtinExtensions {
-		row, err := s.Read().GetExtensionByExtID(ctx, want.extID)
-		if err != nil {
-			t.Fatalf("builtin extension %q missing: %v", want.extID, err)
-		}
-		if row.IsBuiltin != 1 {
-			t.Errorf("%s: is_builtin = %d, want 1", want.extID, row.IsBuiltin)
-		}
-		if row.Payload != nil {
-			t.Errorf("%s: payload should be NULL for native builtins", want.extID)
-		}
-		if row.Lang != "native" {
-			t.Errorf("%s: lang = %q, want native", want.extID, row.Lang)
-		}
-		if row.Type != "anime-torrent" {
-			t.Errorf("%s: type = %q, want anime-torrent", want.extID, row.Type)
-		}
-		if row.Enabled != 1 {
-			t.Errorf("%s: enabled = %d, want 1", want.extID, row.Enabled)
-		}
+}
+
+func TestCreateAndListTorrentExtension(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	row, err := s.Write().CreateExtension(ctx, CreateExtensionParams{
+		Uuid:      newUUID(),
+		ExtID:     "test.ext.torrent",
+		Name:      "Test Torrent",
+		Type:      "torrent",
+		Lang:      "javascript",
+		Payload:   p("export default {};"),
+		Enabled:   1,
+		IsBuiltin: 0,
+		Nsfw:      0,
+		Icon:      nil,
+	})
+	if err != nil {
+		t.Fatalf("create extension: %v", err)
+	}
+	if row.Type != "torrent" {
+		t.Errorf("type = %q, want torrent", row.Type)
 	}
 
-	// Second seed must not create duplicates.
-	if err := s.seed(ctx, &config.Config{DataDir: t.TempDir()}); err != nil {
-		t.Fatalf("second seed: %v", err)
-	}
-	exts2, err := s.Read().ListExtensions(ctx)
+	enabled, err := s.Read().ListEnabledExtensionsByType(ctx, "torrent")
 	if err != nil {
-		t.Fatalf("list extensions after second seed: %v", err)
+		t.Fatalf("list enabled by type: %v", err)
 	}
-	if len(exts2) != len(builtinExtensions) {
-		t.Errorf("extension count after second seed = %d, want %d (idempotency broken)", len(exts2), len(builtinExtensions))
+	if len(enabled) != 1 || enabled[0].ExtID != "test.ext.torrent" {
+		t.Fatalf("enabled torrent extensions = %+v, want one (test.ext.torrent)", enabled)
+	}
+}
+
+func TestSettingsSetupAndNsfwRoundTrip(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	cur, err := s.Read().GetSettings(ctx)
+	if err != nil {
+		t.Fatalf("get settings: %v", err)
+	}
+	if cur.SetupCompleted != 0 || cur.ShowNsfw != 0 {
+		t.Errorf("fresh settings setup_completed=%d show_nsfw=%d, want 0/0", cur.SetupCompleted, cur.ShowNsfw)
+	}
+
+	if _, err := s.Write().UpdateSettings(ctx, UpdateSettingsParams{
+		DownloadRoot:        cur.DownloadRoot,
+		EncodedRoot:         cur.EncodedRoot,
+		CleanupPolicy:       cur.CleanupPolicy,
+		ProcessedDir:        cur.ProcessedDir,
+		NamingTemplate:      cur.NamingTemplate,
+		DownloadBackend:     cur.DownloadBackend,
+		DefaultProfileID:    cur.DefaultProfileID,
+		ConcurrencyDownload: cur.ConcurrencyDownload,
+		ConcurrencyEncode:   cur.ConcurrencyEncode,
+		FfmpegPath:          cur.FfmpegPath,
+		YtdlpPath:           cur.YtdlpPath,
+		Port:                cur.Port,
+		DohEnabled:          cur.DohEnabled,
+		SetupCompleted:      1,
+		ShowNsfw:            1,
+	}); err != nil {
+		t.Fatalf("update settings: %v", err)
+	}
+
+	reread, err := s.Read().GetSettings(ctx)
+	if err != nil {
+		t.Fatalf("re-read settings: %v", err)
+	}
+	if reread.SetupCompleted != 1 || reread.ShowNsfw != 1 {
+		t.Errorf("after update setup_completed=%d show_nsfw=%d, want 1/1", reread.SetupCompleted, reread.ShowNsfw)
 	}
 }
 

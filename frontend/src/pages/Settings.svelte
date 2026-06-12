@@ -27,6 +27,8 @@
     ytdlp_path: null,
     port: 4773,
     doh_enabled: true,
+    setup_completed: false,
+    show_nsfw: false,
   })
 
   async function load() {

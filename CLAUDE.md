@@ -7,9 +7,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This repo is **implemented and building**. The Go daemon (`cmd/ssanime` + 19 `internal/` packages),
 the embedded Svelte SPA (`frontend/`, built to `internal/server/dist` and `go:embed`-ed), and the
 Tauri desktop shell (`desktop/`) all exist and compile; `go test ./...` is green (~124 tests across
-19 packages) and CI gates every push/PR on `main`. The end-to-end pipeline (DoH→nyaa search →
-embedded `anacrolix/torrent` download → ffmpeg multi-resolution encode → Jellyfin-style archive →
-cleanup) has been validated against a real torrent. Remaining work is feature breadth, polish, and
+19 packages) and CI gates every push/PR on `main`. The end-to-end pipeline (extension-supplied
+provider search → embedded `anacrolix/torrent` download → ffmpeg multi-resolution encode →
+Jellyfin-style archive → cleanup) has been validated against a real torrent. Remaining work is
+feature breadth, polish, and
 distribution — not bring-up.
 
 Implemented `internal/` packages: `anilist` (GraphQL metadata), `binaries` (ffmpeg/yt-dlp provision
@@ -19,8 +20,8 @@ multi-res fan-out), `events` (SSE hub), `extension` (goja/hibike runtime), `meta
 tolerant AniList refresh trickle), `animedb` (offline anime-database index powering AniList-free
 add-search), `poller` (RSS/scrape feed watcher → enqueue), `procguard` (Windows job-object so a
 force-killed daemon doesn't orphan ffmpeg), `server` (REST + SSE + `localGuard` CSRF/rebind defense),
-`source` (nyaa/subsplease providers, habari parsing, autoselect), `store` (sqlc/goose/`modernc.org/
-sqlite`, dual read/write pool), `tray`.
+`source` (Provider interface + autoselect + habari parsing; providers are supplied by JS extensions),
+`store` (sqlc/goose/`modernc.org/sqlite`, dual read/write pool), `tray`.
 
 The original spec at `docs/superpowers/specs/2026-06-06-ssanime-gui-design.md` was **substantially
 refined** during build — the source of truth for the data model, sourcing, and decisions is
@@ -36,9 +37,11 @@ Read `docs/reference/` before the old spec where they conflict. Key decisions ba
 - **License: GPL-3.0** (the app reuses GPL `habari` + adapts GPL Seanime code).
 - **Build posture: comprehensive, no rush** — include AniList metadata, multi-resolution output, a
   goja JS extension runtime (hibike interface), and external torrent-client backends.
-- **Sourcing: torrents-primary**, with a **DoH resolver baked in** (the dev machine's ISP DNS-blocks
-  nyaa.si; DoH via `1.1.1.1` defeats it — verified). yt-dlp/direct/HLS still deferred behind the
-  `Downloader` interface.
+- **Sourcing: extensions-only** — every provider comes from a user-installed JS extension running in
+  the goja/hibike runtime and registered into `source.Registry`; the binary ships no site-specific
+  scraper. A **DoH resolver is baked in** behind the guarded HTTP client that backs extension `fetch()`
+  and repo index fetching (the dev machine's ISP DNS-blocks some trackers; DoH via `1.1.1.1` defeats
+  it — verified). yt-dlp/direct/HLS still deferred behind the `Downloader` interface.
 - **DB: sqlc/goose/`modernc.org/sqlite`** (cgo-free), single-writer pool + WAL. The core entity table
   is **`episodes`** (not `items`).
 
@@ -83,7 +86,7 @@ inside `download` and `encode` themselves rather than in a separate `queue` pack
 | `server` | HTTP, REST handlers, SSE hub, serves embedded SPA, `localGuard` (CSRF/DNS-rebind defense) |
 | `store` | SQLite persistence + sqlc/goose migrations, dual read/write pool |
 | `poller` | RSS/scrape feed watchers: poll on interval, apply filter rules, autoselect, enqueue (`mmcdole/gofeed`) |
-| `source` | Providers (nyaa, subsplease), habari release-name parsing, SmartSearch + autoselect |
+| `source` | Provider interface, autoselect, habari (release-name) parsing; no built-in providers — sourcing is supplied by user-installed JS extensions |
 | `download` | Download manager behind `Downloader`; backends: embedded `anacrolix/torrent`, qBittorrent, Transmission. Owns its worker pool |
 | `encode` | ffmpeg x265 wrapper, encode worker pool, profiles, ffprobe-anchored progress, multi-resolution fan-out |
 | `anilist` | AniList GraphQL metadata (cover image/color, banner, titles, airing status); batched + 429-tolerant |

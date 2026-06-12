@@ -11,6 +11,7 @@
   import PosterCard from '$lib/components/PosterCard.svelte'
   import DiscoveryCard from '$lib/components/DiscoveryCard.svelte'
   import { markTracked, trackedAnilistIds } from '$lib/discovery.svelte'
+  import { requireSource } from '$lib/sources.svelte'
 
   let rows = $state<DiscoveryRow[]>([])
   let inProgress = $state<SeriesProgress[]>([])
@@ -69,6 +70,7 @@
   // ---- Download & track (optimistic) ----
   async function track(item: DiscoveryItem) {
     if (trackingId != null) return
+    if (!requireSource()) return
     trackingId = item.anilist_id
     // Optimistic: flip the card to tracked immediately.
     markTracked(item.anilist_id)

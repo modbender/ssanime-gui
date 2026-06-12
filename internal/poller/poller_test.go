@@ -2,6 +2,7 @@ package poller
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"path/filepath"
 	"testing"
@@ -108,7 +109,7 @@ func makeFeed(t *testing.T, st *store.Store, status string) (store.Series, store
 
 func newPoller(t *testing.T, st *store.Store, prov source.Provider) (*Poller, *events.Hub) {
 	t.Helper()
-	reg := source.NewRegistry(nil)
+	reg := source.NewRegistry()
 	reg.Register(prov)
 	hub := events.NewHub(slog.Default())
 	hub.Start()
@@ -209,6 +210,48 @@ func TestPollSkipsUnsubscribed(t *testing.T) {
 		t.Errorf("provider called %d times for an unsubscribed series, want 0", prov.calls)
 	}
 }
+
+func TestProviderForUnregistered(t *testing.T) {
+	p := New(nil, source.NewRegistry(), nil, slog.Default())
+
+	// A site pointing at a provider id that isn't registered.
+	if _, err := p.providerFor(store.Feed{Site: strptr("ghost")}); !errorsIs(err, errProviderNotRegistered) {
+		t.Errorf("providerFor(ghost) err = %v, want errProviderNotRegistered", err)
+	}
+
+	// A feed with no site at all.
+	if _, err := p.providerFor(store.Feed{Site: nil}); !errorsIs(err, errProviderNotRegistered) {
+		t.Errorf("providerFor(nil site) err = %v, want errProviderNotRegistered", err)
+	}
+}
+
+func TestPollSkipsUnregisteredProviderWithoutError(t *testing.T) {
+	st := openStore(t)
+	ctx := context.Background()
+	series, feed := makeFeed(t, st, "RELEASING")
+
+	// An empty registry means the feed's "stub" provider is unregistered, so the
+	// feed must be skipped quietly: nothing enqueued, no error stamped.
+	hub := events.NewHub(slog.Default())
+	hub.Start()
+	t.Cleanup(hub.Stop)
+	p := New(st, source.NewRegistry(), hub, slog.Default())
+	p.PollDue(ctx)
+
+	eps, _ := st.Read().ListEpisodesBySeries(ctx, series.ID)
+	if len(eps) != 0 {
+		t.Errorf("unregistered-provider feed enqueued %d episodes, want 0", len(eps))
+	}
+	got, err := st.Read().GetFeed(ctx, feed.ID)
+	if err != nil {
+		t.Fatalf("GetFeed: %v", err)
+	}
+	if got.ErrorMessage != nil {
+		t.Errorf("feed error_message = %q, want nil (graceful skip)", *got.ErrorMessage)
+	}
+}
+
+func errorsIs(err, target error) bool { return errors.Is(err, target) }
 
 func itoa(i int) string {
 	if i == 0 {

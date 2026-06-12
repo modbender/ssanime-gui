@@ -10,11 +10,20 @@
   import Settings from './pages/Settings.svelte'
   import Logs from './pages/Logs.svelte'
   import About from './pages/About.svelte'
+  import Extensions from './pages/Extensions.svelte'
+  import WelcomeModal from '$lib/components/WelcomeModal.svelte'
+  import SourceGateModal from '$lib/components/SourceGateModal.svelte'
   import { startSSE } from '$lib/sse.svelte'
+  import { reloadSources } from '$lib/sources.svelte'
 
   $effect(() => {
     const stop = startSSE()
     return stop
+  })
+
+  // Load the installed-source signal once on app start; download gating reads it.
+  $effect(() => {
+    reloadSources()
   })
 </script>
 
@@ -49,9 +58,15 @@
       <Route path="/logs">
         <Logs />
       </Route>
+      <Route path="/extensions">
+        <Extensions />
+      </Route>
       <Route path="/about">
         <About />
       </Route>
     </main>
   </div>
+
+  <WelcomeModal />
+  <SourceGateModal />
 </Router>

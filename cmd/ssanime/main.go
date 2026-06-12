@@ -283,7 +283,7 @@ func startDaemon(cfg *config.Config, logger *slog.Logger) (shutdown func(), dlQu
 
 	// --- Source registry + DoH ---
 	resolver := doh.NewResolver("")
-	registry := source.NewRegistry(resolver)
+	registry := source.NewRegistry()
 
 	// --- AniList client ---
 	anilistClient := anilist.New()

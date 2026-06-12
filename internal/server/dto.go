@@ -303,6 +303,56 @@ type PutSettingsRequest struct {
 	YtdlpPath           *string `json:"ytdlp_path"`
 	Port                int64   `json:"port"`
 	DohEnabled          bool    `json:"doh_enabled"`
+	SetupCompleted      bool    `json:"setup_completed"`
+	ShowNsfw            bool    `json:"show_nsfw"`
+}
+
+// SettingsResponse is the stable settings wire shape. It serialises the int64
+// flag columns (doh_enabled, setup_completed, show_nsfw) as JSON booleans so GET
+// and PUT use the same types and a client can round-trip the object unchanged.
+type SettingsResponse struct {
+	ID                  int64   `json:"id"`
+	DownloadRoot        string  `json:"download_root"`
+	EncodedRoot         string  `json:"encoded_root"`
+	CleanupPolicy       string  `json:"cleanup_policy"`
+	ProcessedDir        *string `json:"processed_dir"`
+	NamingTemplate      string  `json:"naming_template"`
+	DownloadBackend     *int64  `json:"download_backend"`
+	DefaultProfileID    *int64  `json:"default_profile_id"`
+	ConcurrencyDownload int64   `json:"concurrency_download"`
+	ConcurrencyEncode   int64   `json:"concurrency_encode"`
+	FfmpegPath          *string `json:"ffmpeg_path"`
+	YtdlpPath           *string `json:"ytdlp_path"`
+	Port                int64   `json:"port"`
+	DohEnabled          bool    `json:"doh_enabled"`
+	SetupCompleted      bool    `json:"setup_completed"`
+	ShowNsfw            bool    `json:"show_nsfw"`
+	AddedAt             int64   `json:"added_at"`
+	ModifiedAt          int64   `json:"modified_at"`
+}
+
+// toSettingsResponse maps the sqlc Setting row to the bool-flagged wire shape.
+func toSettingsResponse(s store.Setting) SettingsResponse {
+	return SettingsResponse{
+		ID:                  s.ID,
+		DownloadRoot:        s.DownloadRoot,
+		EncodedRoot:         s.EncodedRoot,
+		CleanupPolicy:       s.CleanupPolicy,
+		ProcessedDir:        s.ProcessedDir,
+		NamingTemplate:      s.NamingTemplate,
+		DownloadBackend:     s.DownloadBackend,
+		DefaultProfileID:    s.DefaultProfileID,
+		ConcurrencyDownload: s.ConcurrencyDownload,
+		ConcurrencyEncode:   s.ConcurrencyEncode,
+		FfmpegPath:          s.FfmpegPath,
+		YtdlpPath:           s.YtdlpPath,
+		Port:                s.Port,
+		DohEnabled:          s.DohEnabled != 0,
+		SetupCompleted:      s.SetupCompleted != 0,
+		ShowNsfw:            s.ShowNsfw != 0,
+		AddedAt:             s.AddedAt,
+		ModifiedAt:          s.ModifiedAt,
+	}
 }
 
 // ---- Stats ----
@@ -363,6 +413,66 @@ type TorrentSearchResult struct {
 type CreateExtensionRepoRequest struct {
 	Name string `json:"name"`
 	URL  string `json:"url"`
+}
+
+// ExtensionDTO is the wire shape for an installed extension.
+type ExtensionDTO struct {
+	ID         int64   `json:"id"`
+	UUID       string  `json:"uuid"`
+	RepoID     *int64  `json:"repo_id"`
+	ExtID      string  `json:"ext_id"`
+	Name       string  `json:"name"`
+	Version    *string `json:"version"`
+	Lang       string  `json:"lang"`
+	Enabled    bool    `json:"enabled"`
+	Nsfw       bool    `json:"nsfw"`
+	Icon       *string `json:"icon"`
+	SourceURL  *string `json:"source_url"`
+	AddedAt    int64   `json:"added_at"`
+	ModifiedAt int64   `json:"modified_at"`
+}
+
+// ExtensionRepoDTO is the wire shape for an extension repo.
+type ExtensionRepoDTO struct {
+	ID           int64  `json:"id"`
+	UUID         string `json:"uuid"`
+	Name         string `json:"name"`
+	URL          string `json:"url"`
+	Enabled      bool   `json:"enabled"`
+	LastSyncedAt *int64 `json:"last_synced_at"`
+	AddedAt      int64  `json:"added_at"`
+}
+
+// toExtensionDTO maps a store row to the frozen wire shape.
+func toExtensionDTO(e store.Extension) ExtensionDTO {
+	return ExtensionDTO{
+		ID:         e.ID,
+		UUID:       e.Uuid,
+		RepoID:     e.RepoID,
+		ExtID:      e.ExtID,
+		Name:       e.Name,
+		Version:    e.Version,
+		Lang:       e.Lang,
+		Enabled:    e.Enabled != 0,
+		Nsfw:       e.Nsfw != 0,
+		Icon:       e.Icon,
+		SourceURL:  e.SourceUrl,
+		AddedAt:    e.AddedAt,
+		ModifiedAt: e.ModifiedAt,
+	}
+}
+
+// toExtensionRepoDTO maps a store row to the frozen wire shape.
+func toExtensionRepoDTO(r store.ExtensionRepo) ExtensionRepoDTO {
+	return ExtensionRepoDTO{
+		ID:           r.ID,
+		UUID:         r.Uuid,
+		Name:         r.Name,
+		URL:          r.Url,
+		Enabled:      r.Enabled != 0,
+		LastSyncedAt: r.LastSyncedAt,
+		AddedAt:      r.AddedAt,
+	}
 }
 
 // ---- Logs ----

@@ -2,8 +2,6 @@ package store
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"path/filepath"
 
 	"github.com/modbender/ssanime-gui/internal/config"
@@ -27,9 +25,8 @@ const (
 func p[T any](v T) *T { return &v }
 
 // seed inserts the immutable builtin encode profile, the default embedded
-// download client, the singleton settings row, and the native builtin
-// extension rows — each idempotently, so a second boot is a no-op.
-// Runs on the single-writer pool after migrations.
+// download client, and the singleton settings row — each idempotently, so a
+// second boot is a no-op. Runs on the single-writer pool after migrations.
 func (s *Store) seed(ctx context.Context, cfg *config.Config) error {
 	profileID, err := s.seedBuiltinProfile(ctx)
 	if err != nil {
@@ -39,10 +36,7 @@ func (s *Store) seed(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 		return err
 	}
-	if err := s.seedSettings(ctx, cfg, profileID, clientID); err != nil {
-		return err
-	}
-	return s.seedBuiltinExtensions(ctx)
+	return s.seedSettings(ctx, cfg, profileID, clientID)
 }
 
 // seedBuiltinProfile inserts the immutable "Automin (x265)" profile if absent
@@ -103,49 +97,6 @@ func (s *Store) seedDefaultDownloadClient(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 	return client.ID, nil
-}
-
-// builtinExtensions is the authoritative list of native (non-JS) providers.
-// Adding a new native provider is one entry here; lang="native" signals to the
-// extension manager that these have no JS payload and are already registered
-// in source.Registry — it skips them in LoadAndRegisterAll.
-var builtinExtensions = []struct {
-	extID string
-	name  string
-}{
-	{extID: "nyaa", name: "Nyaa"},
-	{extID: "subsplease", name: "SubsPlease"},
-}
-
-// seedBuiltinExtensions inserts one row per native provider into the extensions
-// table if absent. payload=NULL because native providers are Go code registered
-// directly in source.Registry; the extension manager skips is_builtin rows when
-// compiling JS at boot.
-func (s *Store) seedBuiltinExtensions(ctx context.Context) error {
-	for _, e := range builtinExtensions {
-		if _, err := s.write.GetExtensionByExtID(ctx, e.extID); err == nil {
-			continue // already present
-		} else if !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-		if _, err := s.write.CreateExtension(ctx, CreateExtensionParams{
-			Uuid:      newUUID(),
-			RepoID:    nil,
-			ExtID:     e.extID,
-			Name:      e.name,
-			Type:      "anime-torrent",
-			Lang:      "native",
-			Version:   nil,
-			SourceUrl: nil,
-			Payload:   nil,
-			Enabled:   1,
-			IsBuiltin: 1,
-			Settings:  nil,
-		}); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // seedSettings inserts the singleton settings row (id=1) if absent, wiring the

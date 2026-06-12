@@ -108,6 +108,8 @@ type Extension struct {
 	Enabled    int64   `json:"enabled"`
 	IsBuiltin  int64   `json:"is_builtin"`
 	Settings   *string `json:"settings"`
+	Nsfw       int64   `json:"nsfw"`
+	Icon       *string `json:"icon"`
 	AddedAt    int64   `json:"added_at"`
 	ModifiedAt int64   `json:"modified_at"`
 }
@@ -206,4 +208,6 @@ type Setting struct {
 	DohEnabled          int64   `json:"doh_enabled"`
 	AddedAt             int64   `json:"added_at"`
 	ModifiedAt          int64   `json:"modified_at"`
+	SetupCompleted      int64   `json:"setup_completed"`
+	ShowNsfw            int64   `json:"show_nsfw"`
 }

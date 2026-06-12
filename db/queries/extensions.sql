@@ -42,18 +42,18 @@ SELECT * FROM extensions WHERE repo_id = ? ORDER BY name ASC;
 -- name: CreateExtension :one
 INSERT INTO extensions (
     uuid, repo_id, ext_id, name, type, lang, version, source_url,
-    payload, enabled, is_builtin, settings
+    payload, enabled, is_builtin, settings, nsfw, icon
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 RETURNING *;
 
 -- name: UpsertExtensionByExtID :one
 INSERT INTO extensions (
     uuid, repo_id, ext_id, name, type, lang, version, source_url,
-    payload, enabled, is_builtin, settings
+    payload, enabled, is_builtin, settings, nsfw, icon
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 ON CONFLICT (ext_id) DO UPDATE SET
     repo_id = excluded.repo_id,
@@ -64,6 +64,8 @@ ON CONFLICT (ext_id) DO UPDATE SET
     source_url = excluded.source_url,
     payload = excluded.payload,
     settings = excluded.settings,
+    nsfw = excluded.nsfw,
+    icon = excluded.icon,
     modified_at = unixepoch()
 RETURNING *;
 
