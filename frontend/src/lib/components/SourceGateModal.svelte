@@ -29,7 +29,7 @@
     </div>
     <div class="space-y-2 text-sm leading-relaxed text-[var(--color-text-dim)]">
       <p>
-        Downloading needs at least one enabled source. ssanime-gui ships with none — you install
+        Downloading needs at least one enabled source. SSAnime ships with none — you install
         sources yourself as extensions.
       </p>
       <p class="text-[var(--color-muted)]">

@@ -2,6 +2,7 @@
   import { Link } from 'svelte-routing'
   import { sseState } from '$lib/sse.svelte'
   import { activityState, toggleDrawer } from '$lib/activity.svelte'
+  import { APP_NAME } from '$lib/app'
   import logoMark from '$lib/assets/logo-mark.svg?raw'
 
   const navItems = [
@@ -35,7 +36,7 @@
     href="/"
     onclick={() => { currentPath = '/' }}
     class="group relative mb-6 w-10 h-10 bg-white/[0.04] ring-1 ring-white/10 flex items-center justify-center transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:scale-105"
-    aria-label="ssanime — home"
+    aria-label="{APP_NAME} — home"
   >
     <div class="w-5 h-5 [&_svg]:w-full [&_svg]:h-full">
       {@html logoMark}

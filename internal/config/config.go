@@ -10,8 +10,10 @@ import (
 )
 
 const (
-	// AppName is used for the app-data directory and tray label.
-	AppName = "ssanime-gui"
+	// AppName is the slug for the app-data directory (%APPDATA%/<AppName>).
+	AppName = "ssanime"
+	// DisplayName is the user-facing product name (tray label, etc.).
+	DisplayName = "SSAnime"
 	// DefaultPort is the localhost port the daemon binds by default.
 	DefaultPort = 4773
 )

@@ -1,7 +1,7 @@
 [package]
 name = "ssanime-desktop"
 version = "0.1.0"
-description = "ssanime-gui desktop shell — launches the Go daemon and wraps it in a native window"
+description = "SSAnime desktop shell — launches the Go daemon and wraps it in a native window"
 authors = ["modbender"]
 license = "GPL-3.0"
 repository = ""

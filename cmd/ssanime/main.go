@@ -162,8 +162,8 @@ func runHeadless(cfg *config.Config, logger *slog.Logger) {
 func onReady(cfg *config.Config, logger *slog.Logger, noOpen bool, daemonShutdown *func()) func() {
 	return func() {
 		systray.SetIcon(icon.Data)
-		systray.SetTitle("ssanime-gui")
-		systray.SetTooltip("ssanime-gui — anime download & encode manager")
+		systray.SetTitle(config.DisplayName)
+		systray.SetTooltip(config.DisplayName + " — anime download & encode manager")
 
 		mOpen := systray.AddMenuItem("Open UI", fmt.Sprintf("Open http://127.0.0.1:%d/", cfg.Port))
 		mPause := systray.AddMenuItem("Pause all", "Pause download and encode queues")

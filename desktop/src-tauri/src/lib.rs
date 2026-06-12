@@ -273,9 +273,11 @@ pub fn run() {
             // decide below whether to show it (normal launch) or leave it in the
             // tray (`--hidden`, used by the autostart entry). The background
             // thread calls navigate() once the daemon is ready.
+            // Display name comes from tauri.conf.json `productName` — single source of truth.
+            let app_name = app.package_info().name.clone();
             let loading_url = WebviewUrl::App("index.html".into());
             let main_window = WebviewWindowBuilder::new(app, "main", loading_url)
-                .title("ssanime-gui")
+                .title(app_name.clone())
                 .inner_size(1280.0, 800.0)
                 .min_inner_size(800.0, 500.0)
                 .resizable(true)
@@ -293,7 +295,7 @@ pub fn run() {
 
             TrayIconBuilder::with_id("main-tray")
                 .icon(app.default_window_icon().cloned().expect("bundle defines an icon"))
-                .tooltip("ssanime-gui")
+                .tooltip(app_name.clone())
                 .menu(&tray_menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id().as_ref() {
