@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.0](https://github.com/modbender/ssanime-gui/compare/v0.3.0...v0.4.0) (2026-06-12)
+
+
+### Features
+
+* about page, dynamic version, sponsor link, and accent-contrast fix ([162343b](https://github.com/modbender/ssanime-gui/commit/162343bf948eaa7b1a2d93cadfad92188d6f4bdc))
+* add About page, sidebar sponsor link, and accent-contrast fix ([8723245](https://github.com/modbender/ssanime-gui/commit/8723245dccf80ac38d1db6d1c852291c46f725f5))
+* expose build version via /api/version ([0f490bf](https://github.com/modbender/ssanime-gui/commit/0f490bf812454f1e7dfb71016789ce4d3f44efd2))
+* extensions-only sourcing with first-run setup ([#19](https://github.com/modbender/ssanime-gui/issues/19)) ([980b7d5](https://github.com/modbender/ssanime-gui/commit/980b7d5c65ab08bc0907eafcc2111a754ab8b1cf))
+
+
+### Bug Fixes
+
+* keep accent legible as text on dark covers ([e54861d](https://github.com/modbender/ssanime-gui/commit/e54861d18cf78234d808024b2b140f06dd2818d5))
+* keep accent legible as text on dark covers ([d756354](https://github.com/modbender/ssanime-gui/commit/d75635422bdabfd07e78e783c2dce8354adc75ef))
+* remove hardcoded version label from sidebar ([b7c9a39](https://github.com/modbender/ssanime-gui/commit/b7c9a3984fa65908087b26768e424f6a05ef1bf4))
+* remove hardcoded version label from sidebar ([8d32ba0](https://github.com/modbender/ssanime-gui/commit/8d32ba0d68dbe72100e823272223a34e86219759))
+
 ## [0.3.0](https://github.com/modbender/ssanime-gui/compare/v0.2.0...v0.3.0) (2026-06-11)
 
 
