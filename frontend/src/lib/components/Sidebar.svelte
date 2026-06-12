@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Link } from 'svelte-routing'
   import { sseState } from '$lib/sse.svelte'
+  import { activityState, toggleDrawer } from '$lib/activity.svelte'
   import logoMark from '$lib/assets/logo-mark.svg?raw'
 
   const navItems = [
@@ -79,8 +80,37 @@
     {/each}
   </nav>
 
-  <!-- Bottom group: About + Sponsor -->
+  <!-- Bottom group: Activity + About + Sponsor -->
   <div class="flex flex-col items-center gap-1.5 pt-1.5">
+    <button
+      type="button"
+      onclick={toggleDrawer}
+      class="group relative flex items-center justify-center w-11 h-11 transition-[background,color,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] {activityState.open
+        ? 'bg-[var(--accent-soft)] text-[var(--color-text)]'
+        : 'text-[var(--color-muted)] hover:bg-white/5 hover:text-[var(--color-text)]'}"
+      aria-label="Activity"
+      aria-pressed={activityState.open}
+    >
+      <span
+        class="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-full bg-[var(--accent-text)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] {activityState.open ? 'opacity-100' : 'opacity-0 -translate-x-1'}"
+      ></span>
+
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:scale-110">
+        <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+
+      <!-- live-active pulse -->
+      {#if activityState.activeEpisodes.length > 0}
+        <span class="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[var(--color-success)] ring-2 ring-[var(--color-surface)] animate-pulse" aria-hidden="true"></span>
+      {/if}
+
+      <span
+        class="pointer-events-none absolute left-[120%] top-1/2 -translate-y-1/2 translate-x-1 whitespace-nowrap bg-[var(--color-elevated)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-text)] ring-1 ring-white/10 shadow-xl opacity-0 transition-all duration-200 ease-out group-hover:opacity-100 group-hover:translate-x-0 z-30"
+      >
+        Activity
+      </span>
+    </button>
+
     <Link to="/about" onclick={() => { currentPath = '/about' }}>
       <span
         class="group relative flex items-center justify-center w-11 h-11 transition-[background,color,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] {isActive('/about')

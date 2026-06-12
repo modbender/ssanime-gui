@@ -188,7 +188,7 @@ func (h *Handler) handleGetSeries(w http.ResponseWriter, r *http.Request) {
 			archived++
 		}
 		outputs, _ := h.store.Read().ListEncodedOutputsByEpisode(r.Context(), ep.ID)
-		details = append(details, episodeToDetail(ep, outputs))
+		details = append(details, episodeToDetail(ep, series.Title, outputs))
 	}
 	ds := derivedStatus(series.AiringStatus, series.EpisodeCount, total, archived)
 

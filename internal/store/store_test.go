@@ -94,6 +94,57 @@ func TestSeedIdempotent(t *testing.T) {
 	}
 }
 
+// TestSourceCleanedAtRoundTrip verifies migration 00007: the nullable
+// source_cleaned_at column defaults to NULL on a fresh episode and persists a
+// stamped unix value through MarkEpisodeSourceCleaned.
+func TestSourceCleanedAtRoundTrip(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	series, err := s.Write().CreateSeries(ctx, CreateSeriesParams{
+		Uuid: newUUID(), Title: "Cleanup Series", SeasonNumber: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateSeries: %v", err)
+	}
+	ep, err := s.Write().CreateEpisode(ctx, CreateEpisodeParams{
+		Uuid: newUUID(), SeriesID: series.ID, SourceKind: "torrent", Status: "downloaded",
+	})
+	if err != nil {
+		t.Fatalf("CreateEpisode: %v", err)
+	}
+	if ep.SourceCleanedAt != nil {
+		t.Errorf("fresh episode source_cleaned_at = %v, want nil", ep.SourceCleanedAt)
+	}
+
+	now := int64(1_700_000_000)
+	if err := s.Write().MarkEpisodeSourceCleaned(ctx, MarkEpisodeSourceCleanedParams{
+		SourceCleanedAt: &now, ID: ep.ID,
+	}); err != nil {
+		t.Fatalf("MarkEpisodeSourceCleaned: %v", err)
+	}
+
+	reread, err := s.Read().GetEpisode(ctx, ep.ID)
+	if err != nil {
+		t.Fatalf("GetEpisode: %v", err)
+	}
+	if reread.SourceCleanedAt == nil || *reread.SourceCleanedAt != now {
+		t.Errorf("source_cleaned_at = %v, want %d", reread.SourceCleanedAt, now)
+	}
+
+	// The join query also surfaces the column.
+	withSeries, err := s.Read().GetEpisodeWithSeries(ctx, ep.ID)
+	if err != nil {
+		t.Fatalf("GetEpisodeWithSeries: %v", err)
+	}
+	if withSeries.SeriesTitle != "Cleanup Series" {
+		t.Errorf("series_title = %q, want %q", withSeries.SeriesTitle, "Cleanup Series")
+	}
+	if withSeries.Episode.SourceCleanedAt == nil || *withSeries.Episode.SourceCleanedAt != now {
+		t.Errorf("joined source_cleaned_at = %v, want %d", withSeries.Episode.SourceCleanedAt, now)
+	}
+}
+
 func TestNoBuiltinExtensionsSeeded(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()

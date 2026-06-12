@@ -46,6 +46,9 @@ type Querier interface {
 	GetEncodedOutput(ctx context.Context, id int64) (EncodedOutput, error)
 	GetEpisode(ctx context.Context, id int64) (Episode, error)
 	GetEpisodeByUUID(ctx context.Context, uuid string) (Episode, error)
+	// GetEpisodeWithSeries returns an episode joined with its series title so the
+	// detail/queue DTOs can show the series name without a second query.
+	GetEpisodeWithSeries(ctx context.Context, id int64) (GetEpisodeWithSeriesRow, error)
 	GetExtension(ctx context.Context, id int64) (Extension, error)
 	GetExtensionByExtID(ctx context.Context, extID string) (Extension, error)
 	GetExtensionRepo(ctx context.Context, id int64) (ExtensionRepo, error)
@@ -102,6 +105,9 @@ type Querier interface {
 	MarkEpisodeDownloading(ctx context.Context, id int64) error
 	MarkEpisodeEncoded(ctx context.Context, id int64) error
 	MarkEpisodeEncoding(ctx context.Context, arg MarkEpisodeEncodingParams) error
+	// MarkEpisodeSourceCleaned stamps the unix time the source files were deleted
+	// under cleanup_policy=delete, so the UI can show "source cleaned up".
+	MarkEpisodeSourceCleaned(ctx context.Context, arg MarkEpisodeSourceCleanedParams) error
 	MarkExtensionRepoSynced(ctx context.Context, id int64) error
 	MarkFeedChecked(ctx context.Context, arg MarkFeedCheckedParams) error
 	MarkFeedError(ctx context.Context, arg MarkFeedErrorParams) error

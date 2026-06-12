@@ -1,6 +1,14 @@
 -- name: GetEpisode :one
 SELECT * FROM episodes WHERE id = ?;
 
+-- GetEpisodeWithSeries returns an episode joined with its series title so the
+-- detail/queue DTOs can show the series name without a second query.
+-- name: GetEpisodeWithSeries :one
+SELECT sqlc.embed(episodes), series.title AS series_title
+FROM episodes
+JOIN series ON series.id = episodes.series_id
+WHERE episodes.id = ?;
+
 -- name: GetEpisodeByUUID :one
 SELECT * FROM episodes WHERE uuid = ?;
 
@@ -61,6 +69,11 @@ UPDATE episodes SET source_path = ?, modified_at = unixepoch() WHERE id = ?;
 
 -- name: ClearEpisodeError :exec
 UPDATE episodes SET error_message = NULL, modified_at = unixepoch() WHERE id = ?;
+
+-- MarkEpisodeSourceCleaned stamps the unix time the source files were deleted
+-- under cleanup_policy=delete, so the UI can show "source cleaned up".
+-- name: MarkEpisodeSourceCleaned :exec
+UPDATE episodes SET source_cleaned_at = ?, modified_at = unixepoch() WHERE id = ?;
 
 -- Crash recovery: orphaned in-flight statuses reset to the last durable state.
 -- name: ResetOrphanedDownloadingEpisodes :exec

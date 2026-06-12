@@ -102,6 +102,78 @@ func TestGetEpisodesParsesAndSorts(t *testing.T) {
 	}
 }
 
+// logoBody mirrors the real ani.zip /mappings "images" array: a flat list of
+// artwork entries discriminated by coverType, with a transparent Clearlogo on
+// the allowlisted TVDB host.
+const logoBody = `{
+  "images": [
+    {"coverType": "Banner", "url": "https://artworks.thetvdb.com/banners/v4/series/81797/banners/x.jpg"},
+    {"coverType": "Clearlogo", "url": "https://artworks.thetvdb.com/banners/v4/series/81797/clearlogo/abc.png"},
+    {"coverType": "Poster", "url": "https://artworks.thetvdb.com/banners/v4/series/81797/posters/y.jpg"}
+  ],
+  "episodes": {}
+}`
+
+func TestGetClearLogoExtractsClearlogo(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(logoBody))
+	})
+	logo, err := c.GetClearLogo(context.Background(), 21)
+	if err != nil {
+		t.Fatalf("GetClearLogo: %v", err)
+	}
+	want := "https://artworks.thetvdb.com/banners/v4/series/81797/clearlogo/abc.png"
+	if logo != want {
+		t.Errorf("logo = %q, want %q", logo, want)
+	}
+}
+
+func TestGetClearLogoNoLogoIsEmpty(t *testing.T) {
+	// Same payload minus the Clearlogo entry: must yield "" (no error).
+	body := `{"images":[{"coverType":"Banner","url":"https://artworks.thetvdb.com/banners/v4/series/1/banners/x.jpg"}],"episodes":{}}`
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	})
+	logo, err := c.GetClearLogo(context.Background(), 21)
+	if err != nil {
+		t.Fatalf("GetClearLogo: %v", err)
+	}
+	if logo != "" {
+		t.Errorf("logo = %q, want empty when no Clearlogo present", logo)
+	}
+}
+
+func TestGetClearLogoNonAllowlistedHostDropped(t *testing.T) {
+	// A Clearlogo served from a non-allowlisted host is dropped by safeImageURL.
+	body := `{"images":[{"coverType":"Clearlogo","url":"https://evil.example.com/logo.png"}],"episodes":{}}`
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	})
+	logo, err := c.GetClearLogo(context.Background(), 21)
+	if err != nil {
+		t.Fatalf("GetClearLogo: %v", err)
+	}
+	if logo != "" {
+		t.Errorf("logo = %q, want empty for non-allowlisted host", logo)
+	}
+}
+
+func TestGetClearLogoNotFoundIsEmpty(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	logo, err := c.GetClearLogo(context.Background(), 999999)
+	if err != nil {
+		t.Fatalf("404 should not be an error: %v", err)
+	}
+	if logo != "" {
+		t.Errorf("logo = %q, want empty for unmapped id", logo)
+	}
+}
+
 func TestGetEpisodesNotFoundIsEmpty(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)

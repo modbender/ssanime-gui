@@ -40,3 +40,6 @@ Thumbs.db
 
 # Mage generated wrapper (only present with `mage -keep`)
 mage_output_file.go
+
+# Internal design specs + plans — kept local, not published to the public repo
+/docs/superpowers/

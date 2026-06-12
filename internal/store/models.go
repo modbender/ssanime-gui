@@ -92,6 +92,7 @@ type Episode struct {
 	ErrorMessage          *string `json:"error_message"`
 	AddedAt               int64   `json:"added_at"`
 	ModifiedAt            int64   `json:"modified_at"`
+	SourceCleanedAt       *int64  `json:"source_cleaned_at"`
 }
 
 type Extension struct {
