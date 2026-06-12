@@ -240,6 +240,36 @@ export interface Settings {
   ytdlp_path: string | null
   port: number
   doh_enabled: boolean
+  setup_completed: boolean
+  show_nsfw: boolean
+}
+
+// ---- Extensions ----
+
+export interface ExtensionRepo {
+  id: number
+  uuid: string
+  name: string
+  url: string
+  enabled: boolean
+  last_synced_at: number | null
+  added_at: number
+}
+
+export interface Extension {
+  id: number
+  uuid: string
+  repo_id: number | null
+  ext_id: string
+  name: string
+  version: string
+  lang: string | null
+  enabled: boolean
+  nsfw: boolean
+  icon: string | null
+  source_url: string | null
+  added_at: number
+  modified_at: number
 }
 
 export interface StatsResponse {
@@ -441,10 +471,12 @@ export const api = {
     post<EpisodeDetail>(`/series/${id}/available/download`, body),
 
   // Extensions
-  listExtensionRepos: () => get<unknown[]>('/extension-repos'),
-  createExtensionRepo: (body: { name: string; url: string }) => post<unknown>('/extension-repos', body),
-  installFromRepo: (id: number) => post<null>(`/extension-repos/${id}/install`),
-  listExtensions: () => get<unknown[]>('/extensions'),
-  enableExtension: (id: string) => post<null>(`/extensions/${id}/enable`),
-  disableExtension: (id: string) => post<null>(`/extensions/${id}/disable`),
+  listExtensionRepos: () => get<ExtensionRepo[]>('/extension-repos'),
+  createExtensionRepo: (body: { name: string; url: string }) => post<ExtensionRepo>('/extension-repos', body),
+  deleteExtensionRepo: (id: number) => del<null>(`/extension-repos/${id}`),
+  syncExtensionRepo: (id: number) => post<unknown>(`/extension-repos/${id}/install`),
+  listExtensions: () => get<Extension[]>('/extensions'),
+  enableExtension: (id: number) => post<Extension>(`/extensions/${id}/enable`),
+  disableExtension: (id: number) => post<Extension>(`/extensions/${id}/disable`),
+  uninstallExtension: (id: number) => del<null>(`/extensions/${id}`),
 }

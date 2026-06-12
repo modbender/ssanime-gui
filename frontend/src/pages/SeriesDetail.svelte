@@ -36,6 +36,7 @@
   } from '$lib/utils'
   import { sseState } from '$lib/sse.svelte'
   import { getPreview, markTracked } from '$lib/discovery.svelte'
+  import { requireSource } from '$lib/sources.svelte'
 
   let { id, anilistId }: { id?: string; anilistId?: string } = $props()
 
@@ -138,6 +139,7 @@
   // ---- Track flow (untracked → tracked) ----
   async function track(anilist: number) {
     if (tracking) return
+    if (!requireSource()) return
     tracking = true
     try {
       const res = await api.trackSeries({ anilist_id: anilist })
@@ -190,6 +192,7 @@
 
   async function downloadAvailable(ep: AvailableEpisode) {
     if (numId == null || downloadingEp) return
+    if (!requireSource()) return
     downloadingEp = ep.source_url
     try {
       await api.downloadAvailable(numId, {
@@ -223,6 +226,7 @@
   }
   async function startEncode() {
     if (selected.size === 0) return
+    if (!requireSource()) return
     encoding = true
     try {
       await api.bulkEncode({
