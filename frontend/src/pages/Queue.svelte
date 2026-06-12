@@ -12,8 +12,16 @@
   let loading = $state(true)
   let error = $state('')
 
+  // Plain (non-reactive) re-entry guard so a status-driven refetch can never
+  // self-trigger by flipping `loading`. `seeded` keeps the initial mount paint
+  // from showing the spinner on subsequent live refetches.
+  let inFlight = false
+  let seeded = false
+
   async function load() {
-    loading = true
+    if (inFlight) return
+    inFlight = true
+    if (!seeded) loading = true
     error = ''
     try {
       const q = await api.getQueue()
@@ -23,15 +31,21 @@
       error = e.message
     } finally {
       loading = false
+      seeded = true
+      inFlight = false
     }
   }
 
+  // Prime once on mount.
   $effect(() => { load() })
 
-  // Refresh queue when SSE status events arrive
+  // Refetch when a status event arrives. Depends ONLY on a status-event signal
+  // (the joined status values change as episodes transition); never on `loading`,
+  // so it cannot re-trigger itself. The in-flight guard prevents overlap.
   $effect(() => {
-    const _ = Object.keys(sseState.episodeStatus).length
-    if (!loading) load()
+    const _signal = Object.values(sseState.episodeStatus).join('|')
+    void _signal
+    if (seeded) load()
   })
 
   function downloadProgress(ep: EpisodeDetail) {

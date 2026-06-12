@@ -14,7 +14,6 @@
   import Button from '$lib/components/Button.svelte'
   import Modal from '$lib/components/Modal.svelte'
   import Spinner from '$lib/components/Spinner.svelte'
-  import ProgressBar from '$lib/components/ProgressBar.svelte'
   import Carousel from '$lib/components/Carousel.svelte'
   import DiscoveryCard from '$lib/components/DiscoveryCard.svelte'
   import {
@@ -35,6 +34,9 @@
     countdown,
   } from '$lib/utils'
   import { sseState } from '$lib/sse.svelte'
+  import { episodeOverall, episodeStage } from '$lib/pipeline.svelte'
+  import { fillGreenMix } from '$lib/pipeline-math'
+  import { openDrawer } from '$lib/activity.svelte'
   import { getPreview, markTracked } from '$lib/discovery.svelte'
   import { requireSource } from '$lib/sources.svelte'
 
@@ -814,13 +816,49 @@
             {@const epStatus = p ? liveStatus(p) : null}
             {@const future = isFuture(ep.airDate)}
             {@const isSelected = p ? selected.has(p.id) : false}
+            {@const overall = p ? episodeOverall(p) : 0}
+            {@const stage = p ? episodeStage(p) : 'queued'}
+            {@const done = stage === 'done'}
+            {@const greenMix = fillGreenMix(overall, done)}
             <li
               class="group relative flex gap-3 border bg-[var(--color-surface)] p-2.5 transition-colors duration-200
-                {isSelected ? 'border-[var(--accent-text)] bg-[rgb(var(--accent-rgb)/0.06)]' : 'border-[var(--color-border)] hover:border-[var(--color-border-strong)]'}
+                {isSelected ? 'border-[var(--accent-text)] bg-[rgb(var(--accent-rgb)/0.06)]' : stage === 'error' ? 'border-[var(--color-error)]/40' : 'border-[var(--color-border)] hover:border-[var(--color-border-strong)]'}
                 {future ? 'opacity-55' : ''}"
+              style={p ? `--fill-color: color-mix(in oklab, var(--accent-text) ${(1 - greenMix) * 100}%, var(--color-success) ${greenMix * 100}%);` : ''}
             >
+              <!-- background fill-sweep (pipeline-backed, in-progress episodes) -->
+              {#if p && overall > 0}
+                <div
+                  class="pointer-events-none absolute inset-0 z-0 transition-[width] duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]"
+                  style="width: {overall}%; background: linear-gradient(90deg, rgb(from var(--fill-color) r g b / 0.20), rgb(from var(--fill-color) r g b / 0.07) 70%, rgb(from var(--fill-color) r g b / 0.14));"
+                ></div>
+                {#if overall < 100}
+                  <div
+                    class="pointer-events-none absolute inset-y-0 z-0 w-px transition-[left] duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]"
+                    style="left: {overall}%; background: rgb(from var(--fill-color) r g b / 0.5);"
+                  ></div>
+                {/if}
+              {/if}
+
+              <!-- click-through overlay: opens the Activity drawer for this episode -->
+              {#if p}
+                <button
+                  type="button"
+                  class="absolute inset-0 z-[1] cursor-pointer"
+                  onclick={() => openDrawer(p.id)}
+                  aria-label={`Activity for ${ep.title || (ep.number != null ? `Episode ${ep.number}` : 'Special')}`}
+                ></button>
+              {/if}
+
+              <!-- ✓ completion badge -->
+              {#if done}
+                <span class="absolute right-2 top-2 z-[6] inline-flex h-5 w-5 items-center justify-center bg-[var(--color-success)] text-black" aria-hidden="true">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+              {/if}
+
               <!-- thumbnail -->
-              <div class="relative aspect-video w-40 shrink-0 overflow-hidden bg-[var(--color-surface-2)]">
+              <div class="relative z-[5] aspect-video w-40 shrink-0 overflow-hidden bg-[var(--color-surface-2)] pointer-events-none">
                 <!-- tinted placeholder (always rendered; the image layers on top when present) -->
                 <div
                   class="absolute inset-0 z-0 flex items-center justify-center"
@@ -843,10 +881,11 @@
 
                 <!-- selection checkbox (tracked, pipeline-backed only) -->
                 {#if series && p}
-                  <label class="absolute left-1.5 top-1.5 z-10 flex cursor-pointer items-center">
+                  <label class="absolute left-1.5 top-1.5 z-10 flex cursor-pointer items-center pointer-events-auto">
                     <input
                       type="checkbox"
                       checked={isSelected}
+                      onclick={(e) => e.stopPropagation()}
                       onchange={() => toggleEpisode(p.id)}
                       class="h-4 w-4 cursor-pointer border-[var(--color-border-strong)] bg-black/50 accent-[var(--accent-text)]"
                       aria-label={`Select episode ${ep.number ?? ep.title ?? ''}`}
@@ -856,7 +895,7 @@
               </div>
 
               <!-- body -->
-              <div class="flex min-w-0 flex-1 flex-col py-0.5">
+              <div class="relative z-[5] flex min-w-0 flex-1 flex-col py-0.5 pointer-events-none">
                 <div class="flex items-baseline gap-2">
                   <span class="shrink-0 text-[11px] font-bold tabular-nums text-[var(--color-text-dim)]">
                     {ep.number != null ? `E${String(ep.number).padStart(2, '0')}` : 'SP'}
@@ -870,11 +909,17 @@
                   <p class="mt-1 line-clamp-2 text-xs leading-relaxed text-[var(--color-muted)]">{ep.overview}</p>
                 {/if}
 
-                <!-- live progress (pipeline) -->
-                {#if progress && 'percent' in progress}
-                  <div class="mt-2 flex items-center gap-2">
-                    <ProgressBar value={progress.percent} max={100} class="flex-1" />
-                    <span class="shrink-0 text-[10px] font-medium tabular-nums text-[var(--color-muted)]">{Math.round(progress.percent)}%</span>
+                <!-- live stage + percent (the full-card fill-sweep shows overall progress) -->
+                {#if p && (stage === 'downloading' || stage === 'encoding')}
+                  {@const tick = progress && 'percent' in progress ? progress : null}
+                  <div class="mt-1.5 flex items-center gap-2 text-[11px] tabular-nums">
+                    <span class="font-semibold text-[var(--color-text-dim)]">{Math.round(overall)}%</span>
+                    {#if tick && 'speed_bps' in tick}
+                      <span class="text-[var(--color-muted)]">{formatBytes(tick.speed_bps)}/s</span>
+                      {#if tick.peers}<span class="text-[var(--color-faint)]">{tick.peers} peers</span>{/if}
+                    {:else if tick && 'speed' in tick && tick.speed}
+                      <span class="text-[var(--color-muted)]">{tick.resolution}p · {tick.speed}</span>
+                    {/if}
                   </div>
                 {/if}
 
@@ -906,7 +951,7 @@
                     </div>
                   {/if}
 
-                  <div class="ml-auto flex items-center gap-1.5">
+                  <div class="ml-auto flex items-center gap-1.5 pointer-events-auto">
                     {#if series && ep.source}
                       <Button
                         size="sm"

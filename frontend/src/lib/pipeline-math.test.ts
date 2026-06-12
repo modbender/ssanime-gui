@@ -4,6 +4,7 @@ import {
   encodeAvg,
   episodeOverall,
   episodeStage,
+  fillGreenMix,
   isActive,
   overallPercentOf,
   type EpisodeProgressInput,
@@ -147,6 +148,29 @@ describe('isActive', () => {
     expect(isActive('encoded')).toBe(false)
     expect(isActive('archived')).toBe(false)
     expect(isActive('error')).toBe(false)
+  })
+})
+
+describe('fillGreenMix', () => {
+  test('done pins to full green regardless of percent', () => {
+    expect(fillGreenMix(0, true)).toBe(1)
+    expect(fillGreenMix(50, true)).toBe(1)
+  })
+
+  test('stays fully accent through the first 60%', () => {
+    expect(fillGreenMix(0, false)).toBe(0)
+    expect(fillGreenMix(40, false)).toBe(0)
+    expect(fillGreenMix(60, false)).toBe(0)
+  })
+
+  test('ramps accent→green between 60% and 100%', () => {
+    expect(fillGreenMix(80, false)).toBe(0.5)
+    expect(fillGreenMix(100, false)).toBe(1)
+  })
+
+  test('clamps out-of-range input', () => {
+    expect(fillGreenMix(-20, false)).toBe(0)
+    expect(fillGreenMix(140, false)).toBe(1)
   })
 })
 

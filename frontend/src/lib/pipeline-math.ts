@@ -146,3 +146,16 @@ export function overallPercentOf(inputs: EpisodeProgressInput[]): number | null 
   for (const i of inputs) sum += episodeOverall(i)
   return sum / inputs.length
 }
+
+/**
+ * Blend fraction (0..1) from the series accent toward green for the fill-sweep.
+ * Stays fully accent through the first ~60% of progress, then ramps to green by
+ * 100% — so a card only "goes green" as it genuinely nears completion. `done`
+ * pins it to full green regardless of percent.
+ */
+export function fillGreenMix(percent: number, done: boolean): number {
+  if (done) return 1
+  const p = percent < 0 ? 0 : percent > 100 ? 100 : percent
+  if (p <= 60) return 0
+  return (p - 60) / 40
+}

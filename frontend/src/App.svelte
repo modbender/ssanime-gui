@@ -13,8 +13,12 @@
   import Extensions from './pages/Extensions.svelte'
   import WelcomeModal from '$lib/components/WelcomeModal.svelte'
   import SourceGateModal from '$lib/components/SourceGateModal.svelte'
+  import ActivityDrawer from '$lib/components/ActivityDrawer.svelte'
   import { startSSE } from '$lib/sse.svelte'
   import { reloadSources } from '$lib/sources.svelte'
+  import { activityState, startActivity } from '$lib/activity.svelte'
+  import { overallPercent } from '$lib/pipeline.svelte'
+  import { setOverallProgress, clearOverallProgress } from '$lib/taskbar'
 
   $effect(() => {
     const stop = startSSE()
@@ -25,6 +29,16 @@
   $effect(() => {
     reloadSources()
   })
+
+  // Prime the active-episode set and keep it fresh against SSE status churn.
+  $effect(() => startActivity())
+
+  // Drive the OS taskbar / favicon-ring from the mean progress of active jobs.
+  $effect(() => {
+    setOverallProgress(overallPercent(activityState.activeEpisodes))
+  })
+  // Restore the static favicon/title + clear the taskbar once, on app teardown.
+  $effect(() => clearOverallProgress)
 </script>
 
 <Router>
@@ -69,4 +83,5 @@
 
   <WelcomeModal />
   <SourceGateModal />
+  <ActivityDrawer />
 </Router>
