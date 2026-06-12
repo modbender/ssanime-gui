@@ -9,6 +9,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -50,6 +51,11 @@ type Handler struct {
 	anilistDetail AnilistDetailFetcher
 	anizip        AnizipFetcher
 	logs          *RingBuffer
+
+	// onShutdownRequest is fired (once, asynchronously) when a newer build POSTs
+	// /api/shutdown to take over the port. nil in tests / when unset.
+	onShutdownRequest func()
+	shutdownOnce      sync.Once
 }
 
 // Config holds optional dependencies for server.New.
@@ -62,6 +68,11 @@ type Config struct {
 	Discovery     DiscoveryProvider
 	AnilistDetail AnilistDetailFetcher
 	Anizip        AnizipFetcher
+
+	// OnShutdownRequest is invoked once when a newer build POSTs /api/shutdown to
+	// take over the port. The daemon wires its graceful-shutdown trigger here; the
+	// handler responds 204 first, then calls this in a goroutine.
+	OnShutdownRequest func()
 }
 
 // New builds the Handler and returns the fully wired http.Handler: REST + SSE
@@ -84,6 +95,8 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 		anilistDetail: cfg.AnilistDetail,
 		anizip:        cfg.Anizip,
 		logs:          ring,
+
+		onShutdownRequest: cfg.OnShutdownRequest,
 	}
 
 	r := chi.NewRouter()
@@ -99,6 +112,7 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 		api.Get("/healthz", h.handleHealthz)
 		api.Get("/ping", h.handlePing)
 		api.Get("/version", h.handleVersion)
+		api.Post("/shutdown", h.handleShutdown)
 		api.Get("/events", h.handleEvents)
 		api.Get("/settings", h.handleGetSettings)
 		api.Put("/settings", h.handlePutSettings)
