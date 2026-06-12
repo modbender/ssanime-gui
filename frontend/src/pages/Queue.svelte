@@ -39,7 +39,13 @@
   }
 
   function encodeProgress(ep: EpisodeDetail) {
-    return sseState.encodeProgress[ep.id] ?? null
+    // encodeProgress is keyed by output_id; surface the latest live output tick
+    // for this episode (the one currently encoding, if any).
+    for (const out of ep.outputs) {
+      const p = sseState.encodeProgress[out.id]
+      if (p) return p
+    }
+    return null
   }
 
   function liveStatus(ep: EpisodeDetail) {

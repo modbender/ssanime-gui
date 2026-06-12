@@ -36,12 +36,20 @@ export interface LogEvent {
   ts: number
 }
 
-// Global reactive SSE state
+// Global reactive SSE state.
+//   downloadProgress — keyed by episode_id (one in-flight download per episode)
+//   encodeProgress   — keyed by output_id (outputs encode sequentially, one row
+//                       per target resolution; keying by episode_id would make
+//                       multi-resolution progress last-writer-wins)
+//   episodeStatus    — keyed by episode_id
+//   outputStatus     — keyed by output_id (per-output status transitions arrive
+//                       on encode.progress with a `status` field and no percent)
 export const sseState = $state({
   connected: false,
   downloadProgress: {} as Record<number, DownloadProgress>,
   encodeProgress: {} as Record<number, EncodeProgress>,
   episodeStatus: {} as Record<number, string>,
+  outputStatus: {} as Record<number, string>,
   logs: [] as LogEvent[],
   lastHeartbeat: 0,
 })
@@ -77,7 +85,10 @@ function connect() {
   es.addEventListener('encode.progress', (e) => {
     try {
       const data: EncodeProgress = JSON.parse(e.data)
-      sseState.encodeProgress[data.episode_id] = data
+      sseState.encodeProgress[data.output_id] = data
+      if (data.status != null) {
+        sseState.outputStatus[data.output_id] = data.status
+      }
     } catch {}
   })
 

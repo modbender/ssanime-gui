@@ -270,7 +270,15 @@
   }
 
   function getEpisodeProgress(ep: EpisodeDetail) {
-    return sseState.downloadProgress[ep.id] ?? sseState.encodeProgress[ep.id] ?? null
+    const dl = sseState.downloadProgress[ep.id]
+    if (dl) return dl
+    // encodeProgress is keyed by output_id; surface the live tick for whichever
+    // of this episode's outputs is currently encoding.
+    for (const out of ep.outputs) {
+      const enc = sseState.encodeProgress[out.id]
+      if (enc) return enc
+    }
+    return null
   }
   function liveStatus(ep: EpisodeDetail) {
     return sseState.episodeStatus[ep.id] ?? ep.status
