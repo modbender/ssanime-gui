@@ -103,6 +103,17 @@ jobs:
     permissions:
       # Uploading assets to the release via `gh release upload` needs write.
       contents: write
+      # SignPath's submit-signing-request action fetches the uploaded bundle
+      # artifact via the Actions API; that read is only used when signing is on.
+      actions: read
+    # SignPath secrets are surfaced as job-level env so the Windows signing steps
+    # below can gate on their presence (`env.SIGNPATH_API_TOKEN != ''`). They are
+    # absent until a SignPath Foundation account is approved and the secrets are
+    # added (see docs/distribution.md) — until then the signing steps skip and the
+    # unsigned installers ship exactly as before.
+    env:
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      SIGNPATH_ORGANIZATION_ID: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
     strategy:
       # One OS failing must not abort the others — each leg uploads independently,
       # so a transient failure on (say) macOS still ships the Windows + Linux assets.
@@ -246,6 +257,44 @@ jobs:
         with:
           projectPath: desktop
           # tagName/releaseName/releaseId intentionally omitted -> build-only.
+
+      # 3b. Windows code signing via SignPath Foundation (free for OSS). PRE-WIRED
+      #     BUT INERT: both steps below are gated on the SIGNPATH_API_TOKEN secret
+      #     existing, so until a SignPath account is approved and the secrets
+      #     (SIGNPATH_API_TOKEN + SIGNPATH_ORGANIZATION_ID) are added, they skip and
+      #     the unsigned NSIS/MSI bundles ship unchanged. SignPath is a trusted-build
+      #     signer: the unsigned bundles are uploaded as a GitHub Actions artifact,
+      #     SignPath signs them after manual approval in its dashboard, and the signed
+      #     files are written back into the bundle tree (output-artifact-directory) so
+      #     the existing upload step attaches the SIGNED installers. project-slug and
+      #     signing-policy-slug must match the project + policy created in SignPath;
+      #     rename here if you name them differently. UNTESTED until secrets exist —
+      #     verify the signed-file paths on the first real signed release.
+      - name: upload unsigned bundles for signing (windows)
+        id: unsigned-bundles
+        if: matrix.os == 'windows-latest' && env.SIGNPATH_API_TOKEN != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-windows-bundles
+          # Globs share the common root desktop/target/release/bundle, so the
+          # artifact preserves the nsis/ + msi/ layout the signed files restore into.
+          path: |
+            desktop/target/release/bundle/nsis/*.exe
+            desktop/target/release/bundle/msi/*.msi
+          if-no-files-found: error
+
+      - name: sign windows installers (SignPath)
+        if: matrix.os == 'windows-latest' && env.SIGNPATH_API_TOKEN != ''
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ssanime-gui
+          signing-policy-slug: release-signing
+          github-artifact-id: ${{ steps.unsigned-bundles.outputs.artifact-id }}
+          wait-for-completion: true
+          # Restore the signed bundles in place so the upload step below picks them up.
+          output-artifact-directory: desktop/target/release/bundle
 
       # 4. Attach this OS's bundles to the release release-please ALREADY created
       #    for this tag. Each OS uploads only its own artifacts with --clobber so
