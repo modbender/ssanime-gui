@@ -30,6 +30,9 @@
       "certificateThumbprint": null,
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "template": "./windows/installer.nsi"
       }
     }
   }

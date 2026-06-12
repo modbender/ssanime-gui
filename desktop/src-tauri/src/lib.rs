@@ -1,17 +1,22 @@
 /// ssanime-gui desktop shell — Tauri v2
 ///
 /// Lifecycle:
-///   1. setup() runs on the main thread: creates "main" window immediately, loading
-///      the bundled placeholder page (desktop/src-tauri/ui-placeholder/index.html).
-///      The window is visible instantly — no waiting.
+///   1. setup() runs on the main thread: creates the HIDDEN "main" window, loading
+///      the bundled placeholder page (desktop/src-tauri/ui-placeholder/index.html),
+///      and builds the system tray (Open / Quit). A normal launch then shows the
+///      window; a `--hidden` launch (the installer's autostart entry) leaves it in
+///      the tray only.
 ///   2. A background std::thread spawns the Go sidecar with --no-open --headless.
 ///   3. The background thread polls 127.0.0.1:4773 (TCP) for up to 30s.
 ///   4. Once the daemon accepts connections, it calls window.navigate(daemon_url)
-///      to redirect the already-visible window to the real UI.
-///   5. On app exit (RunEvent::Exit) the sidecar child is killed so no orphan remains.
+///      to redirect the window to the real UI.
+///   5. Closing the window is intercepted (prevent_close + hide) so the daemon keeps
+///      running in the background — only tray "Quit" (app.exit(0)) really exits.
+///   6. On real exit (RunEvent::ExitRequested) the sidecar child is killed so no
+///      orphan remains.
 ///
 /// Orphan safety on Windows:
-///   RunEvent::Exit covers a graceful quit, but NOT a crash or a Task-Manager
+///   RunEvent::ExitRequested covers a graceful quit, but NOT a crash or a Task-Manager
 ///   force-kill of this process. To guarantee the sidecar never outlives us, on
 ///   Windows we put it in a Job Object flagged JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE.
 ///   The job's only handle is held by this process; when we die — by any means —
@@ -33,7 +38,11 @@ use std::{
     time::{Duration, Instant},
 };
 
-use tauri::{AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    menu::{MenuBuilder, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+};
 
 const DAEMON_ADDR: &str = "127.0.0.1:4773";
 const DAEMON_URL: &str = "http://127.0.0.1:4773/";
@@ -218,6 +227,23 @@ fn launch_daemon_and_navigate(app: AppHandle, child_handle: SharedChild) {
     });
 }
 
+/// Bring the "main" window to the foreground: restore if minimized, show if
+/// hidden, then focus. Used by the tray "Open" item, tray left-click, and the
+/// single-instance handler.
+fn reveal_main_window(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.unminimize();
+        let _ = win.show();
+        let _ = win.set_focus();
+    }
+}
+
+/// True when this process was launched with `--hidden` (the autostart entry the
+/// installer writes uses this so the app boots straight to the tray).
+fn launched_hidden() -> bool {
+    std::env::args().any(|a| a == "--hidden")
+}
+
 /// Kill the sidecar child if one is stored.
 fn kill_sidecar(child_handle: &SharedChild) {
     if let Ok(mut guard) = child_handle.lock() {
@@ -238,25 +264,73 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            // A second instance was launched — focus our existing window.
-            if let Some(win) = app.get_webview_window("main") {
-                let _ = win.show();
-                let _ = win.set_focus();
-            }
+            // A second instance was launched — reveal our existing window.
+            reveal_main_window(app);
         }))
         .setup(move |app| {
-            // FIX: Create the window HERE on the main thread so Windows WebView2
-            // can initialise its COM/UI objects correctly. Loading the bundled
-            // placeholder page means the user sees a window immediately; the
-            // background thread will call navigate() once the daemon is ready.
+            // Create the window HERE on the main thread so Windows WebView2 can
+            // initialise its COM/UI objects correctly. It is built HIDDEN; we
+            // decide below whether to show it (normal launch) or leave it in the
+            // tray (`--hidden`, used by the autostart entry). The background
+            // thread calls navigate() once the daemon is ready.
             let loading_url = WebviewUrl::App("index.html".into());
-            WebviewWindowBuilder::new(app, "main", loading_url)
+            let main_window = WebviewWindowBuilder::new(app, "main", loading_url)
                 .title("ssanime-gui")
                 .inner_size(1280.0, 800.0)
                 .min_inner_size(800.0, 500.0)
                 .resizable(true)
-                .visible(true)
+                .visible(false)
                 .build()?;
+
+            // System tray: Open + Quit.
+            let open_item = MenuItem::with_id(app, "open", "Open", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let tray_menu = MenuBuilder::new(app)
+                .item(&open_item)
+                .separator()
+                .item(&quit_item)
+                .build()?;
+
+            TrayIconBuilder::with_id("main-tray")
+                .icon(app.default_window_icon().cloned().expect("bundle defines an icon"))
+                .tooltip("ssanime-gui")
+                .menu(&tray_menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "open" => reveal_main_window(app),
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    // Left-click the tray icon → reveal the window.
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        reveal_main_window(tray.app_handle());
+                    }
+                })
+                .build(app)?;
+
+            // Hide-to-tray on close: intercept the close request, keep the daemon
+            // and process alive, just hide the window. MUST stay synchronous — an
+            // async/block_on body here deadlocks prevent_close (Tauri #12334).
+            let close_target = main_window.clone();
+            main_window.on_window_event(move |event| {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = close_target.hide();
+                }
+            });
+
+            // Normal launch shows the window; `--hidden` (autostart) leaves it in
+            // the tray only.
+            if !launched_hidden() {
+                let _ = main_window.show();
+                let _ = main_window.set_focus();
+            }
 
             // Kick off daemon spawn + readiness poll in a background thread.
             let handle = app.handle().clone();
@@ -267,7 +341,11 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(move |_app, event| {
-            if let RunEvent::Exit = event {
+            // Kill the sidecar only on a REAL exit (tray Quit → app.exit(0), or
+            // OS shutdown), NOT on window-close (which we intercept and turn into
+            // a hide — the daemon must keep running in the background). ExitRequested
+            // fires once at teardown; CloseRequested fires on every hide.
+            if let RunEvent::ExitRequested { .. } = event {
                 kill_sidecar(&child_for_exit);
             }
         });
