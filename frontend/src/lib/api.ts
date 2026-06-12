@@ -29,8 +29,34 @@ async function request<T>(
   return envelope.data as T
 }
 
+// For endpoints that reply 204 No Content on success and the standard
+// {data, error} envelope only on failure (e.g. the reveal endpoints).
+async function requestNoContent(
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<void> {
+  const opts: RequestInit = {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+  }
+  if (body !== undefined) {
+    opts.body = JSON.stringify(body)
+  }
+  const res = await fetch(`/api${path}`, opts)
+  if (res.status === 204) return
+  let message = `Request failed (${res.status})`
+  try {
+    const envelope: ApiResponse<unknown> = await res.json()
+    if (envelope.error) message = envelope.error
+  } catch {}
+  throw new Error(message)
+}
+
 const get = <T>(path: string) => request<T>('GET', path)
 const post = <T>(path: string, body?: unknown) => request<T>('POST', path, body)
+const postNoContent = (path: string, body?: unknown) =>
+  requestNoContent('POST', path, body)
 const patch = <T>(path: string, body?: unknown) => request<T>('PATCH', path, body)
 const put = <T>(path: string, body?: unknown) => request<T>('PUT', path, body)
 const del = <T>(path: string) => request<T>('DELETE', path)
@@ -91,6 +117,9 @@ export interface EpisodeDetail {
   uncensored: boolean
   bluray: boolean
   source_size: number | null
+  source_path: string | null
+  source_cleaned_at: number | null
+  series_title: string
   profile_id: number | null
   error_message: string | null
   retry_count: number
@@ -305,6 +334,8 @@ export interface DiscoveryItem {
   episode_count: number | null
   cover_image: string
   banner_image: string
+  /** transparent clearLogo PNG used as the hero title; "" when the series has no logo */
+  clear_logo_url: string
   cover_color: string
   season: string
   season_year: number | null
@@ -416,6 +447,11 @@ export const api = {
   listEpisodes: (id: number) => get<EpisodeDetail[]>(`/series/${id}/episodes`),
   scanEpisodes: (id: number) => post<EpisodeDetail[]>(`/series/${id}/scan`),
   refreshSeries: (id: number) => post<unknown>(`/series/${id}/refresh`, {}),
+
+  // Episodes
+  getEpisode: (id: number) => get<EpisodeDetail>(`/episodes/${id}`),
+  revealEpisodeSource: (id: number) => postNoContent(`/episodes/${id}/reveal`),
+  revealOutput: (id: number) => postNoContent(`/outputs/${id}/reveal`),
 
   // Encode
   bulkEncode: (body: { episode_ids: number[]; profile_id?: number; resolutions?: number[] }) =>

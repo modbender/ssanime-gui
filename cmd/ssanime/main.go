@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"fyne.io/systray"
@@ -84,6 +85,14 @@ func main() {
 
 	logger.Info("starting", "app", config.AppName, "dataDir", cfg.DataDir, "port", cfg.Port, "headless", headless)
 
+	// Single-instance preflight: before binding the port, probe any daemon already
+	// holding it. An identical build -> reopen its UI and exit; a different build
+	// (new version or rebuilt dev binary) -> ask it to shut down and take over.
+	// On reopen/failure this exits the process; if it returns we proceed to bind.
+	if !takeoverOrReopen(cfg, logger, noOpen, headless) {
+		return
+	}
+
 	if headless {
 		// Headless mode: used by the Tauri desktop shell. Run the full daemon
 		// (server + workers) but without the systray. Block until SIGINT or
@@ -109,7 +118,7 @@ func main() {
 // a systray. It blocks until SIGINT or SIGTERM, then runs graceful LIFO shutdown.
 // This is the mode used when the Tauri desktop shell owns the process lifetime.
 func runHeadless(cfg *config.Config, logger *slog.Logger) {
-	shutdown, _, _ := startDaemon(cfg, logger)
+	shutdown, _, _, shutdownRequested := startDaemon(cfg, logger)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -119,6 +128,12 @@ func runHeadless(cfg *config.Config, logger *slog.Logger) {
 		sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer stop()
 		<-sigCtx.Done()
+		cancel()
+	}()
+
+	// A newer build taking over the port also triggers shutdown.
+	go func() {
+		<-shutdownRequested
 		cancel()
 	}()
 
@@ -159,7 +174,8 @@ func onReady(cfg *config.Config, logger *slog.Logger, noOpen bool, daemonShutdow
 		// it returns immediately (server runs in its own goroutine).
 		var dlQ *download.Queue
 		var encQ *encode.Queue
-		*daemonShutdown, dlQ, encQ = startDaemon(cfg, logger)
+		var shutdownRequested <-chan struct{}
+		*daemonShutdown, dlQ, encQ, shutdownRequested = startDaemon(cfg, logger)
 
 		// Auto-open the UI in the default browser once the listener is ready.
 		if !noOpen {
@@ -182,6 +198,14 @@ func onReady(cfg *config.Config, logger *slog.Logger, noOpen bool, daemonShutdow
 			for {
 				select {
 				case <-sigCtx.Done():
+					return
+
+				case <-shutdownRequested:
+					// A newer build POSTed /api/shutdown to take over the port.
+					// Cancel sigCtx so the outer wait runs the same graceful
+					// shutdown + systray.Quit() as the SIGINT/Quit paths.
+					logger.Info("tray: shutdown requested by takeover")
+					sigStop()
 					return
 
 				case <-mOpen.ClickedCh:
@@ -247,7 +271,7 @@ func onExit(daemonShutdown *func(), logger *slog.Logger) func() {
 // It starts the HTTP server in a goroutine and returns a shutdown func plus
 // references to the download and encode queues (so the tray can pause them).
 // The shutdown func tears everything down in LIFO order.
-func startDaemon(cfg *config.Config, logger *slog.Logger) (shutdown func(), dlQueue *download.Queue, encQueue *encode.Queue) {
+func startDaemon(cfg *config.Config, logger *slog.Logger) (shutdown func(), dlQueue *download.Queue, encQueue *encode.Queue, shutdownRequested <-chan struct{}) {
 	var cleanups []func()
 	add := func(fn func()) { cleanups = append(cleanups, fn) }
 
@@ -255,6 +279,18 @@ func startDaemon(cfg *config.Config, logger *slog.Logger) (shutdown func(), dlQu
 		for i := len(cleanups) - 1; i >= 0; i-- {
 			cleanups[i]()
 		}
+	}
+
+	// shutdownRequested is closed (once) when a newer build POSTs /api/shutdown to
+	// take over the port. The headless and tray loops select on it to run the same
+	// graceful shutdown they run on SIGINT.
+	shutdownCh := make(chan struct{})
+	var shutdownReqOnce sync.Once
+	onShutdownRequest := func() {
+		shutdownReqOnce.Do(func() {
+			logger.Info("shutdown requested by a newer instance taking over the port")
+			close(shutdownCh)
+		})
 	}
 
 	// --- Store ---
@@ -325,7 +361,8 @@ func startDaemon(cfg *config.Config, logger *slog.Logger) (shutdown func(), dlQu
 	// Hourly-refreshed AniList feeds (trending/seasonal/popular/genre) powering the
 	// discovery home. Serves a cache so page-loads cost zero AniList calls; on
 	// 429/network error it keeps the prior slice and retries next tick.
-	discoverySvc := discovery.New(anilistClient, logger)
+	discoverySvc := discovery.New(anilistClient, logger,
+		discovery.WithLogoFetcher(anizip.New()))
 	discoverySvc.Start()
 	add(discoverySvc.Stop)
 
@@ -382,14 +419,15 @@ func startDaemon(cfg *config.Config, logger *slog.Logger) (shutdown func(), dlQu
 	srv := &http.Server{
 		Addr: fmt.Sprintf("127.0.0.1:%d", cfg.Port),
 		Handler: server.New(st, hub, logger, server.Config{
-			Registry:      registry,
-			Anilist:       anilistClient,
-			AnimeDB:       animeDB,
-			ExtMgr:        extManager,
-			Refresher:     refresher,
-			Discovery:     discoverySvc,
-			AnilistDetail: anilistClient,
-			Anizip:        anizip.New(),
+			Registry:          registry,
+			Anilist:           anilistClient,
+			AnimeDB:           animeDB,
+			ExtMgr:            extManager,
+			Refresher:         refresher,
+			Discovery:         discoverySvc,
+			AnilistDetail:     anilistClient,
+			Anizip:            anizip.New(),
+			OnShutdownRequest: onShutdownRequest,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
@@ -408,7 +446,7 @@ func startDaemon(cfg *config.Config, logger *slog.Logger) (shutdown func(), dlQu
 		}
 	})
 
-	return shutdown, dlQueue, encQueue
+	return shutdown, dlQueue, encQueue, shutdownCh
 }
 
 // waitForListener polls tcp/127.0.0.1:<port> until it accepts or the timeout

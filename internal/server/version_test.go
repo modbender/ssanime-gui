@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/modbender/ssanime-gui/internal/version"
@@ -33,6 +34,15 @@ func TestVersionEndpoint(t *testing.T) {
 	}
 	if resp.Data.Commit != "a1b2c3d" {
 		t.Errorf("commit = %q, want %q", resp.Data.Commit, "a1b2c3d")
+	}
+	if resp.Data.InstanceID == "" {
+		t.Error("instance_id is empty, want a non-empty identity")
+	}
+	if resp.Data.InstanceID != version.InstanceID() {
+		t.Errorf("instance_id = %q, want %q", resp.Data.InstanceID, version.InstanceID())
+	}
+	if resp.Data.Pid != os.Getpid() {
+		t.Errorf("pid = %d, want %d", resp.Data.Pid, os.Getpid())
 	}
 }
 

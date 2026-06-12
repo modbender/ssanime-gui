@@ -471,7 +471,7 @@ func (h *Handler) handleDownloadAvailable(w http.ResponseWriter, r *http.Request
 	if created {
 		status = http.StatusCreated
 	}
-	WriteJSON(w, status, episodeToDetail(fresh, outputs))
+	WriteJSON(w, status, episodeToDetail(fresh, series.Title, outputs))
 }
 
 // parseResolution reads the leading run of digits from a resolution string

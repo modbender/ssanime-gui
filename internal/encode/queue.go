@@ -492,8 +492,14 @@ func (q *Queue) cleanupOriginal(ep store.Episode, set store.Setting) error {
 		if err := os.RemoveAll(dir); err != nil {
 			return err
 		}
-		return q.store.Write().SetEpisodeSourcePath(bg, store.SetEpisodeSourcePathParams{
+		if err := q.store.Write().SetEpisodeSourcePath(bg, store.SetEpisodeSourcePathParams{
 			SourcePath: nil, ID: ep.ID,
+		}); err != nil {
+			return err
+		}
+		now := time.Now().Unix()
+		return q.store.Write().MarkEpisodeSourceCleaned(bg, store.MarkEpisodeSourceCleanedParams{
+			SourceCleanedAt: &now, ID: ep.ID,
 		})
 	}
 }

@@ -48,6 +48,7 @@ func mediaToDiscoveryItem(m anilist.Media) DiscoveryItem {
 		CoverColor:   m.CoverColor,
 		Season:       m.Season,
 		IsAdult:      m.IsAdult,
+		ClearLogoURL: m.ClearLogoURL,
 	}
 	if m.EpisodeCount > 0 {
 		ec := m.EpisodeCount
