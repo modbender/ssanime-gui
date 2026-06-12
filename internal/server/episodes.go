@@ -13,7 +13,9 @@ import (
 )
 
 // episodeToDetail converts a store.Episode + its outputs into an EpisodeDetail DTO.
-func episodeToDetail(ep store.Episode, outputs []store.EncodedOutput) EpisodeDetail {
+// seriesTitle is the parent series' title, joined in by the caller for the
+// drawer's group-by-series view.
+func episodeToDetail(ep store.Episode, seriesTitle string, outputs []store.EncodedOutput) EpisodeDetail {
 	outs := make([]OutputSummary, len(outputs))
 	for i, o := range outputs {
 		outs[i] = OutputSummary{
@@ -28,27 +30,30 @@ func episodeToDetail(ep store.Episode, outputs []store.EncodedOutput) EpisodeDet
 		}
 	}
 	return EpisodeDetail{
-		ID:           ep.ID,
-		UUID:         ep.Uuid,
-		SeriesID:     ep.SeriesID,
-		Title:        ep.Title,
-		EpisodeNo:    ep.EpisodeNo,
-		Status:       ep.Status,
-		Resolution:   ep.Resolution,
-		ReleaseGroup: ep.ReleaseGroup,
-		Subtype:      ep.Subtype,
-		Uncensored:   ep.Uncensored == 1,
-		Bluray:       ep.Bluray == 1,
-		SourceSize:   ep.SourceSize,
-		ProfileID:    ep.ProfileID,
-		ErrorMessage: ep.ErrorMessage,
-		RetryCount:   ep.RetryCount,
-		PublishedAt:  ep.PublishedAt,
-		DownloadedAt: ep.DownloadedAt,
-		EncodedAt:    ep.EncodedAt,
-		Outputs:      outs,
-		AddedAt:      ep.AddedAt,
-		ModifiedAt:   ep.ModifiedAt,
+		ID:              ep.ID,
+		UUID:            ep.Uuid,
+		SeriesID:        ep.SeriesID,
+		SeriesTitle:     seriesTitle,
+		Title:           ep.Title,
+		EpisodeNo:       ep.EpisodeNo,
+		Status:          ep.Status,
+		Resolution:      ep.Resolution,
+		ReleaseGroup:    ep.ReleaseGroup,
+		Subtype:         ep.Subtype,
+		Uncensored:      ep.Uncensored == 1,
+		Bluray:          ep.Bluray == 1,
+		SourceSize:      ep.SourceSize,
+		SourcePath:      ep.SourcePath,
+		SourceCleanedAt: ep.SourceCleanedAt,
+		ProfileID:       ep.ProfileID,
+		ErrorMessage:    ep.ErrorMessage,
+		RetryCount:      ep.RetryCount,
+		PublishedAt:     ep.PublishedAt,
+		DownloadedAt:    ep.DownloadedAt,
+		EncodedAt:       ep.EncodedAt,
+		Outputs:         outs,
+		AddedAt:         ep.AddedAt,
+		ModifiedAt:      ep.ModifiedAt,
 	}
 }
 
@@ -80,6 +85,16 @@ func (h *Handler) handleListEpisodes(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	series, err := h.store.Read().GetSeries(r.Context(), id)
+	if errors.Is(err, sql.ErrNoRows) {
+		WriteError(w, http.StatusNotFound, "series not found")
+		return
+	}
+	if err != nil {
+		h.logger.Error("list episodes: get series", "series_id", id, "err", err)
+		WriteError(w, http.StatusInternalServerError, "failed to list episodes")
+		return
+	}
 	episodes, err := h.store.Read().ListEpisodesBySeries(r.Context(), id)
 	if err != nil {
 		h.logger.Error("list episodes", "series_id", id, "err", err)
@@ -89,9 +104,31 @@ func (h *Handler) handleListEpisodes(w http.ResponseWriter, r *http.Request) {
 	details := make([]EpisodeDetail, 0, len(episodes))
 	for _, ep := range episodes {
 		outputs, _ := h.store.Read().ListEncodedOutputsByEpisode(r.Context(), ep.ID)
-		details = append(details, episodeToDetail(ep, outputs))
+		details = append(details, episodeToDetail(ep, series.Title, outputs))
 	}
 	WriteJSON(w, http.StatusOK, details)
+}
+
+// handleGetEpisode returns a single episode's detail (paths, cleanup status,
+// outputs, series title) for the Activity drawer's detail view. Lighter than
+// GET /api/series/{id}.
+func (h *Handler) handleGetEpisode(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	row, err := h.store.Read().GetEpisodeWithSeries(r.Context(), id)
+	if errors.Is(err, sql.ErrNoRows) {
+		WriteError(w, http.StatusNotFound, "episode not found")
+		return
+	}
+	if err != nil {
+		h.logger.Error("get episode", "id", id, "err", err)
+		WriteError(w, http.StatusInternalServerError, "failed to get episode")
+		return
+	}
+	outputs, _ := h.store.Read().ListEncodedOutputsByEpisode(r.Context(), id)
+	WriteJSON(w, http.StatusOK, episodeToDetail(row.Episode, row.SeriesTitle, outputs))
 }
 
 // handleScanEpisodes runs SmartSearch on all registered providers for a series

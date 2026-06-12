@@ -144,27 +144,30 @@ type SeriesDetail struct {
 
 // EpisodeDetail is one episode row + its encoded_outputs.
 type EpisodeDetail struct {
-	ID           int64           `json:"id"`
-	UUID         string          `json:"uuid"`
-	SeriesID     int64           `json:"series_id"`
-	Title        *string         `json:"title"`
-	EpisodeNo    *int64          `json:"episode_no"`
-	Status       string          `json:"status"`
-	Resolution   *int64          `json:"resolution"`
-	ReleaseGroup *string         `json:"release_group"`
-	Subtype      *string         `json:"subtype"`
-	Uncensored   bool            `json:"uncensored"`
-	Bluray       bool            `json:"bluray"`
-	SourceSize   *int64          `json:"source_size"`
-	ProfileID    *int64          `json:"profile_id"`
-	ErrorMessage *string         `json:"error_message"`
-	RetryCount   int64           `json:"retry_count"`
-	PublishedAt  *int64          `json:"published_at"`
-	DownloadedAt *int64          `json:"downloaded_at"`
-	EncodedAt    *int64          `json:"encoded_at"`
-	Outputs      []OutputSummary `json:"outputs"`
-	AddedAt      int64           `json:"added_at"`
-	ModifiedAt   int64           `json:"modified_at"`
+	ID              int64           `json:"id"`
+	UUID            string          `json:"uuid"`
+	SeriesID        int64           `json:"series_id"`
+	SeriesTitle     string          `json:"series_title"`
+	Title           *string         `json:"title"`
+	EpisodeNo       *int64          `json:"episode_no"`
+	Status          string          `json:"status"`
+	Resolution      *int64          `json:"resolution"`
+	ReleaseGroup    *string         `json:"release_group"`
+	Subtype         *string         `json:"subtype"`
+	Uncensored      bool            `json:"uncensored"`
+	Bluray          bool            `json:"bluray"`
+	SourceSize      *int64          `json:"source_size"`
+	SourcePath      *string         `json:"source_path"`
+	SourceCleanedAt *int64          `json:"source_cleaned_at"`
+	ProfileID       *int64          `json:"profile_id"`
+	ErrorMessage    *string         `json:"error_message"`
+	RetryCount      int64           `json:"retry_count"`
+	PublishedAt     *int64          `json:"published_at"`
+	DownloadedAt    *int64          `json:"downloaded_at"`
+	EncodedAt       *int64          `json:"encoded_at"`
+	Outputs         []OutputSummary `json:"outputs"`
+	AddedAt         int64           `json:"added_at"`
+	ModifiedAt      int64           `json:"modified_at"`
 }
 
 // OutputSummary is one encoded_outputs row for the UI.
