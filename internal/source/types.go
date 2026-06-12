@@ -2,12 +2,10 @@
 // series/episode across pluggable providers, parses release names with habari,
 // and autoselects the best original release.
 //
-// The provider interface is a native-Go reimplementation of the MIT-licensed
-// hibike AnimeProvider shape (the same interface Seanime and Hayase JS
-// extensions implement), so a goja extension runtime can be slotted in later
-// behind the same contract. v1 ships two native providers: SubsPlease
-// (structured, reachable directly) and Nyaa (RSS via internal/doh to defeat the
-// ISP DNS block).
+// The Provider interface is a native-Go reimplementation of the hibike
+// AnimeProvider shape. Providers are supplied at runtime by user-installed JS
+// extensions running in the goja runtime, registered into source.Registry as
+// they install and enable.
 package source
 
 import "context"

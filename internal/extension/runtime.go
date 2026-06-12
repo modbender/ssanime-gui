@@ -117,7 +117,7 @@ func (v *VM) CallMethod(ctx context.Context, methodName string, args ...interfac
 
 		gojaArgs := make([]goja.Value, len(args))
 		for i, a := range args {
-			gojaArgs[i] = rt.ToValue(a)
+			gojaArgs[i] = nativeJSValue(rt, a)
 		}
 
 		callResult, err := fn(obj, gojaArgs...)
@@ -165,6 +165,29 @@ func (v *VM) CallMethod(ctx context.Context, methodName string, args ...interfac
 		loop.Terminate()
 		return nil, fmt.Errorf("extension %s: %s: %w", v.extID, methodName, callCtx.Err())
 	}
+}
+
+// nativeJSValue converts a Go argument into a native JS value by round-tripping
+// through the runtime's JSON.parse. Passing a Go map/slice straight to ToValue
+// yields host-wrapped objects whose arrays fail Array.isArray and whose elements
+// aren't real JS strings, which breaks extensions that branch on those. A
+// JSON-parsed value is indistinguishable from one the script built itself.
+// Falls back to ToValue for anything that can't be marshalled (e.g. no args).
+func nativeJSValue(rt *goja.Runtime, a interface{}) goja.Value {
+	data, err := json.Marshal(a)
+	if err != nil {
+		return rt.ToValue(a)
+	}
+	jsonObj := rt.Get("JSON").ToObject(rt)
+	parse, ok := goja.AssertFunction(jsonObj.Get("parse"))
+	if !ok {
+		return rt.ToValue(a)
+	}
+	v, err := parse(goja.Undefined(), rt.ToValue(string(data)))
+	if err != nil {
+		return rt.ToValue(a)
+	}
+	return v
 }
 
 // bindConsole wires console.log/warn/error to slog.

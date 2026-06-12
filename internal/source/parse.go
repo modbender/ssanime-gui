@@ -25,6 +25,13 @@ var (
 	episodeRe  = regexp.MustCompile(`\d+`)
 )
 
+// Enrich runs habari over t.Name to backfill any release-group/resolution/
+// episode/info-hash the provider left empty, and ensures a usable magnet.
+func Enrich(t *AnimeTorrent) {
+	enrich(t)
+	t.Magnet = ensureMagnet(t)
+}
+
 // enrich runs habari over t.Name and fills any structured field the provider
 // left unset. Provider-supplied values win over the parse (the provider knows
 // its own data best), so this only backfills.

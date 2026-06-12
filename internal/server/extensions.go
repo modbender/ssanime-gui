@@ -17,7 +17,11 @@ func (h *Handler) handleListExtensionRepos(w http.ResponseWriter, r *http.Reques
 		WriteError(w, http.StatusInternalServerError, "failed to list repos")
 		return
 	}
-	WriteJSON(w, http.StatusOK, repos)
+	out := make([]ExtensionRepoDTO, 0, len(repos))
+	for _, repo := range repos {
+		out = append(out, toExtensionRepoDTO(repo))
+	}
+	WriteJSON(w, http.StatusOK, out)
 }
 
 func (h *Handler) handleCreateExtensionRepo(w http.ResponseWriter, r *http.Request) {
@@ -43,7 +47,7 @@ func (h *Handler) handleCreateExtensionRepo(w http.ResponseWriter, r *http.Reque
 		WriteError(w, http.StatusInternalServerError, "failed to add repo")
 		return
 	}
-	WriteJSON(w, http.StatusCreated, repo)
+	WriteJSON(w, http.StatusCreated, toExtensionRepoDTO(repo))
 }
 
 func (h *Handler) handleInstallFromRepo(w http.ResponseWriter, r *http.Request) {
@@ -73,13 +77,34 @@ func (h *Handler) handleInstallFromRepo(w http.ResponseWriter, r *http.Request) 
 	WriteJSON(w, http.StatusOK, map[string]string{"status": "synced"})
 }
 
+func (h *Handler) handleDeleteExtensionRepo(w http.ResponseWriter, r *http.Request) {
+	if h.extMgr == nil {
+		WriteError(w, http.StatusServiceUnavailable, "extension manager not available")
+		return
+	}
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	if err := h.extMgr.DeleteRepo(r.Context(), id); err != nil {
+		h.logger.Error("delete extension repo", "id", id, "err", err)
+		WriteError(w, http.StatusInternalServerError, "failed to delete repo")
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]int64{"id": id})
+}
+
 func (h *Handler) handleListExtensions(w http.ResponseWriter, r *http.Request) {
 	exts, err := h.store.Read().ListExtensions(r.Context())
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to list extensions")
 		return
 	}
-	WriteJSON(w, http.StatusOK, exts)
+	out := make([]ExtensionDTO, 0, len(exts))
+	for _, ext := range exts {
+		out = append(out, toExtensionDTO(ext))
+	}
+	WriteJSON(w, http.StatusOK, out)
 }
 
 func (h *Handler) handleEnableExtension(w http.ResponseWriter, r *http.Request) {
@@ -120,5 +145,26 @@ func (h *Handler) setExtensionEnabled(w http.ResponseWriter, r *http.Request, en
 		WriteError(w, http.StatusInternalServerError, "failed to get extension")
 		return
 	}
-	WriteJSON(w, http.StatusOK, ext)
+	WriteJSON(w, http.StatusOK, toExtensionDTO(ext))
+}
+
+func (h *Handler) handleUninstallExtension(w http.ResponseWriter, r *http.Request) {
+	if h.extMgr == nil {
+		WriteError(w, http.StatusServiceUnavailable, "extension manager not available")
+		return
+	}
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	if err := h.extMgr.UninstallExtension(r.Context(), id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			WriteError(w, http.StatusNotFound, "extension not found")
+			return
+		}
+		h.logger.Error("uninstall extension", "id", id, "err", err)
+		WriteError(w, http.StatusInternalServerError, "failed to uninstall extension")
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]int64{"id": id})
 }

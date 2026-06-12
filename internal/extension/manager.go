@@ -30,6 +30,14 @@ type Manager struct {
 	logger  *slog.Logger
 }
 
+// b2i maps a Go bool to the SQLite integer sqlc uses for boolean columns.
+func b2i(b bool) int64 {
+	if b {
+		return 1
+	}
+	return 0
+}
+
 // NewManager builds a Manager. httpClient should be the DoH-backed client.
 func NewManager(st *store.Store, registry *source.Registry, httpClient *http.Client, dataDir string, logger *slog.Logger) *Manager {
 	return &Manager{
@@ -97,6 +105,10 @@ func (m *Manager) InstallExtension(ctx context.Context, entry IndexEntry, repoID
 		version = "0.0.1"
 	}
 	sourceURL := entry.Code
+	var icon *string
+	if entry.Icon != "" {
+		icon = &entry.Icon
+	}
 
 	ext, err := m.st.Write().UpsertExtensionByExtID(ctx, store.UpsertExtensionByExtIDParams{
 		Uuid:      uuid.NewString(),
@@ -110,29 +122,91 @@ func (m *Manager) InstallExtension(ctx context.Context, entry IndexEntry, repoID
 		Payload:   &payload,
 		Enabled:   1,
 		IsBuiltin: 0,
+		Nsfw:      b2i(entry.NSFW),
+		Icon:      icon,
 	})
 	if err != nil {
 		return store.Extension{}, fmt.Errorf("install %s: upsert: %w", entry.ID, err)
+	}
+	if err := m.registerProvider(ext); err != nil {
+		m.logger.Warn("extension: register after install failed", "id", entry.ID, "err", err)
 	}
 	m.logger.Info("extension installed", "id", entry.ID, "name", entry.Name, "version", version)
 	return ext, nil
 }
 
-// EnableExtension sets the enabled flag and, if loaded, registers the provider.
-func (m *Manager) EnableExtension(ctx context.Context, dbID int64) error {
-	return m.st.Write().SetExtensionEnabled(ctx, store.SetExtensionEnabledParams{
-		ID:      dbID,
-		Enabled: 1,
-	})
+// registerProvider compiles a stored extension's JS payload into a JSProvider
+// and registers it into the source registry. No-op for rows without a payload.
+func (m *Manager) registerProvider(row store.Extension) error {
+	if row.Payload == nil || *row.Payload == "" {
+		return fmt.Errorf("extension %s: no payload", row.ExtID)
+	}
+	p, err := NewJSProvider(row.ExtID, row.Name, *row.Payload, m.httpClient, m.logger)
+	if err != nil {
+		return err
+	}
+	m.registry.Register(p)
+	return nil
 }
 
-// DisableExtension clears the enabled flag. The provider stays in the registry
-// until next boot (runtime disable-without-restart is a future extension).
+// EnableExtension sets the enabled flag and registers the provider so the
+// source becomes live without a restart.
+func (m *Manager) EnableExtension(ctx context.Context, dbID int64) error {
+	if err := m.st.Write().SetExtensionEnabled(ctx, store.SetExtensionEnabledParams{
+		ID:      dbID,
+		Enabled: 1,
+	}); err != nil {
+		return err
+	}
+	row, err := m.st.Read().GetExtension(ctx, dbID)
+	if err != nil {
+		m.logger.Warn("extension: load after enable failed", "id", dbID, "err", err)
+		return nil
+	}
+	if err := m.registerProvider(row); err != nil {
+		m.logger.Warn("extension: register after enable failed", "id", row.ExtID, "err", err)
+	}
+	return nil
+}
+
+// DisableExtension clears the enabled flag and unregisters the provider so the
+// source stops serving immediately.
 func (m *Manager) DisableExtension(ctx context.Context, dbID int64) error {
-	return m.st.Write().SetExtensionEnabled(ctx, store.SetExtensionEnabledParams{
+	if err := m.st.Write().SetExtensionEnabled(ctx, store.SetExtensionEnabledParams{
 		ID:      dbID,
 		Enabled: 0,
-	})
+	}); err != nil {
+		return err
+	}
+	if row, err := m.st.Read().GetExtension(ctx, dbID); err == nil {
+		m.registry.Unregister(row.ExtID)
+	}
+	return nil
+}
+
+// UninstallExtension unregisters the provider and deletes its row (guarded to
+// non-builtin rows by the DeleteExtension query).
+func (m *Manager) UninstallExtension(ctx context.Context, dbID int64) error {
+	row, err := m.st.Read().GetExtension(ctx, dbID)
+	if err != nil {
+		return err
+	}
+	m.registry.Unregister(row.ExtID)
+	return m.st.Write().DeleteExtension(ctx, dbID)
+}
+
+// DeleteRepo unregisters and deletes every extension belonging to the repo,
+// then deletes the repo row.
+func (m *Manager) DeleteRepo(ctx context.Context, repoID int64) error {
+	rows, err := m.st.Read().ListExtensionsByRepo(ctx, &repoID)
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		m.registry.Unregister(row.ExtID)
+		_ = m.st.Write().DeleteExtension(ctx, row.ID)
+	}
+	return m.st.Write().DeleteExtensionRepo(ctx, repoID)
 }
 
 // SyncRepo fetches the repo's index and upserts all torrent extensions.

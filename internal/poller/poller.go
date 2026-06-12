@@ -25,6 +25,12 @@ import (
 // queuedStatus is the status a freshly-enqueued episode row gets.
 const queuedStatus = "queued"
 
+// errProviderNotRegistered marks a feed whose provider id has no registered
+// provider (or whose provider id is empty). The poller skips such feeds quietly
+// rather than error-marking them, so a series tracked before any source is
+// installed waits silently for one to arrive.
+var errProviderNotRegistered = errors.New("poller: feed provider not registered")
+
 // defaultInterval is how often the poller wakes to look for due feeds. Each feed
 // also has its own interval_seconds; this is just the scheduler tick.
 const defaultInterval = 60 * time.Second
@@ -163,6 +169,11 @@ func (p *Poller) PollDue(ctx context.Context) {
 func (p *Poller) pollFeed(ctx context.Context, feed store.Feed) error {
 	provider, err := p.providerFor(feed)
 	if err != nil {
+		if errors.Is(err, errProviderNotRegistered) {
+			p.logger.Debug("poller: skipping feed with unregistered provider",
+				"feed", feed.ID, "site", deref(feed.Site))
+			return nil
+		}
 		return p.markError(ctx, feed, err)
 	}
 
@@ -331,30 +342,20 @@ func (p *Poller) markError(ctx context.Context, feed store.Feed, cause error) er
 	return cause
 }
 
-// providerFor maps a feed to its provider. feeds.site holds the provider id; we
-// fall back to inferring it from the URL host so a hand-entered feed still works.
+// providerFor maps a feed to its provider. feeds.site holds the provider id (an
+// extension ext_id). A feed with no site, or a site whose provider isn't
+// registered, returns errProviderNotRegistered so the caller skips it quietly.
 func (p *Poller) providerFor(feed store.Feed) (source.Provider, error) {
 	id := ""
 	if feed.Site != nil {
-		id = strings.ToLower(strings.TrimSpace(*feed.Site))
+		id = strings.TrimSpace(*feed.Site)
 	}
 	if id == "" {
-		id = inferProvider(feed.Url)
+		return nil, errProviderNotRegistered
 	}
-	if id == "" {
-		return nil, errors.New("feed has no provider site and none could be inferred from its URL")
+	provider, ok := p.registry.Get(id)
+	if !ok {
+		return nil, errProviderNotRegistered
 	}
-	return p.registry.MustGet(id)
-}
-
-func inferProvider(url string) string {
-	u := strings.ToLower(url)
-	switch {
-	case strings.Contains(u, "subsplease"):
-		return source.ProviderSubsPlease
-	case strings.Contains(u, "nyaa"):
-		return source.ProviderNyaa
-	default:
-		return ""
-	}
+	return provider, nil
 }

@@ -12,11 +12,11 @@ import (
 const createExtension = `-- name: CreateExtension :one
 INSERT INTO extensions (
     uuid, repo_id, ext_id, name, type, lang, version, source_url,
-    payload, enabled, is_builtin, settings
+    payload, enabled, is_builtin, settings, nsfw, icon
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
-RETURNING id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, added_at, modified_at
+RETURNING id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at
 `
 
 type CreateExtensionParams struct {
@@ -32,6 +32,8 @@ type CreateExtensionParams struct {
 	Enabled   int64   `json:"enabled"`
 	IsBuiltin int64   `json:"is_builtin"`
 	Settings  *string `json:"settings"`
+	Nsfw      int64   `json:"nsfw"`
+	Icon      *string `json:"icon"`
 }
 
 func (q *Queries) CreateExtension(ctx context.Context, arg CreateExtensionParams) (Extension, error) {
@@ -48,6 +50,8 @@ func (q *Queries) CreateExtension(ctx context.Context, arg CreateExtensionParams
 		arg.Enabled,
 		arg.IsBuiltin,
 		arg.Settings,
+		arg.Nsfw,
+		arg.Icon,
 	)
 	var i Extension
 	err := row.Scan(
@@ -64,6 +68,8 @@ func (q *Queries) CreateExtension(ctx context.Context, arg CreateExtensionParams
 		&i.Enabled,
 		&i.IsBuiltin,
 		&i.Settings,
+		&i.Nsfw,
+		&i.Icon,
 		&i.AddedAt,
 		&i.ModifiedAt,
 	)
@@ -122,7 +128,7 @@ func (q *Queries) DeleteExtensionRepo(ctx context.Context, id int64) error {
 }
 
 const getExtension = `-- name: GetExtension :one
-SELECT id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, added_at, modified_at FROM extensions WHERE id = ?
+SELECT id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at FROM extensions WHERE id = ?
 `
 
 func (q *Queries) GetExtension(ctx context.Context, id int64) (Extension, error) {
@@ -142,6 +148,8 @@ func (q *Queries) GetExtension(ctx context.Context, id int64) (Extension, error)
 		&i.Enabled,
 		&i.IsBuiltin,
 		&i.Settings,
+		&i.Nsfw,
+		&i.Icon,
 		&i.AddedAt,
 		&i.ModifiedAt,
 	)
@@ -149,7 +157,7 @@ func (q *Queries) GetExtension(ctx context.Context, id int64) (Extension, error)
 }
 
 const getExtensionByExtID = `-- name: GetExtensionByExtID :one
-SELECT id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, added_at, modified_at FROM extensions WHERE ext_id = ?
+SELECT id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at FROM extensions WHERE ext_id = ?
 `
 
 func (q *Queries) GetExtensionByExtID(ctx context.Context, extID string) (Extension, error) {
@@ -169,6 +177,8 @@ func (q *Queries) GetExtensionByExtID(ctx context.Context, extID string) (Extens
 		&i.Enabled,
 		&i.IsBuiltin,
 		&i.Settings,
+		&i.Nsfw,
+		&i.Icon,
 		&i.AddedAt,
 		&i.ModifiedAt,
 	)
@@ -249,7 +259,7 @@ func (q *Queries) ListEnabledExtensionRepos(ctx context.Context) ([]ExtensionRep
 }
 
 const listEnabledExtensionsByType = `-- name: ListEnabledExtensionsByType :many
-SELECT id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, added_at, modified_at FROM extensions WHERE enabled = 1 AND type = ? ORDER BY name ASC
+SELECT id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at FROM extensions WHERE enabled = 1 AND type = ? ORDER BY name ASC
 `
 
 func (q *Queries) ListEnabledExtensionsByType(ctx context.Context, type_ string) ([]Extension, error) {
@@ -275,6 +285,8 @@ func (q *Queries) ListEnabledExtensionsByType(ctx context.Context, type_ string)
 			&i.Enabled,
 			&i.IsBuiltin,
 			&i.Settings,
+			&i.Nsfw,
+			&i.Icon,
 			&i.AddedAt,
 			&i.ModifiedAt,
 		); err != nil {
@@ -327,7 +339,7 @@ func (q *Queries) ListExtensionRepos(ctx context.Context) ([]ExtensionRepo, erro
 }
 
 const listExtensions = `-- name: ListExtensions :many
-SELECT id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, added_at, modified_at FROM extensions ORDER BY name ASC
+SELECT id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at FROM extensions ORDER BY name ASC
 `
 
 func (q *Queries) ListExtensions(ctx context.Context) ([]Extension, error) {
@@ -353,6 +365,8 @@ func (q *Queries) ListExtensions(ctx context.Context) ([]Extension, error) {
 			&i.Enabled,
 			&i.IsBuiltin,
 			&i.Settings,
+			&i.Nsfw,
+			&i.Icon,
 			&i.AddedAt,
 			&i.ModifiedAt,
 		); err != nil {
@@ -370,7 +384,7 @@ func (q *Queries) ListExtensions(ctx context.Context) ([]Extension, error) {
 }
 
 const listExtensionsByRepo = `-- name: ListExtensionsByRepo :many
-SELECT id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, added_at, modified_at FROM extensions WHERE repo_id = ? ORDER BY name ASC
+SELECT id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at FROM extensions WHERE repo_id = ? ORDER BY name ASC
 `
 
 func (q *Queries) ListExtensionsByRepo(ctx context.Context, repoID *int64) ([]Extension, error) {
@@ -396,6 +410,8 @@ func (q *Queries) ListExtensionsByRepo(ctx context.Context, repoID *int64) ([]Ex
 			&i.Enabled,
 			&i.IsBuiltin,
 			&i.Settings,
+			&i.Nsfw,
+			&i.Icon,
 			&i.AddedAt,
 			&i.ModifiedAt,
 		); err != nil {
@@ -466,9 +482,9 @@ func (q *Queries) UpdateExtensionSettings(ctx context.Context, arg UpdateExtensi
 const upsertExtensionByExtID = `-- name: UpsertExtensionByExtID :one
 INSERT INTO extensions (
     uuid, repo_id, ext_id, name, type, lang, version, source_url,
-    payload, enabled, is_builtin, settings
+    payload, enabled, is_builtin, settings, nsfw, icon
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 ON CONFLICT (ext_id) DO UPDATE SET
     repo_id = excluded.repo_id,
@@ -479,8 +495,10 @@ ON CONFLICT (ext_id) DO UPDATE SET
     source_url = excluded.source_url,
     payload = excluded.payload,
     settings = excluded.settings,
+    nsfw = excluded.nsfw,
+    icon = excluded.icon,
     modified_at = unixepoch()
-RETURNING id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, added_at, modified_at
+RETURNING id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at
 `
 
 type UpsertExtensionByExtIDParams struct {
@@ -496,6 +514,8 @@ type UpsertExtensionByExtIDParams struct {
 	Enabled   int64   `json:"enabled"`
 	IsBuiltin int64   `json:"is_builtin"`
 	Settings  *string `json:"settings"`
+	Nsfw      int64   `json:"nsfw"`
+	Icon      *string `json:"icon"`
 }
 
 func (q *Queries) UpsertExtensionByExtID(ctx context.Context, arg UpsertExtensionByExtIDParams) (Extension, error) {
@@ -512,6 +532,8 @@ func (q *Queries) UpsertExtensionByExtID(ctx context.Context, arg UpsertExtensio
 		arg.Enabled,
 		arg.IsBuiltin,
 		arg.Settings,
+		arg.Nsfw,
+		arg.Icon,
 	)
 	var i Extension
 	err := row.Scan(
@@ -528,6 +550,8 @@ func (q *Queries) UpsertExtensionByExtID(ctx context.Context, arg UpsertExtensio
 		&i.Enabled,
 		&i.IsBuiltin,
 		&i.Settings,
+		&i.Nsfw,
+		&i.Icon,
 		&i.AddedAt,
 		&i.ModifiedAt,
 	)

@@ -25,7 +25,7 @@ func (h *Handler) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "failed to read settings")
 		return
 	}
-	WriteJSON(w, http.StatusOK, set)
+	WriteJSON(w, http.StatusOK, toSettingsResponse(set))
 }
 
 // handlePutSettings replaces the singleton settings row.
@@ -58,11 +58,13 @@ func (h *Handler) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		YtdlpPath:           req.YtdlpPath,
 		Port:                req.Port,
 		DohEnabled:          boolToInt64(req.DohEnabled),
+		SetupCompleted:      boolToInt64(req.SetupCompleted),
+		ShowNsfw:            boolToInt64(req.ShowNsfw),
 	})
 	if err != nil {
 		h.logger.Error("update settings", "err", err)
 		WriteError(w, http.StatusInternalServerError, "failed to update settings")
 		return
 	}
-	WriteJSON(w, http.StatusOK, set)
+	WriteJSON(w, http.StatusOK, toSettingsResponse(set))
 }

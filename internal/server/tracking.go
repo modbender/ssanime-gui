@@ -23,11 +23,6 @@ const (
 	userStatusDropped = "dropped"
 )
 
-// defaultTrackProvider is the provider site stamped on an auto-created feed. The
-// poller resolves it via providerFor; SmartSearch is driven from series metadata,
-// so the feed needs no structured URL.
-const defaultTrackProvider = source.ProviderSubsPlease
-
 // handleGetTracked groups tracked series into the home/Downloads buckets:
 // in_progress (Active), completed, paused, dropped. A manual user_status override
 // wins the bucket; otherwise the derived status decides. Series actively
@@ -219,7 +214,12 @@ func (h *Handler) ensureFeed(ctx context.Context, seriesID int64) (int64, error)
 		}
 		return feeds[0].ID, nil
 	}
-	site := defaultTrackProvider
+	site := ""
+	if h.registry != nil {
+		if ids := h.registry.List(); len(ids) > 0 {
+			site = ids[0]
+		}
+	}
 	feed, err := h.store.Write().CreateFeed(ctx, store.CreateFeedParams{
 		Uuid:            mustUUID(),
 		SeriesID:        seriesID,

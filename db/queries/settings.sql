@@ -20,7 +20,8 @@ UPDATE settings SET
     download_root = ?, encoded_root = ?, cleanup_policy = ?, processed_dir = ?,
     naming_template = ?, download_backend = ?, default_profile_id = ?,
     concurrency_download = ?, concurrency_encode = ?, ffmpeg_path = ?,
-    ytdlp_path = ?, port = ?, doh_enabled = ?, modified_at = unixepoch()
+    ytdlp_path = ?, port = ?, doh_enabled = ?, setup_completed = ?,
+    show_nsfw = ?, modified_at = unixepoch()
 WHERE id = 1
 RETURNING *;
 

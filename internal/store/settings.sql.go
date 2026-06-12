@@ -10,7 +10,7 @@ import (
 )
 
 const getSettings = `-- name: GetSettings :one
-SELECT id, download_root, encoded_root, cleanup_policy, processed_dir, naming_template, download_backend, default_profile_id, concurrency_download, concurrency_encode, ffmpeg_path, ytdlp_path, port, doh_enabled, added_at, modified_at FROM settings WHERE id = 1
+SELECT id, download_root, encoded_root, cleanup_policy, processed_dir, naming_template, download_backend, default_profile_id, concurrency_download, concurrency_encode, ffmpeg_path, ytdlp_path, port, doh_enabled, added_at, modified_at, setup_completed, show_nsfw FROM settings WHERE id = 1
 `
 
 func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
@@ -33,6 +33,8 @@ func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
 		&i.DohEnabled,
 		&i.AddedAt,
 		&i.ModifiedAt,
+		&i.SetupCompleted,
+		&i.ShowNsfw,
 	)
 	return i, err
 }
@@ -46,7 +48,7 @@ INSERT INTO settings (
 ) VALUES (
     1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
-RETURNING id, download_root, encoded_root, cleanup_policy, processed_dir, naming_template, download_backend, default_profile_id, concurrency_download, concurrency_encode, ffmpeg_path, ytdlp_path, port, doh_enabled, added_at, modified_at
+RETURNING id, download_root, encoded_root, cleanup_policy, processed_dir, naming_template, download_backend, default_profile_id, concurrency_download, concurrency_encode, ffmpeg_path, ytdlp_path, port, doh_enabled, added_at, modified_at, setup_completed, show_nsfw
 `
 
 type InsertSettingsParams struct {
@@ -99,6 +101,8 @@ func (q *Queries) InsertSettings(ctx context.Context, arg InsertSettingsParams) 
 		&i.DohEnabled,
 		&i.AddedAt,
 		&i.ModifiedAt,
+		&i.SetupCompleted,
+		&i.ShowNsfw,
 	)
 	return i, err
 }
@@ -137,9 +141,10 @@ UPDATE settings SET
     download_root = ?, encoded_root = ?, cleanup_policy = ?, processed_dir = ?,
     naming_template = ?, download_backend = ?, default_profile_id = ?,
     concurrency_download = ?, concurrency_encode = ?, ffmpeg_path = ?,
-    ytdlp_path = ?, port = ?, doh_enabled = ?, modified_at = unixepoch()
+    ytdlp_path = ?, port = ?, doh_enabled = ?, setup_completed = ?,
+    show_nsfw = ?, modified_at = unixepoch()
 WHERE id = 1
-RETURNING id, download_root, encoded_root, cleanup_policy, processed_dir, naming_template, download_backend, default_profile_id, concurrency_download, concurrency_encode, ffmpeg_path, ytdlp_path, port, doh_enabled, added_at, modified_at
+RETURNING id, download_root, encoded_root, cleanup_policy, processed_dir, naming_template, download_backend, default_profile_id, concurrency_download, concurrency_encode, ffmpeg_path, ytdlp_path, port, doh_enabled, added_at, modified_at, setup_completed, show_nsfw
 `
 
 type UpdateSettingsParams struct {
@@ -156,6 +161,8 @@ type UpdateSettingsParams struct {
 	YtdlpPath           *string `json:"ytdlp_path"`
 	Port                int64   `json:"port"`
 	DohEnabled          int64   `json:"doh_enabled"`
+	SetupCompleted      int64   `json:"setup_completed"`
+	ShowNsfw            int64   `json:"show_nsfw"`
 }
 
 func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (Setting, error) {
@@ -173,6 +180,8 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		arg.YtdlpPath,
 		arg.Port,
 		arg.DohEnabled,
+		arg.SetupCompleted,
+		arg.ShowNsfw,
 	)
 	var i Setting
 	err := row.Scan(
@@ -192,6 +201,8 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		&i.DohEnabled,
 		&i.AddedAt,
 		&i.ModifiedAt,
+		&i.SetupCompleted,
+		&i.ShowNsfw,
 	)
 	return i, err
 }

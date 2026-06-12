@@ -1,19 +1,27 @@
 package source
 
 import (
-	"context"
 	"testing"
 )
 
+// loadFrierenTorrents builds the release set the autoselect tests rank: two
+// trusted-group 1080p copies of ep 28 (SubsPlease lower seeders, Erai-raws
+// higher), a 720p copy, a 1080p batch, and an unrelated high-seeder 1080p show
+// that the title filter must reject.
 func loadFrierenTorrents(t *testing.T) []*AnimeTorrent {
 	t.Helper()
-	srv := fixtureServer(t, "nyaa_frieren.xml")
-	n := NewNyaa(srv.Client())
-	got, err := n.fetch(context.Background(), srv.URL)
-	if err != nil {
-		t.Fatalf("fetch: %v", err)
+	return []*AnimeTorrent{
+		{Name: "[SubsPlease] Sousou no Frieren - 28 (1080p)", ReleaseGroup: "SubsPlease",
+			Resolution: "1080p", EpisodeNumber: 28, IsBatch: false, Seeders: 1542},
+		{Name: "[Erai-raws] Sousou no Frieren - 28 (1080p)", ReleaseGroup: "Erai-raws",
+			Resolution: "1080p", EpisodeNumber: 28, IsBatch: false, Seeders: 2100},
+		{Name: "[SubsPlease] Sousou no Frieren - 28 (720p)", ReleaseGroup: "SubsPlease",
+			Resolution: "720p", EpisodeNumber: 28, IsBatch: false, Seeders: 480},
+		{Name: "[SubsPlease] Sousou no Frieren (01-28) (1080p) [Batch]", ReleaseGroup: "SubsPlease",
+			Resolution: "1080p", EpisodeNumber: -1, IsBatch: true, Seeders: 900},
+		{Name: "[SubsPlease] Some Other Show - 05 (1080p)", ReleaseGroup: "SubsPlease",
+			Resolution: "1080p", EpisodeNumber: 5, IsBatch: false, Seeders: 9000},
 	}
-	return got
 }
 
 func frierenMedia() Media {

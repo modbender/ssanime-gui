@@ -172,11 +172,13 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 			r.Post("/", h.handleCreateExtensionRepo)
 			r.Route("/{id}", func(r chi.Router) {
 				r.Post("/install", h.handleInstallFromRepo)
+				r.Delete("/", h.handleDeleteExtensionRepo)
 			})
 		})
 		api.Get("/extensions", h.handleListExtensions)
 		api.Post("/extensions/{id}/enable", h.handleEnableExtension)
 		api.Post("/extensions/{id}/disable", h.handleDisableExtension)
+		api.Delete("/extensions/{id}", h.handleUninstallExtension)
 	})
 
 	// Everything not under /api falls through to the embedded SPA.

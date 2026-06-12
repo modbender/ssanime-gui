@@ -109,23 +109,22 @@ func (p *JSProvider) GetTorrentInfoHash(_ context.Context, t *source.AnimeTorren
 	return "", fmt.Errorf("extension %s: no info hash for torrent %q", p.id, t.Name)
 }
 
-// callAndMarshal tries each method name in order, returning on the first that
-// exists on the JS object.
+// callAndMarshal calls the first method name that exists on the JS object and
+// returns its result. The method names are alternate spellings of the same
+// entry point (Hayase "single" vs hibike "smartSearch"/"search") that all take
+// the same options object — so only an absent method is skipped. A method that
+// runs and rejects returns its error directly rather than falling through to a
+// differently-shaped method, which would mask the real failure.
 func (p *JSProvider) callAndMarshal(ctx context.Context, args interface{}, methods ...string) ([]*source.AnimeTorrent, error) {
-	var lastErr error
 	for _, m := range methods {
 		raw, err := p.vm.CallMethod(ctx, m, args)
 		if err != nil {
 			if strings.Contains(err.Error(), "not found or not a function") {
 				continue
 			}
-			lastErr = err
-			continue
+			return nil, err
 		}
 		return marshalTorrents(p.id, raw)
-	}
-	if lastErr != nil {
-		return nil, lastErr
 	}
 	return nil, fmt.Errorf("extension %s: none of methods %v found", p.id, methods)
 }
@@ -177,7 +176,6 @@ func marshalTorrents(providerID string, raw interface{}) ([]*source.AnimeTorrent
 		t.InfoHash = firstNonEmpty(it.InfoHash, it.Hash)
 		t.Resolution = it.Resolution
 		t.ReleaseGroup = it.ReleaseGroup
-		t.EpisodeNumber = -1
 
 		// If link is a magnet URI, move it to Magnet.
 		if strings.HasPrefix(t.Link, "magnet:") && t.Magnet == "" {
@@ -189,6 +187,10 @@ func marshalTorrents(providerID string, raw interface{}) ([]*source.AnimeTorrent
 		} else {
 			t.Seeders = -1
 		}
+
+		// Backfill release-group/resolution/episode/info-hash from the name via
+		// habari for anything the JS left empty, and ensure a usable magnet.
+		source.Enrich(t)
 
 		out = append(out, t)
 	}
