@@ -36,6 +36,13 @@ type DiscoveryProvider interface {
 	Snapshot() map[discovery.FeedKey][]anilist.Media
 }
 
+// LogStore supplies recent formatted log lines to GET /api/logs. The logging
+// package's *Ring satisfies it, so the historic Logs view reads exactly the lines
+// written to the on-disk log file.
+type LogStore interface {
+	Lines(limit int) []string
+}
+
 // Handler carries the shared dependencies every route needs and registers the
 // route table.
 type Handler struct {
@@ -50,7 +57,7 @@ type Handler struct {
 	discovery     DiscoveryProvider
 	anilistDetail AnilistDetailFetcher
 	anizip        AnizipFetcher
-	logs          *RingBuffer
+	logs          LogStore
 
 	// onShutdownRequest is fired (once, asynchronously) when a newer build POSTs
 	// /api/shutdown to take over the port. nil in tests / when unset.
@@ -68,6 +75,7 @@ type Config struct {
 	Discovery     DiscoveryProvider
 	AnilistDetail AnilistDetailFetcher
 	Anizip        AnizipFetcher
+	Logs          LogStore
 
 	// OnShutdownRequest is invoked once when a newer build POSTs /api/shutdown to
 	// take over the port. The daemon wires its graceful-shutdown trigger here; the
@@ -81,7 +89,6 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 	if logger == nil {
 		logger = slog.Default()
 	}
-	ring := NewRingBuffer(500)
 	h := &Handler{
 		store:         st,
 		hub:           hub,
@@ -94,7 +101,7 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 		discovery:     cfg.Discovery,
 		anilistDetail: cfg.AnilistDetail,
 		anizip:        cfg.Anizip,
-		logs:          ring,
+		logs:          cfg.Logs,
 
 		onShutdownRequest: cfg.OnShutdownRequest,
 	}
