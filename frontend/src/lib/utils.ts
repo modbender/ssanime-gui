@@ -171,15 +171,20 @@ export function statusColor(status: string): string {
 }
 
 /**
- * The user-facing bucket of a subscribed series. `Completed` is derived (finished
- * airing + all episodes archived) and wins over the watch status; otherwise the
- * watch status (`watching | on_hold | dropped`) is shown. Returns one of
- * `completed | watching | on_hold | dropped`, which feed the label/color helpers.
+ * The user-facing bucket of a series. A subscribed series buckets by `Completed`
+ * (derived: finished airing + all episodes archived, wins over the watch status)
+ * else its watch status (`watching | on_hold | dropped`). An UNsubscribed series
+ * that still has episodes (manually downloaded, never tracked) buckets as
+ * `downloaded`. Returns one of `completed | watching | on_hold | dropped |
+ * downloaded`, which feed the label/color helpers.
  */
 export function watchBucket(s: {
   status?: WatchStatus | null
   derived_status?: string
-}): 'completed' | WatchStatus {
+  subscribed?: boolean
+  episode_total?: number
+}): 'completed' | 'downloaded' | WatchStatus {
+  if (!s.subscribed && (s.episode_total ?? 0) > 0) return 'downloaded'
   if (s.derived_status === 'completed') return 'completed'
   return s.status ?? 'watching'
 }
@@ -189,6 +194,7 @@ export function watchStatusColor(bucket: string): string {
   switch (bucket) {
     case 'completed': return 'bg-green-500/15 text-green-300 border-green-500/30'
     case 'watching': return 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+    case 'downloaded': return 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
     case 'on_hold': return 'bg-amber-500/15 text-amber-300 border-amber-500/30'
     case 'dropped': return 'bg-rose-500/15 text-rose-300 border-rose-500/30'
     default: return 'bg-gray-500/15 text-gray-400 border-gray-500/30'
@@ -200,6 +206,7 @@ export function watchStatusLabel(bucket: string): string {
   const map: Record<string, string> = {
     completed: 'Completed',
     watching: 'Watching',
+    downloaded: 'Downloaded',
     on_hold: 'On Hold',
     dropped: 'Dropped',
   }

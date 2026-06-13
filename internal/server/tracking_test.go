@@ -103,33 +103,6 @@ func TestTrackIdempotent(t *testing.T) {
 	}
 }
 
-// TestPauseDropResumeStatus verifies the legacy pause/drop/resume aliases write
-// the expected watch_status values (pause->on_hold, drop->dropped, resume->watching).
-func TestPauseDropResumeStatus(t *testing.T) {
-	srv, st := newTrackingServer(t)
-	s := addTrackedSeries(t, st, "Override Me", 555)
-	id := itoa(int(s.ID))
-
-	cases := []struct {
-		path string
-		want string
-	}{
-		{"/api/series/" + id + "/pause", watchStatusOnHold},
-		{"/api/series/" + id + "/drop", watchStatusDropped},
-		{"/api/series/" + id + "/resume", watchStatusWatching},
-	}
-	for _, c := range cases {
-		rec := postJSON(t, srv, c.path, nil)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("%s: status=%d body=%s", c.path, rec.Code, rec.Body.String())
-		}
-		got, _ := st.Read().GetSeries(context.Background(), s.ID)
-		if got.WatchStatus != c.want {
-			t.Errorf("%s: watch_status = %q, want %q", c.path, got.WatchStatus, c.want)
-		}
-	}
-}
-
 // TestSetSeriesStatus verifies POST /api/series/{id}/status writes the watch
 // status, surfaces it in the SeriesProgress "status" field, and rejects invalid
 // values with 400.
@@ -198,7 +171,7 @@ func TestPausedSeriesSkippedByPoller(t *testing.T) {
 	}
 }
 
-// TestTrackedBuckets verifies /api/tracked groups by status, honoring user_status
+// TestTrackedBuckets verifies /api/tracked groups by status, honoring watch_status
 // for paused/dropped and derivedStatus for the rest.
 func TestTrackedBuckets(t *testing.T) {
 	srv, st := newTrackingServer(t)
@@ -236,9 +209,10 @@ func TestTrackedBuckets(t *testing.T) {
 	}
 }
 
-// TestManualEnqueueReengages verifies that manually enqueuing an episode clears
-// a paused series' user_status (→ Active).
-func TestManualEnqueueReengages(t *testing.T) {
+// TestManualEnqueueDoesNotReengage verifies that manually enqueuing an episode
+// via the encode path leaves the series' watch status untouched: episode actions
+// are decoupled from subscription, so an On Hold series stays On Hold.
+func TestManualEnqueueDoesNotReengage(t *testing.T) {
 	srv, st := newTrackingServer(t)
 	ctx := context.Background()
 	s := addTrackedSeries(t, st, "Reengage Me", 42)
@@ -260,8 +234,8 @@ func TestManualEnqueueReengages(t *testing.T) {
 	}
 
 	updated, _ := st.Read().GetSeries(ctx, s.ID)
-	if updated.WatchStatus != watchStatusWatching {
-		t.Errorf("watch_status = %q, want watching after manual enqueue", updated.WatchStatus)
+	if updated.WatchStatus != watchStatusOnHold {
+		t.Errorf("watch_status = %q, want on_hold (manual enqueue must not re-engage)", updated.WatchStatus)
 	}
 }
 
@@ -287,15 +261,21 @@ func TestDiscoveryColdCacheReturnsEmptyRows(t *testing.T) {
 	}
 }
 
-// TestDownloadAvailableCreatesAndReengages verifies POST
-// /api/series/{id}/available/download on a paused series: it creates the queued
-// episode for the requested number, clears user_status (→ Active), and is
-// idempotent (a second identical call reuses the row, not a duplicate).
-func TestDownloadAvailableCreatesAndReengages(t *testing.T) {
+// downloadResult is the {series_id, episode_id} body of the anilist-keyed download.
+type downloadResult struct {
+	SeriesID  int64 `json:"series_id"`
+	EpisodeID int64 `json:"episode_id"`
+}
+
+// TestAnilistDownloadDecoupled verifies POST /api/anilist/{id}/available/download
+// finds-or-creates the queued episode for the requested number, does NOT mutate
+// subscription/watch state (decoupled from subscription), and is idempotent.
+func TestAnilistDownloadDecoupled(t *testing.T) {
 	srv, st := newTrackingServer(t)
 	ctx := context.Background()
 	s := addTrackedSeries(t, st, "Available DL", 7777)
 
+	// On-hold beforehand: a manual download must leave watch_status untouched now.
 	if err := st.Write().SetSeriesWatchStatus(ctx, store.SetSeriesWatchStatusParams{ID: s.ID, WatchStatus: watchStatusOnHold}); err != nil {
 		t.Fatalf("on_hold: %v", err)
 	}
@@ -305,47 +285,50 @@ func TestDownloadAvailableCreatesAndReengages(t *testing.T) {
 		Number:     3,
 		Resolution: "1080p",
 	}
-	rec := postJSON(t, srv, "/api/series/"+itoa(int(s.ID))+"/available/download", body)
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("download available: want 201, got %d; body=%s", rec.Code, rec.Body.String())
+	rec := postJSON(t, srv, "/api/anilist/7777/available/download", body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("download available: want 200, got %d; body=%s", rec.Code, rec.Body.String())
 	}
-	resp := decodeBody[EpisodeDetail](t, rec)
+	resp := decodeBody[downloadResult](t, rec)
 	if resp.Data == nil {
 		t.Fatalf("no data: %s", rec.Body.String())
 	}
-	if resp.Data.Status != "queued" {
-		t.Errorf("status = %q, want queued", resp.Data.Status)
-	}
-	if resp.Data.EpisodeNo == nil || *resp.Data.EpisodeNo != 3 {
-		t.Errorf("episode_no = %v, want 3", resp.Data.EpisodeNo)
-	}
-	if resp.Data.Resolution == nil || *resp.Data.Resolution != 1080 {
-		t.Errorf("resolution = %v, want 1080", resp.Data.Resolution)
+	if resp.Data.SeriesID != s.ID || resp.Data.EpisodeID == 0 {
+		t.Fatalf("unexpected result: %+v (want series_id=%d, episode_id>0)", *resp.Data, s.ID)
 	}
 
-	// The magnet must be stored in magnet (not source_url) per the poller mapping.
-	created, err := st.Read().GetEpisode(ctx, resp.Data.ID)
+	created, err := st.Read().GetEpisode(ctx, resp.Data.EpisodeID)
 	if err != nil {
 		t.Fatalf("get created episode: %v", err)
 	}
+	if created.Status != "queued" {
+		t.Errorf("status = %q, want queued", created.Status)
+	}
+	if created.EpisodeNo == nil || *created.EpisodeNo != 3 {
+		t.Errorf("episode_no = %v, want 3", created.EpisodeNo)
+	}
+	if created.Resolution == nil || *created.Resolution != 1080 {
+		t.Errorf("resolution = %v, want 1080", created.Resolution)
+	}
+	// The magnet must be stored in magnet (not source_url) per the poller mapping.
 	if created.Magnet == nil || *created.Magnet != body.SourceURL {
 		t.Errorf("magnet = %v, want %q", created.Magnet, body.SourceURL)
 	}
 
-	// The on-hold series must be re-engaged to watching.
+	// Decoupled: the on-hold series must stay on_hold and stay subscribed as it was.
 	updated, _ := st.Read().GetSeries(ctx, s.ID)
-	if updated.WatchStatus != watchStatusWatching {
-		t.Errorf("watch_status = %q, want watching after download", updated.WatchStatus)
+	if updated.WatchStatus != watchStatusOnHold {
+		t.Errorf("watch_status = %q, want on_hold (download must not re-engage)", updated.WatchStatus)
 	}
 
-	// Idempotent: a second identical call reuses the row (200) and does not add one.
-	rec2 := postJSON(t, srv, "/api/series/"+itoa(int(s.ID))+"/available/download", body)
+	// Idempotent: a second identical call reuses the row and does not add one.
+	rec2 := postJSON(t, srv, "/api/anilist/7777/available/download", body)
 	if rec2.Code != http.StatusOK {
-		t.Fatalf("second download: want 200 (existing), got %d; body=%s", rec2.Code, rec2.Body.String())
+		t.Fatalf("second download: want 200, got %d; body=%s", rec2.Code, rec2.Body.String())
 	}
-	resp2 := decodeBody[EpisodeDetail](t, rec2)
-	if resp2.Data == nil || resp2.Data.ID != resp.Data.ID {
-		t.Fatalf("idempotent call returned a different episode: %+v vs id %d", resp2.Data, resp.Data.ID)
+	resp2 := decodeBody[downloadResult](t, rec2)
+	if resp2.Data == nil || resp2.Data.EpisodeID != resp.Data.EpisodeID {
+		t.Fatalf("idempotent call returned a different episode: %+v vs id %d", resp2.Data, resp.Data.EpisodeID)
 	}
 	eps, _ := st.Read().ListEpisodesBySeries(ctx, s.ID)
 	if len(eps) != 1 {
@@ -353,19 +336,66 @@ func TestDownloadAvailableCreatesAndReengages(t *testing.T) {
 	}
 }
 
-// TestUnsubscribeCascade verifies POST /api/series/{id}/unsubscribe deletes the
-// series and all child rows (episodes, feeds, encoded_outputs, screenshots) via FK
-// cascade in one write, leaves a sibling series untouched, and returns 204.
-func TestUnsubscribeCascade(t *testing.T) {
+// TestAnilistDownloadNeverSubscribed verifies a manual download on an AniList id
+// with NO pre-existing DB row creates the series with subscribed=0 and does not
+// enable polling (no enabled feed, so the double-gate keeps it out of the poller).
+func TestAnilistDownloadNeverSubscribed(t *testing.T) {
 	srv, st := newTrackingServer(t)
 	ctx := context.Background()
 
-	// Target series with a feed, an episode, an encoded output, and a screenshot.
-	target := addTrackedSeries(t, st, "Cascade Target", 8001)
-	if _, err := st.Write().CreateFeed(ctx, store.CreateFeedParams{
+	body := DownloadAvailableRequest{
+		SourceURL: "magnet:?xt=urn:btih:freshbeef",
+		Number:    1,
+	}
+	rec := postJSON(t, srv, "/api/anilist/424242/available/download", body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("download: want 200, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+	resp := decodeBody[downloadResult](t, rec)
+	if resp.Data == nil || resp.Data.SeriesID == 0 {
+		t.Fatalf("no series created: %s", rec.Body.String())
+	}
+
+	s, err := st.Read().GetSeries(ctx, resp.Data.SeriesID)
+	if err != nil {
+		t.Fatalf("get created series: %v", err)
+	}
+	if s.Subscribed != 0 {
+		t.Errorf("subscribed = %d, want 0 (manual download must not subscribe)", s.Subscribed)
+	}
+
+	// No feed at all -> ListFeedsDueForPoll never returns it (double-gate holds).
+	now := int64(1 << 40)
+	due, _ := st.Read().ListFeedsDueForPoll(ctx, &now)
+	for _, f := range due {
+		if f.SeriesID == s.ID {
+			t.Errorf("never-subscribed series %d must not be polled", s.ID)
+		}
+	}
+}
+
+// unsubscribeResult is the {deleted, series_id} body of POST .../unsubscribe.
+type unsubscribeResult struct {
+	Deleted  bool  `json:"deleted"`
+	SeriesID int64 `json:"series_id"`
+}
+
+// TestUnsubscribeKeepsSeriesWithEpisodes verifies unsubscribe on a series WITH
+// episodes keeps the row + its episodes, clears subscribed, disables its feeds,
+// leaves watch_status untouched, and reports deleted:false.
+func TestUnsubscribeKeepsSeriesWithEpisodes(t *testing.T) {
+	srv, st := newTrackingServer(t)
+	ctx := context.Background()
+
+	target := addTrackedSeries(t, st, "Keep Me", 8001)
+	if err := st.Write().SetSeriesWatchStatus(ctx, store.SetSeriesWatchStatusParams{ID: target.ID, WatchStatus: watchStatusOnHold}); err != nil {
+		t.Fatalf("on_hold: %v", err)
+	}
+	feed, err := st.Write().CreateFeed(ctx, store.CreateFeedParams{
 		Uuid: mustUUID(), SeriesID: target.ID, Type: "scrape",
-		Url: "ssanime://test/cascade", IntervalSeconds: 3600, Enabled: 1,
-	}); err != nil {
+		Url: "ssanime://test/keep", IntervalSeconds: 3600, Enabled: 1,
+	})
+	if err != nil {
 		t.Fatalf("create feed: %v", err)
 	}
 	ep, err := st.Write().CreateEpisode(ctx, store.CreateEpisodeParams{
@@ -375,59 +405,183 @@ func TestUnsubscribeCascade(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create episode: %v", err)
 	}
-	if _, err := st.Write().CreateEncodedOutput(ctx, store.CreateEncodedOutputParams{
-		Uuid: mustUUID(), EpisodeID: ep.ID, Resolution: 1080, Status: "archived",
-	}); err != nil {
-		t.Fatalf("create encoded output: %v", err)
-	}
-	if _, err := st.Write().CreateScreenshot(ctx, store.CreateScreenshotParams{
-		Uuid: mustUUID(), EpisodeID: ep.ID, SeriesID: target.ID, Path: "/tmp/shot.png",
-	}); err != nil {
-		t.Fatalf("create screenshot: %v", err)
-	}
-
-	// A sibling series that must survive the cascade.
-	sibling := addTrackedSeries(t, st, "Cascade Sibling", 8002)
-	sibEp, err := st.Write().CreateEpisode(ctx, store.CreateEpisodeParams{
-		Uuid: mustUUID(), SeriesID: sibling.ID, SourceKind: "torrent", Status: "queued",
-		EpisodeNo: i64ptrLocal(1),
-	})
-	if err != nil {
-		t.Fatalf("create sibling episode: %v", err)
-	}
 
 	rec := postJSON(t, srv, "/api/series/"+itoa(int(target.ID))+"/unsubscribe", nil)
-	if rec.Code != http.StatusNoContent {
+	if rec.Code != http.StatusOK {
 		t.Fatalf("unsubscribe: status=%d body=%s", rec.Code, rec.Body.String())
 	}
-
-	// The series row is gone.
-	if _, err := st.Read().GetSeries(ctx, target.ID); err == nil {
-		t.Errorf("series %d still present after unsubscribe", target.ID)
+	resp := decodeBody[unsubscribeResult](t, rec)
+	if resp.Data == nil || resp.Data.Deleted {
+		t.Fatalf("expected deleted:false, got %+v", resp.Data)
 	}
-	// All children are gone (FK cascade).
+
+	got, err := st.Read().GetSeries(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("series deleted but has episodes: %v", err)
+	}
+	if got.Subscribed != 0 {
+		t.Errorf("subscribed = %d, want 0", got.Subscribed)
+	}
+	if got.WatchStatus != watchStatusOnHold {
+		t.Errorf("watch_status = %q, want on_hold (untouched)", got.WatchStatus)
+	}
+	if _, err := st.Read().GetEpisode(ctx, ep.ID); err != nil {
+		t.Errorf("episode deleted on unsubscribe: %v", err)
+	}
+	gotFeed, err := st.Read().GetFeed(ctx, feed.ID)
+	if err != nil {
+		t.Fatalf("get feed: %v", err)
+	}
+	if gotFeed.Enabled != 0 {
+		t.Errorf("feed enabled = %d, want 0 (disabled on unsubscribe)", gotFeed.Enabled)
+	}
+}
+
+// TestUnsubscribeDeletesEmptySeries verifies unsubscribe on a series with ZERO
+// episodes deletes the row (cascade) and reports deleted:true.
+func TestUnsubscribeDeletesEmptySeries(t *testing.T) {
+	srv, st := newTrackingServer(t)
+	ctx := context.Background()
+
+	target := addTrackedSeries(t, st, "Empty Target", 8003)
+	if _, err := st.Write().CreateFeed(ctx, store.CreateFeedParams{
+		Uuid: mustUUID(), SeriesID: target.ID, Type: "scrape",
+		Url: "ssanime://test/empty", IntervalSeconds: 3600, Enabled: 1,
+	}); err != nil {
+		t.Fatalf("create feed: %v", err)
+	}
+	// A sibling that must survive.
+	sibling := addTrackedSeries(t, st, "Sibling", 8004)
+
+	rec := postJSON(t, srv, "/api/series/"+itoa(int(target.ID))+"/unsubscribe", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unsubscribe: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	resp := decodeBody[unsubscribeResult](t, rec)
+	if resp.Data == nil || !resp.Data.Deleted {
+		t.Fatalf("expected deleted:true, got %+v", resp.Data)
+	}
+	if _, err := st.Read().GetSeries(ctx, target.ID); err == nil {
+		t.Errorf("empty series %d still present after unsubscribe", target.ID)
+	}
 	if feeds, _ := st.Read().ListFeedsBySeries(ctx, target.ID); len(feeds) != 0 {
 		t.Errorf("feeds not cascaded: %d remain", len(feeds))
 	}
-	if eps, _ := st.Read().ListEpisodesBySeries(ctx, target.ID); len(eps) != 0 {
-		t.Errorf("episodes not cascaded: %d remain", len(eps))
-	}
-	if outs, _ := st.Read().ListEncodedOutputsByEpisode(ctx, ep.ID); len(outs) != 0 {
-		t.Errorf("encoded_outputs not cascaded: %d remain", len(outs))
-	}
-
-	// The sibling and its episode are untouched.
 	if _, err := st.Read().GetSeries(ctx, sibling.ID); err != nil {
-		t.Errorf("sibling series deleted: %v", err)
-	}
-	if _, err := st.Read().GetEpisode(ctx, sibEp.ID); err != nil {
-		t.Errorf("sibling episode deleted: %v", err)
+		t.Errorf("sibling deleted: %v", err)
 	}
 
 	// Unsubscribing a missing series is a 404.
 	rec404 := postJSON(t, srv, "/api/series/"+itoa(int(target.ID))+"/unsubscribe", nil)
 	if rec404.Code != http.StatusNotFound {
 		t.Errorf("re-unsubscribe: status=%d, want 404", rec404.Code)
+	}
+}
+
+// TestDeleteLastEpisodeGCsUnsubscribed verifies deleting the last episode of an
+// unsubscribed series garbage-collects the series row; a subscribed series' row
+// survives the same deletion.
+func TestDeleteLastEpisodeGCsUnsubscribed(t *testing.T) {
+	srv, st := newTrackingServer(t)
+	ctx := context.Background()
+
+	// Unsubscribed series with one episode -> deleting it GCs the series.
+	unsub, err := st.Write().CreateSeries(ctx, store.CreateSeriesParams{
+		Uuid: mustUUID(), Title: "Unsub With Ep", AnilistID: i64ptrLocal(8100), Subscribed: 0,
+	})
+	if err != nil {
+		t.Fatalf("create unsub series: %v", err)
+	}
+	ep, err := st.Write().CreateEpisode(ctx, store.CreateEpisodeParams{
+		Uuid: mustUUID(), SeriesID: unsub.ID, SourceKind: "torrent", Status: "archived",
+		EpisodeNo: i64ptrLocal(1),
+	})
+	if err != nil {
+		t.Fatalf("create episode: %v", err)
+	}
+
+	// Subscribed control: its row must survive deleting its only episode.
+	sub := addTrackedSeries(t, st, "Sub With Ep", 8101)
+	subEp, err := st.Write().CreateEpisode(ctx, store.CreateEpisodeParams{
+		Uuid: mustUUID(), SeriesID: sub.ID, SourceKind: "torrent", Status: "archived",
+		EpisodeNo: i64ptrLocal(1),
+	})
+	if err != nil {
+		t.Fatalf("create sub episode: %v", err)
+	}
+
+	if rec := deleteReq(t, srv, "/api/episodes/"+itoa(int(ep.ID))); rec.Code != http.StatusOK {
+		t.Fatalf("delete unsub episode: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if _, err := st.Read().GetSeries(ctx, unsub.ID); err == nil {
+		t.Errorf("unsubscribed series %d should be GC'd after its last episode", unsub.ID)
+	}
+
+	if rec := deleteReq(t, srv, "/api/episodes/"+itoa(int(subEp.ID))); rec.Code != http.StatusOK {
+		t.Fatalf("delete sub episode: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if _, err := st.Read().GetSeries(ctx, sub.ID); err != nil {
+		t.Errorf("subscribed series %d must survive deleting its last episode: %v", sub.ID, err)
+	}
+}
+
+// TestLibraryListingIncludesDownloadedOnly verifies ?library=true returns a series
+// that is unsubscribed but has episodes, while ?subscribed=true excludes it.
+func TestLibraryListingIncludesDownloadedOnly(t *testing.T) {
+	srv, st := newTrackingServer(t)
+	ctx := context.Background()
+
+	// Downloaded-only: unsubscribed, but has an episode.
+	dl, err := st.Write().CreateSeries(ctx, store.CreateSeriesParams{
+		Uuid: mustUUID(), Title: "Downloaded Only", AnilistID: i64ptrLocal(8200), Subscribed: 0,
+	})
+	if err != nil {
+		t.Fatalf("create downloaded-only: %v", err)
+	}
+	if _, err := st.Write().CreateEpisode(ctx, store.CreateEpisodeParams{
+		Uuid: mustUUID(), SeriesID: dl.ID, SourceKind: "torrent", Status: "archived",
+		EpisodeNo: i64ptrLocal(1),
+	}); err != nil {
+		t.Fatalf("create episode: %v", err)
+	}
+	// Subscribed-no-episodes: in library too.
+	sub := addTrackedSeries(t, st, "Subscribed Empty", 8201)
+	// Bare row: unsubscribed and no episodes -> NOT in library.
+	if _, err := st.Write().CreateSeries(ctx, store.CreateSeriesParams{
+		Uuid: mustUUID(), Title: "Bare Row", AnilistID: i64ptrLocal(8202), Subscribed: 0,
+	}); err != nil {
+		t.Fatalf("create bare row: %v", err)
+	}
+
+	rec := getJSON(t, srv, "/api/series?library=true")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("library list: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	lib := decodeBody[[]SeriesProgress](t, rec)
+	if lib.Data == nil {
+		t.Fatalf("no data: %s", rec.Body.String())
+	}
+	inLib := map[int64]bool{}
+	for _, s := range *lib.Data {
+		inLib[s.ID] = true
+	}
+	if !inLib[dl.ID] {
+		t.Errorf("library must include downloaded-only series %d", dl.ID)
+	}
+	if !inLib[sub.ID] {
+		t.Errorf("library must include subscribed series %d", sub.ID)
+	}
+	if len(inLib) != 2 {
+		t.Errorf("library size = %d, want 2 (bare unsubscribed-empty row excluded)", len(inLib))
+	}
+
+	// ?subscribed=true excludes the downloaded-only series.
+	recSub := getJSON(t, srv, "/api/series?subscribed=true")
+	subResp := decodeBody[[]SeriesProgress](t, recSub)
+	for _, s := range *subResp.Data {
+		if s.ID == dl.ID {
+			t.Errorf("subscribed filter must not include downloaded-only series %d", dl.ID)
+		}
 	}
 }
 

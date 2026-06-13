@@ -135,6 +135,9 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 
 		// AniList detail (series page; tracked + untracked alike)
 		api.Get("/anilist/{id}/detail", h.handleAnilistDetail)
+		// AniList-keyed selective download: works with no pre-existing DB row.
+		api.Get("/anilist/{id}/available", h.handleAnilistAvailable)
+		api.Post("/anilist/{id}/available/download", h.handleAnilistDownload)
 
 		// Series
 		api.Route("/series", func(r chi.Router) {
@@ -147,13 +150,8 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 				r.Get("/episodes", h.handleListEpisodes)
 				r.Post("/scan", h.handleScanEpisodes)
 				r.Post("/refresh", h.handleRefreshSeries)
-				r.Get("/available", h.handleAvailableEpisodes)
-				r.Post("/available/download", h.handleDownloadAvailable)
 				r.Post("/status", h.handleSetSeriesStatus)
 				r.Post("/unsubscribe", h.handleUnsubscribeSeries)
-				r.Post("/pause", h.handlePauseSeries)
-				r.Post("/drop", h.handleDropSeries)
-				r.Post("/resume", h.handleResumeSeries)
 			})
 		})
 
@@ -175,16 +173,6 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 		// Search
 		api.Get("/search/anilist", h.handleSearchAnilist)
 		api.Get("/search/torrents", h.handleSearchTorrents)
-
-		// Feeds
-		api.Route("/feeds", func(r chi.Router) {
-			r.Get("/", h.handleListFeeds)
-			r.Post("/", h.handleCreateFeed)
-			r.Route("/{id}", func(r chi.Router) {
-				r.Patch("/", h.handlePatchFeed)
-				r.Delete("/", h.handleDeleteFeed)
-			})
-		})
 
 		// Profiles
 		api.Route("/profiles", func(r chi.Router) {

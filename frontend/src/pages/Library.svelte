@@ -12,14 +12,14 @@
   let error = $state('')
 
   let searchQ = $state('')
-  type Filter = 'all' | 'watching' | 'on_hold' | 'dropped' | 'completed'
+  type Filter = 'all' | 'watching' | 'downloaded' | 'on_hold' | 'dropped' | 'completed'
   let filter = $state<Filter>('all')
 
   async function load() {
     loading = true
     error = ''
     try {
-      all = await api.listSeries({ subscribed: true })
+      all = await api.listSeries({ library: true })
     } catch (e: any) {
       error = e.message
     } finally {
@@ -47,7 +47,7 @@
   const searched = $derived(all.filter(matchesSearch))
 
   const counts = $derived.by(() => {
-    const c = { all: searched.length, watching: 0, on_hold: 0, dropped: 0, completed: 0 }
+    const c = { all: searched.length, watching: 0, downloaded: 0, on_hold: 0, dropped: 0, completed: 0 }
     for (const s of searched) c[bucketOf(s)]++
     return c
   })
@@ -59,6 +59,7 @@
   const chips: { value: Filter; label: string }[] = [
     { value: 'all', label: 'All' },
     { value: 'watching', label: watchStatusLabel('watching') },
+    { value: 'downloaded', label: watchStatusLabel('downloaded') },
     { value: 'on_hold', label: watchStatusLabel('on_hold') },
     { value: 'dropped', label: watchStatusLabel('dropped') },
     { value: 'completed', label: watchStatusLabel('completed') },
@@ -129,7 +130,7 @@
     <div class="px-6 sm:px-10 py-8">
       <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-6 animate-fade-up">
         {#each filtered as s (s.id)}
-          <PosterCard series={s} showProgress={watchBucket(s) === 'watching'} />
+          <PosterCard series={s} showProgress={watchBucket(s) === 'watching' || watchBucket(s) === 'downloaded'} />
         {/each}
       </div>
     </div>

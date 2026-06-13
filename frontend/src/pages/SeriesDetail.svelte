@@ -75,6 +75,9 @@
   let availableLoading = $state(false)
   let availableChecked = $state(false)
   let downloadingEp = $state<string | null>(null) // keyed by source_url
+  // Multi-select for available (source) episodes — keyed by source_url.
+  let selectedAvailable = $state<Set<string>>(new Set())
+  let bulkDownloading = $state(false)
 
   // ---- Encode modal ----
   let selected = $state<Set<number>>(new Set())
@@ -135,6 +138,7 @@
     detail = null; preview = null; series = null; error = ''
     available = []; availableWarnings = []; availableChecked = false; synopsisExpanded = false
     selected = new Set()
+    selectedAvailable = new Set()
     if (numId != null) loadTracked()
     else if (numAnilist != null) loadPreview()
     else loading = false
@@ -176,11 +180,13 @@
     }
   }
 
-  // ---- Unsubscribe (full DB cleanup; files kept) ----
+  // ---- Unsubscribe (stops tracking; series survives as "Downloaded" if it has episodes) ----
   async function unsubscribe() {
     if (numId == null || unsubscribing) return
     unsubscribing = true
     try {
+      // Returns { deleted, series_id }: the row is removed only when it has no
+      // episodes; otherwise it lives on in the library under "Downloaded".
       await api.unsubscribeSeries(numId)
       unsubscribeOpen = false
       navigate('/library')
@@ -192,11 +198,18 @@
   }
 
   // ---- Available episodes ----
+  // Source resolution arrives as a label ("1080p"); the download body wants a number.
+  function parseResolution(res: string | null | undefined): number | undefined {
+    if (!res) return undefined
+    const n = parseInt(res, 10)
+    return Number.isNaN(n) ? undefined : n
+  }
+
   async function loadAvailable() {
-    if (numId == null || availableLoading) return
+    if (detailAnilistId == null || availableLoading) return
     availableLoading = true
     try {
-      const res = await api.getAvailable(numId)
+      const res = await api.getAnilistAvailable(detailAnilistId)
       available = res.episodes ?? []
       availableWarnings = res.warnings ?? []
     } catch (e: any) {
@@ -207,23 +220,70 @@
     }
   }
 
+  /** Download a single available episode. Creates the series row (unsubscribed)
+   *  on the backend if it doesn't exist yet; never touches subscription state. */
   async function downloadAvailable(ep: AvailableEpisode) {
-    if (numId == null || downloadingEp) return
+    if (detailAnilistId == null || downloadingEp || bulkDownloading) return
     if (!requireSource()) return
     downloadingEp = ep.source_url
     try {
-      await api.downloadAvailable(numId, {
+      const res = await api.anilistDownload(detailAnilistId, {
         source_url: ep.source_url,
         number: ep.number,
-        resolution: ep.resolution || undefined,
+        resolution: parseResolution(ep.resolution),
       })
-      // Manual download re-engages the series (→ Active) and pulls it into the pipeline.
       available = available.filter((e) => e.source_url !== ep.source_url)
-      await loadTracked()
+      const next = new Set(selectedAvailable); next.delete(ep.source_url); selectedAvailable = next
+      // Untracked → flip to the now-existing DB-backed series; tracked → refresh in place.
+      if (numId == null) navigate(`/series/${res.series_id}`)
+      else await loadTracked()
     } catch (e: any) {
       alert(e.message)
     } finally {
       downloadingEp = null
+    }
+  }
+
+  function toggleAvailable(url: string) {
+    const s = new Set(selectedAvailable)
+    if (s.has(url)) s.delete(url); else s.add(url)
+    selectedAvailable = s
+  }
+  const allAvailableSelected = $derived(
+    available.length > 0 && selectedAvailable.size === available.length,
+  )
+  function toggleAllAvailable() {
+    selectedAvailable = allAvailableSelected
+      ? new Set()
+      : new Set(available.map((e) => e.source_url))
+  }
+
+  /** Download every selected available episode sequentially. Like the single
+   *  path, this never changes subscription — it just grabs the chosen episodes. */
+  async function downloadSelectedAvailable() {
+    if (detailAnilistId == null || bulkDownloading || selectedAvailable.size === 0) return
+    if (!requireSource()) return
+    bulkDownloading = true
+    const eps = available.filter((e) => selectedAvailable.has(e.source_url))
+    let lastSeriesId: number | null = null
+    try {
+      for (const ep of eps) {
+        const res = await api.anilistDownload(detailAnilistId, {
+          source_url: ep.source_url,
+          number: ep.number,
+          resolution: parseResolution(ep.resolution),
+        })
+        lastSeriesId = res.series_id
+        available = available.filter((e) => e.source_url !== ep.source_url)
+      }
+      selectedAvailable = new Set()
+      if (numId == null && lastSeriesId != null) navigate(`/series/${lastSeriesId}`)
+      else await loadTracked()
+    } catch (e: any) {
+      alert(e.message)
+      selectedAvailable = new Set()
+    } finally {
+      bulkDownloading = false
     }
   }
 
@@ -707,6 +767,10 @@
               <p class="mt-3 text-xs text-[var(--color-muted)] max-w-xl">
                 {series.status === 'on_hold' ? 'On Hold' : 'Dropped'} — background auto-download is off. Files are kept. Set it back to Watching to resume polling.
               </p>
+            {:else if !series && numAnilist != null}
+              <p class="mt-3 text-xs text-[var(--color-muted)] max-w-xl">
+                Subscribe to auto-fetch every new episode as it airs — or skip it and grab individual episodes now from the list below.
+              </p>
             {/if}
           </div>
         </div>
@@ -783,11 +847,24 @@
           <span class="text-xs font-medium text-[var(--color-muted)] tabular-nums">{mergedEpisodes.length}</span>
         {/if}
 
-        {#if series}
+        {#if detailAnilistId != null}
           <div class="ml-auto flex items-center gap-2">
-            {#if pipelineEpisodes.length}
+            {#if series && pipelineEpisodes.length}
               <Button variant="ghost" size="sm" onclick={toggleAll}>
                 {allSelected ? 'Clear' : 'Select all'}
+              </Button>
+            {/if}
+            {#if available.length}
+              <Button variant="ghost" size="sm" onclick={toggleAllAvailable}>
+                {allAvailableSelected ? 'Deselect sources' : 'Select sources'}
+              </Button>
+            {/if}
+            {#if selectedAvailable.size > 0}
+              <Button size="sm" onclick={downloadSelectedAvailable} disabled={bulkDownloading}>
+                {#if bulkDownloading}<Spinner size={13}/>{:else}
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                {/if}
+                Download selected ({selectedAvailable.size})
               </Button>
             {/if}
             <Button variant="secondary" size="sm" onclick={loadAvailable} disabled={availableLoading}>
@@ -846,7 +923,7 @@
                 {availableWarnings.length ? 'Source check failed' : 'No episodes yet'}
               </h3>
               <p class="max-w-sm text-sm text-[var(--color-muted)]">
-                {#if availableWarnings.length}The source(s) errored, so no episodes could be listed — this is a source problem, not an empty catalogue. See the warning above.{:else if series}The auto-downloader will grab new episodes as they air. Or run a source check above.{:else}Episode data will appear once it's available.{/if}
+                {#if availableWarnings.length}The source(s) errored, so no episodes could be listed — this is a source problem, not an empty catalogue. See the warning above.{:else if series}The auto-downloader will grab new episodes as they air. Or run a source check above.{:else}Run a source check above to list downloadable episodes — no subscription needed.{/if}
               </p>
             </div>
           </div>
@@ -912,7 +989,9 @@
                   />
                 {/if}
 
-                <!-- selection checkbox (tracked, pipeline-backed only) -->
+                <!-- selection checkbox: pipeline episode (tracked, for encode) takes
+                     precedence; otherwise a source-backed card is selectable for
+                     bulk download (works pre-subscribe). -->
                 {#if series && p}
                   <label class="absolute left-1.5 top-1.5 z-10 flex cursor-pointer items-center pointer-events-auto">
                     <input
@@ -922,6 +1001,17 @@
                       onchange={() => toggleEpisode(p.id)}
                       class="h-4 w-4 cursor-pointer border-[var(--color-border-strong)] bg-black/50 accent-[var(--accent-text)]"
                       aria-label={`Select episode ${ep.number ?? ep.title ?? ''}`}
+                    />
+                  </label>
+                {:else if ep.source}
+                  <label class="absolute left-1.5 top-1.5 z-10 flex cursor-pointer items-center pointer-events-auto">
+                    <input
+                      type="checkbox"
+                      checked={selectedAvailable.has(ep.source.source_url)}
+                      onclick={(e) => e.stopPropagation()}
+                      onchange={() => toggleAvailable(ep.source!.source_url)}
+                      class="h-4 w-4 cursor-pointer border-[var(--color-border-strong)] bg-black/50 accent-[var(--accent-text)]"
+                      aria-label={`Select source for episode ${ep.number ?? ep.title ?? ''}`}
                     />
                   </label>
                 {/if}
@@ -985,11 +1075,11 @@
                   {/if}
 
                   <div class="ml-auto flex items-center gap-1.5 pointer-events-auto">
-                    {#if series && ep.source}
+                    {#if ep.source}
                       <Button
                         size="sm"
                         onclick={() => downloadAvailable(ep.source!)}
-                        disabled={downloadingEp === ep.source.source_url}
+                        disabled={downloadingEp === ep.source.source_url || bulkDownloading}
                         title={`${ep.source.resolution}${ep.source.size ? ' · ' + formatBytes(ep.source.size) : ''}`}
                       >
                         {#if downloadingEp === ep.source.source_url}<Spinner size={12}/>{:else}
@@ -1110,7 +1200,7 @@
   {/snippet}
 
   <div class="space-y-3 text-sm text-[var(--color-text-dim)]">
-    <p>This removes the series from your library and stops all tracking. Its episodes, feeds, and encode records are deleted.</p>
-    <p class="text-[var(--color-muted)]">Downloaded and encoded files on disk are <span class="font-medium text-[var(--color-text)]">kept</span> — they remain in your library folder as orphaned files.</p>
+    <p>This stops auto-tracking and turns off background polling for new episodes. Your feeds are removed.</p>
+    <p class="text-[var(--color-muted)]">Any episodes you've already downloaded are <span class="font-medium text-[var(--color-text)]">kept</span> — the series stays in your library under <span class="font-medium text-[var(--color-text)]">Downloaded</span>. It's fully removed only if it has no episodes.</p>
   </div>
 </Modal>

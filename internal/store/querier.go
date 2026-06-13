@@ -12,6 +12,7 @@ type Querier interface {
 	// ClearDefaultDownloadClients resets all defaults before setting a new one.
 	ClearDefaultDownloadClients(ctx context.Context) error
 	ClearEpisodeError(ctx context.Context, id int64) error
+	CountEpisodesBySeries(ctx context.Context, seriesID int64) (int64, error)
 	// CountErroredOutputs reports failed outputs for an episode; >0 keeps the original.
 	CountErroredOutputs(ctx context.Context, episodeID int64) (int64, error)
 	// CountUnarchivedOutputs reports how many of an episode's outputs are not yet
@@ -138,9 +139,6 @@ type Querier interface {
 	SetSeriesAiringStatus(ctx context.Context, arg SetSeriesAiringStatusParams) error
 	SetSeriesFavorite(ctx context.Context, arg SetSeriesFavoriteParams) error
 	SetSeriesSubscribed(ctx context.Context, arg SetSeriesSubscribedParams) error
-	// SetSeriesUserStatus sets the manual override: NULL re-engages full automation,
-	// 'paused'/'dropped' make the series' feed dormant (the poller gate skips it).
-	SetSeriesUserStatus(ctx context.Context, arg SetSeriesUserStatusParams) error
 	// SetSeriesWatchStatus sets the watch status that solely drives polling: 'watching'
 	// (polled), 'on_hold'/'dropped' (never polled). 'completed' is never stored here.
 	SetSeriesWatchStatus(ctx context.Context, arg SetSeriesWatchStatusParams) error

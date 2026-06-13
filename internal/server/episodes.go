@@ -207,10 +207,8 @@ func (h *Handler) handleBulkEncode(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	enqueued := 0
-	reengage := map[int64]struct{}{}
 	for _, eid := range req.EpisodeIDs {
-		ep, err := h.store.Read().GetEpisode(ctx, eid)
-		if errors.Is(err, sql.ErrNoRows) {
+		if _, err := h.store.Read().GetEpisode(ctx, eid); errors.Is(err, sql.ErrNoRows) {
 			continue // skip missing
 		} else if err != nil {
 			h.logger.Error("bulk encode: get episode", "id", eid, "err", err)
@@ -224,12 +222,7 @@ func (h *Handler) handleBulkEncode(w http.ResponseWriter, r *http.Request) {
 			h.logger.Error("bulk encode: set queued", "id", eid, "err", err)
 			continue
 		}
-		reengage[ep.SeriesID] = struct{}{}
 		enqueued++
-	}
-	// A manual download re-engages each affected series to Active.
-	for sid := range reengage {
-		h.reengageSeries(ctx, sid)
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]any{
@@ -248,9 +241,9 @@ func (h *Handler) handleEncodeEpisode(w http.ResponseWriter, r *http.Request) {
 
 // handleRetryEpisode requeues an errored episode: it is valid only when the
 // episode is in 'error'. It clears error_message, increments retry_count, sets
-// status 'queued', re-engages the series to 'watching', broadcasts
-// episode.status=queued, and returns {"episode": <EpisodeDetail>}. A non-error
-// episode is a 409.
+// status 'queued', broadcasts episode.status=queued, and returns
+// {"episode": <EpisodeDetail>}. A non-error episode is a 409. Retrying an
+// episode never changes the series' subscription or watch status.
 func (h *Handler) handleRetryEpisode(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r)
 	if !ok {
@@ -282,7 +275,6 @@ func (h *Handler) handleRetryEpisode(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "failed to requeue episode")
 		return
 	}
-	h.reengageSeries(ctx, ep.Episode.SeriesID)
 	h.hub.Broadcast(events.TypeEpisodeStatus, map[string]any{
 		"episode_id": id,
 		"series_id":  ep.Episode.SeriesID,
@@ -299,7 +291,7 @@ func (h *Handler) handleRetryEpisode(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) enqueueEpisode(w http.ResponseWriter, ctx context.Context, id int64) {
-	ep, err := h.store.Read().GetEpisode(ctx, id)
+	_, err := h.store.Read().GetEpisode(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		WriteError(w, http.StatusNotFound, "episode not found")
 		return
@@ -317,21 +309,7 @@ func (h *Handler) enqueueEpisode(w http.ResponseWriter, ctx context.Context, id 
 		WriteError(w, http.StatusInternalServerError, "failed to enqueue episode")
 		return
 	}
-	// A manual download re-engages the series to Active: clear any Paused/Dropped
-	// override so background automation resumes for future episodes too.
-	h.reengageSeries(ctx, ep.SeriesID)
 	WriteJSON(w, http.StatusOK, map[string]any{"id": id, "status": "queued"})
-}
-
-// reengageSeries returns a series to the polled 'watching' watch status so a
-// manual episode download resumes full automation for future episodes too.
-// Best-effort: a failure here doesn't fail the enqueue.
-func (h *Handler) reengageSeries(ctx context.Context, seriesID int64) {
-	if err := h.store.Write().SetSeriesWatchStatus(ctx, store.SetSeriesWatchStatusParams{
-		ID: seriesID, WatchStatus: watchStatusWatching,
-	}); err != nil {
-		h.logger.Warn("re-engage series after manual download", "series_id", seriesID, "err", err)
-	}
 }
 
 func (h *Handler) handleDeleteEpisode(w http.ResponseWriter, r *http.Request) {
@@ -339,14 +317,51 @@ func (h *Handler) handleDeleteEpisode(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, err := h.store.Read().GetEpisode(r.Context(), id); errors.Is(err, sql.ErrNoRows) {
+	ctx := r.Context()
+	ep, err := h.store.Read().GetEpisode(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
 		WriteError(w, http.StatusNotFound, "episode not found")
 		return
 	}
-	if err := h.store.Write().DeleteEpisode(r.Context(), id); err != nil {
+	if err != nil {
+		h.logger.Error("delete episode: get", "id", id, "err", err)
+		WriteError(w, http.StatusInternalServerError, "failed to delete episode")
+		return
+	}
+	if err := h.store.Write().DeleteEpisode(ctx, id); err != nil {
 		h.logger.Error("delete episode", "id", id, "err", err)
 		WriteError(w, http.StatusInternalServerError, "failed to delete episode")
 		return
 	}
+
+	// Garbage-collect the parent series if this was its last episode and it is not
+	// subscribed — holding the "exists iff subscribed OR has episodes" invariant.
+	h.gcSeriesIfOrphaned(ctx, ep.SeriesID)
+
 	WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// gcSeriesIfOrphaned deletes the series row when it is unsubscribed AND has zero
+// remaining episodes, broadcasting series.updated{deleted:true}. Best-effort: a
+// lookup error leaves the row in place rather than failing the caller.
+func (h *Handler) gcSeriesIfOrphaned(ctx context.Context, seriesID int64) {
+	series, err := h.store.Read().GetSeries(ctx, seriesID)
+	if err != nil {
+		return // already gone, or unreadable — nothing to GC
+	}
+	if series.Subscribed == 1 {
+		return
+	}
+	count, err := h.store.Read().CountEpisodesBySeries(ctx, seriesID)
+	if err != nil || count > 0 {
+		return
+	}
+	if err := h.store.Write().DeleteSeries(ctx, seriesID); err != nil {
+		h.logger.Error("gc orphaned series", "id", seriesID, "err", err)
+		return
+	}
+	h.hub.Broadcast(events.TypeSeriesUpdated, map[string]any{
+		"series_id": seriesID,
+		"deleted":   true,
+	})
 }

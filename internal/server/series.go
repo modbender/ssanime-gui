@@ -70,9 +70,8 @@ func derivedStatus(airingStatus *string, episodeCount *int64, episodeTotal, epis
 }
 
 // rowToProgress builds a SeriesProgress wire row from a ListSeriesWithProgress
-// row. derivedStatus computes the automatic status; a manual user_status
-// override is carried alongside so the frontend can render the right badge and
-// bucket the series. Used by the Library grid, the Downloads grouping, and the
+// row. derivedStatus computes the automatic status the frontend renders and
+// buckets on. Used by the Library grid, the Downloads grouping, and the
 // tracked-home endpoint so the mapping lives in one place.
 func rowToProgress(row store.ListSeriesWithProgressRow) SeriesProgress {
 	src := toInt64(row.SourceBytesTotal)
@@ -89,7 +88,6 @@ func rowToProgress(row store.ListSeriesWithProgressRow) SeriesProgress {
 		AiringStatus:      row.AiringStatus,
 		Status:            row.WatchStatus,
 		DerivedStatus:     ds,
-		UserStatus:        row.UserStatus,
 		PosterPath:        row.PosterPath,
 		CoverImageURL:     row.CoverImageUrl,
 		BannerImageURL:    row.BannerImageUrl,
@@ -127,6 +125,7 @@ func toInt64(v interface{}) int64 {
 func (h *Handler) handleListSeries(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	filterSubscribed := q.Get("subscribed") == "true"
+	filterLibrary := q.Get("library") == "true"
 	filterFavorite := q.Get("favorite") == "true"
 	filterStatus := q.Get("status")
 	filterQ := strings.ToLower(q.Get("q"))
@@ -141,6 +140,11 @@ func (h *Handler) handleListSeries(w http.ResponseWriter, r *http.Request) {
 	out := make([]SeriesProgress, 0, len(rows))
 	for _, row := range rows {
 		if filterSubscribed && row.Subscribed != 1 {
+			continue
+		}
+		// "in library" = subscribed OR has at least one episode (the decoupling
+		// invariant), so manually-downloaded unsubscribed series show in Library.
+		if filterLibrary && row.Subscribed != 1 && row.EpisodeTotal == 0 {
 			continue
 		}
 		if filterFavorite && row.Favorite != 1 {
@@ -205,7 +209,6 @@ func (h *Handler) handleGetSeries(w http.ResponseWriter, r *http.Request) {
 		AiringStatus:     series.AiringStatus,
 		Status:           series.WatchStatus,
 		DerivedStatus:    ds,
-		UserStatus:       series.UserStatus,
 		PosterPath:       series.PosterPath,
 		CoverImageURL:    series.CoverImageUrl,
 		BannerImageURL:   series.BannerImageUrl,

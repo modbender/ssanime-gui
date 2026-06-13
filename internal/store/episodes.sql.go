@@ -18,6 +18,17 @@ func (q *Queries) ClearEpisodeError(ctx context.Context, id int64) error {
 	return err
 }
 
+const countEpisodesBySeries = `-- name: CountEpisodesBySeries :one
+SELECT COUNT(*) FROM episodes WHERE series_id = ?
+`
+
+func (q *Queries) CountEpisodesBySeries(ctx context.Context, seriesID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countEpisodesBySeries, seriesID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createEpisode = `-- name: CreateEpisode :one
 INSERT INTO episodes (
     uuid, series_id, title, episode_no, source_kind, source_url, magnet,

@@ -78,8 +78,6 @@ export interface SeriesProgress {
   derived_status: string
   /** watch status — `watching | on_hold | dropped`; Completed is derived, never stored. */
   status: WatchStatus
-  /** manual override layer: null = automatic, 'paused' | 'dropped' */
-  user_status: string | null
   poster_path: string | null
   cover_image_url: string | null
   banner_image_url: string | null
@@ -149,8 +147,6 @@ export interface SeriesDetail {
   derived_status: string
   /** watch status — `watching | on_hold | dropped`; Completed is derived, never stored. */
   status: WatchStatus
-  /** manual override layer: null = automatic, 'paused' | 'dropped' */
-  user_status: string | null
   poster_path: string | null
   cover_image_url: string | null
   banner_image_url: string | null
@@ -422,8 +418,14 @@ export interface AnilistDetail {
 
 export const api = {
   // Series
-  listSeries: (opts?: { subscribed?: boolean }) =>
-    get<SeriesProgress[]>(opts?.subscribed ? '/series?subscribed=true' : '/series'),
+  listSeries: (opts?: { subscribed?: boolean; library?: boolean }) =>
+    get<SeriesProgress[]>(
+      opts?.library
+        ? '/series?library=true'
+        : opts?.subscribed
+          ? '/series?subscribed=true'
+          : '/series',
+    ),
   createSeries: (body: {
     anilist_id?: number
     title?: string
@@ -490,10 +492,14 @@ export const api = {
   trackSeries: (body: { anilist_id: number }) => post<TrackResponse>('/track', body),
   setSeriesStatus: (id: number, status: WatchStatus) =>
     post<{ series: SeriesProgress }>(`/series/${id}/status`, { status }),
-  unsubscribeSeries: (id: number) => postNoContent(`/series/${id}/unsubscribe`),
-  getAvailable: (id: number) => get<AvailableResponse>(`/series/${id}/available`),
-  downloadAvailable: (id: number, body: { source_url: string; number: number; resolution?: string }) =>
-    post<EpisodeDetail>(`/series/${id}/available/download`, body),
+  unsubscribeSeries: (id: number) =>
+    post<{ deleted: boolean; series_id: number }>(`/series/${id}/unsubscribe`),
+  getAnilistAvailable: (anilistId: number) =>
+    get<AvailableResponse>(`/anilist/${anilistId}/available`),
+  anilistDownload: (
+    anilistId: number,
+    body: { source_url: string; number: number; resolution?: number },
+  ) => post<{ series_id: number; episode_id: number }>(`/anilist/${anilistId}/available/download`, body),
 
   // Extensions
   listExtensionRepos: () => get<ExtensionRepo[]>('/extension-repos'),
