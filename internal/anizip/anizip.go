@@ -121,22 +121,48 @@ func (c *Client) GetEpisodes(ctx context.Context, anilistID int) ([]Episode, err
 	return mapEpisodes(raw.Episodes), nil
 }
 
-// GetClearLogo fetches the mappings for one AniList id and returns the
-// transparent series logo URL (the "Clearlogo" artwork entry), passed through
-// safeImageURL so only allowlisted (CSP-pinned) hosts survive. A missing logo,
-// a non-allowlisted host, or a 404 mapping yields "" with no error; only
-// network/HTTP/decode failures propagate so the caller can degrade silently.
-func (c *Client) GetClearLogo(ctx context.Context, anilistID int) (string, error) {
+// GetHeroArt fetches the mappings for one AniList id ONCE and returns both the
+// transparent series logo (the "Clearlogo" artwork entry) and the ordered wide
+// hero artwork URLs for the home hero carousel. Every URL is passed through
+// safeImageURL so only allowlisted (CSP-pinned) hosts survive.
+//
+// wide collects 16:9 background artwork best/sharpest first: all "Fanart"
+// entries (full 16:9 backgrounds) in source order, then all "Banner" entries,
+// deduped; Poster and Clearlogo are excluded. A missing logo, non-allowlisted
+// host, or a 404 mapping yields ("", nil, nil) — only network/HTTP/decode
+// failures propagate so the caller can degrade silently.
+func (c *Client) GetHeroArt(ctx context.Context, anilistID int) (clearLogo string, wide []string, err error) {
 	raw, ok, err := c.fetchMappings(ctx, anilistID)
 	if err != nil || !ok {
-		return "", err
+		return "", nil, err
 	}
+	// Bucket by cover type so the wide list keeps Fanart-before-Banner ordering
+	// regardless of how the upstream array interleaves them.
+	var fanart, banner []string
 	for _, img := range raw.Images {
-		if strings.EqualFold(img.CoverType, "Clearlogo") {
-			return safeImageURL(img.URL), nil
+		switch {
+		case strings.EqualFold(img.CoverType, "Clearlogo"):
+			if clearLogo == "" {
+				clearLogo = safeImageURL(img.URL)
+			}
+		case strings.EqualFold(img.CoverType, "Fanart"):
+			if u := safeImageURL(img.URL); u != "" {
+				fanart = append(fanart, u)
+			}
+		case strings.EqualFold(img.CoverType, "Banner"):
+			if u := safeImageURL(img.URL); u != "" {
+				banner = append(banner, u)
+			}
 		}
 	}
-	return "", nil
+	seen := make(map[string]bool, len(fanart)+len(banner))
+	for _, u := range append(fanart, banner...) {
+		if !seen[u] {
+			seen[u] = true
+			wide = append(wide, u)
+		}
+	}
+	return clearLogo, wide, nil
 }
 
 // fetchMappings GETs and decodes the ani.zip mappings envelope for one id. The

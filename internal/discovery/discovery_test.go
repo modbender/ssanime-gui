@@ -43,28 +43,29 @@ func newService(t *testing.T, al AniList) *Service {
 	return New(al, slog.Default())
 }
 
-// fakeLogos records every id it was asked to resolve and returns a per-id logo,
-// or a fixed error, so a test can assert which items were enriched and that a
-// failing lookup degrades to "".
+// fakeLogos records every id it was asked to resolve and returns a per-id logo
+// plus wide images, or a fixed error, so a test can assert which items were
+// enriched and that a failing lookup degrades to empty.
 type fakeLogos struct {
 	mu     sync.Mutex
 	asked  []int
 	byID   map[int]string
+	wideID map[int][]string
 	err    error
 	errIDs map[int]bool // ids that error (when err is nil, per-id)
 }
 
-func (f *fakeLogos) GetClearLogo(_ context.Context, id int) (string, error) {
+func (f *fakeLogos) GetHeroArt(_ context.Context, id int) (string, []string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.asked = append(f.asked, id)
 	if f.err != nil {
-		return "", f.err
+		return "", nil, f.err
 	}
 	if f.errIDs[id] {
-		return "", errors.New("anizip: simulated lookup failure")
+		return "", nil, errors.New("anizip: simulated lookup failure")
 	}
-	return f.byID[id], nil
+	return f.byID[id], f.wideID[id], nil
 }
 
 func (f *fakeLogos) askedIDs() map[int]bool {
@@ -205,10 +206,11 @@ func feedsWithTrending(trending []anilist.Media) *fakeAniList {
 func TestEnrichHeroLogosPopulatesTrendingTopN(t *testing.T) {
 	// 15 trending items: ids 1..15. Cap is 12, so 13..15 must not be enriched.
 	trending := make([]anilist.Media, 0, 15)
-	logos := &fakeLogos{byID: map[int]string{}}
+	logos := &fakeLogos{byID: map[int]string{}, wideID: map[int][]string{}}
 	for i := 1; i <= 15; i++ {
 		trending = append(trending, anilist.Media{ID: i})
 		logos.byID[i] = "https://artworks.thetvdb.com/logo/" + itoa(i) + ".png"
+		logos.wideID[i] = []string{"https://artworks.thetvdb.com/fanart/" + itoa(i) + ".jpg"}
 	}
 	svc := New(feedsWithTrending(trending), slog.Default(), WithLogoFetcher(logos))
 

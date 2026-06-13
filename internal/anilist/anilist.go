@@ -53,6 +53,11 @@ type Media struct {
 	// enriched, and rides alongside the AniList fields so the cached feed can
 	// surface it to the home hero.
 	ClearLogoURL string `json:"-"`
+
+	// WideImages is an ordered list of wide hero artwork URLs (ani.zip Fanart then
+	// Banner) sourced during the same enrichment pass as ClearLogoURL. Empty unless
+	// enriched; rides alongside the AniList fields for the home hero carousel.
+	WideImages []string `json:"-"`
 }
 
 // Client is a cached AniList GraphQL client. Safe for concurrent use.

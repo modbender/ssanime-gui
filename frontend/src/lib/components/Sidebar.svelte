@@ -28,7 +28,12 @@
   })
 </script>
 
-<aside class="relative flex flex-col items-center h-full w-[68px] shrink-0 bg-[var(--color-surface)] border-r border-[var(--color-border)] py-4 z-20">
+<aside
+  class="relative flex flex-col items-center h-full w-[68px] shrink-0 py-4 z-20
+         bg-[linear-gradient(to_right,rgb(255_255_255/0.025),transparent)]
+         after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-px
+         after:bg-[linear-gradient(to_bottom,transparent,rgb(255_255_255/0.06)_18%,rgb(255_255_255/0.06)_82%,transparent)]"
+>
   <!-- Logo mark -->
   <a
     href="/"
@@ -41,7 +46,7 @@
     </div>
     <!-- SSE connection dot -->
     <span
-      class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-[var(--color-surface)] transition-colors duration-300 {sseState.connected ? 'bg-[var(--color-success)]' : 'bg-[var(--color-error)]'}"
+      class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-[var(--color-bg)] transition-colors duration-300 {sseState.connected ? 'bg-[var(--color-success)]' : 'bg-[var(--color-error)]'}"
       title={sseState.connected ? 'Connected to daemon' : 'Disconnected'}
     ></span>
   </a>
@@ -85,7 +90,7 @@
       <span
         class="group relative flex items-center justify-center w-11 h-11 transition-[background,color,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] {isActive('/about')
           ? 'bg-[var(--accent-soft)] text-[var(--color-text)]'
-          : 'text-[var(--color-muted)] hover:bg-white/5 hover:text-[var(--color-text)]'}"
+          : 'text-[#5b9dff]/75 hover:bg-[#5b9dff]/10 hover:text-[#5b9dff]'}"
       >
         <span
           class="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-full bg-[var(--accent-text)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] {isActive('/about') ? 'opacity-100' : 'opacity-0 -translate-x-1'}"
@@ -109,7 +114,7 @@
       target="_blank"
       rel="noopener"
       aria-label="Sponsor"
-      class="group relative flex items-center justify-center w-11 h-11 text-[var(--color-muted)] transition-[background,color,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-[#db61a2]/10 hover:text-[#db61a2]"
+      class="group relative flex items-center justify-center w-11 h-11 text-[#db61a2]/80 transition-[background,color,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-[#db61a2]/10 hover:text-[#db61a2] [&_svg]:hover:fill-[#db61a2]/15"
     >
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:scale-110">
         <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" stroke-linecap="round" stroke-linejoin="round" />

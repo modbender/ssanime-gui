@@ -11,14 +11,23 @@
   import CarouselSkeleton from '$lib/components/CarouselSkeleton.svelte'
   import PosterCard from '$lib/components/PosterCard.svelte'
   import DiscoveryCard from '$lib/components/DiscoveryCard.svelte'
+  import Spinner from '$lib/components/Spinner.svelte'
+  import Button from '$lib/components/Button.svelte'
   import { markTracked, trackedAnilistIds } from '$lib/discovery.svelte'
   import { requireSource } from '$lib/sources.svelte'
   import { sseState } from '$lib/sse.svelte'
 
   let rows = $state<DiscoveryRow[]>([])
+  let heroItems = $state<DiscoveryItem[]>([])
   let activitySeries = $state<ActivitySeries[]>([])
   let discoveryLoading = $state(true)
+  let discoveryFailed = $state(false)
   let trackingId = $state<number | null>(null)
+
+  // Hero pulls a fresh random lineup from the top of the trending row each open.
+  // The pool is capped to the items the server enriches with logos + wide art.
+  const HERO_POOL_SIZE = 12
+  const HERO_COUNT = 6
 
   // Episode statuses that count as "in the active pipeline" for the
   // Currently-downloading row (a series shows once any episode is mid-flight).
@@ -29,17 +38,42 @@
   // Number of placeholder rows to show while the discovery cache is cold.
   const SKELETON_ROWS = ['Trending now', 'Popular this season', 'All-time popular', 'Action']
 
+  // The server discovery cache warms asynchronously after the daemon boots, so a
+  // cold first call returns empty rows. Poll until rows arrive instead of
+  // stranding the page on a one-shot empty result; give up after ~36s with a
+  // retry affordance rather than spinning forever.
   async function loadDiscovery() {
     discoveryLoading = true
-    try {
-      const res = await api.getDiscovery()
-      // Keep only rows that actually have items — empty rows are hidden.
-      rows = (res.rows ?? []).filter((r) => r.items && r.items.length > 0)
-    } catch {
-      rows = []
-    } finally {
-      discoveryLoading = false
+    discoveryFailed = false
+    for (let attempt = 0; attempt < 24; attempt++) {
+      try {
+        const res = await api.getDiscovery()
+        const got = (res.rows ?? []).filter((r) => r.items && r.items.length > 0)
+        if (got.length > 0) {
+          rows = got
+          pickHero()
+          discoveryLoading = false
+          return
+        }
+      } catch {
+        // Transient during boot — keep retrying.
+      }
+      await new Promise((r) => setTimeout(r, 1500))
     }
+    discoveryLoading = false
+    discoveryFailed = true
+  }
+
+  // Fresh random hero lineup from the enriched top of the trending row.
+  function pickHero() {
+    const trending = rows.find((r) => r.key === 'trending') ?? rows[0]
+    const pool = (trending?.items ?? []).slice(0, HERO_POOL_SIZE)
+    const a = [...pool]
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[a[i], a[j]] = [a[j], a[i]]
+    }
+    heroItems = a.slice(0, HERO_COUNT)
   }
 
   // Seed the optimistic tracked-set so discovery cards paint as tracked.
@@ -101,13 +135,7 @@
     refreshActivity()
   })
 
-  // The hero pulls from the trending row (top items, rotating).
-  const heroItems = $derived.by(() => {
-    const trending = rows.find((r) => r.key === 'trending') ?? rows[0]
-    return (trending?.items ?? []).slice(0, 6)
-  })
-
-  // ---- Download & track (optimistic) ----
+  // ---- Subscribe (optimistic) ----
   async function track(item: DiscoveryItem) {
     if (trackingId != null) return
     if (!requireSource()) return
@@ -133,7 +161,20 @@
   }
 </script>
 
-<div class="flex flex-col h-full overflow-y-auto">
+<div class="relative flex flex-col h-full overflow-y-auto">
+  <!-- Warm-up overlay: blurs the skeletons loading behind it until discovery lands. -->
+  {#if discoveryLoading && rows.length === 0}
+    <div class="absolute inset-0 z-30 flex items-center justify-center bg-[var(--color-bg)]/40 backdrop-blur-md">
+      <div class="flex flex-col items-center gap-4 px-6 text-center">
+        <Spinner size={38} />
+        <div class="space-y-1">
+          <p class="text-sm font-medium text-[var(--color-text)]">Preparing your discovery feed…</p>
+          <p class="text-xs text-[var(--color-muted)]">Pulling trending &amp; popular titles — this takes a moment on a fresh start.</p>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <!-- HERO -->
   {#if discoveryLoading && heroItems.length === 0}
     <div class="relative min-h-[72vh] w-full shrink-0 overflow-hidden">
@@ -151,8 +192,7 @@
   {/if}
 
   <div class="px-6 sm:px-10 pb-16 -mt-2 space-y-12">
-    <!-- CURRENTLY DOWNLOADING — always present (mirror of a persistent row);
-         shows a tasteful idle state instead of a bare empty carousel. -->
+    <!-- CURRENTLY DOWNLOADING — shown only when something is actually in flight. -->
     {#if inProgress.length > 0}
       <Carousel title="Currently downloading" count={inProgress.length}>
         {#each inProgress as s (s.id)}
@@ -161,18 +201,6 @@
           </div>
         {/each}
       </Carousel>
-    {:else}
-      <section>
-        <h2 class="mb-3 text-[15px] font-semibold tracking-tight text-[var(--color-text)]">Currently downloading</h2>
-        <div class="flex items-center gap-4 border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-6">
-          <div class="flex h-11 w-11 shrink-0 items-center justify-center bg-white/[0.04] text-[var(--color-faint)] ring-1 ring-white/10">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </div>
-          <p class="text-sm text-[var(--color-muted)]">
-            Nothing downloading — subscribe to a series or grab an episode from its page.
-          </p>
-        </div>
-      </section>
     {/if}
 
     <!-- DISCOVERY ROWS -->
@@ -195,19 +223,18 @@
         </Carousel>
       {/each}
 
-      {#if !discoveryLoading && rows.length === 0}
-        <!-- Discovery cache cold/unreachable AND nothing tracked: graceful, never the old empty state -->
-        {#if inProgress.length === 0}
-          <div class="flex flex-col items-center justify-center gap-3 py-24 text-center">
-            <div class="w-14 h-14 bg-white/[0.04] ring-1 ring-white/10 flex items-center justify-center text-[var(--color-faint)]">
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </div>
-            <div class="space-y-1.5">
-              <h2 class="text-base font-semibold tracking-tight">Warming up discovery…</h2>
-              <p class="max-w-sm text-sm text-[var(--color-muted)]">Trending and popular rows populate within a few seconds of the daemon starting. Hang tight.</p>
-            </div>
+      {#if discoveryFailed && rows.length === 0}
+        <!-- Polled out: daemon still warming or unreachable. Offer a manual retry. -->
+        <div class="flex flex-col items-center justify-center gap-4 py-24 text-center">
+          <div class="w-14 h-14 bg-white/[0.04] ring-1 ring-white/10 flex items-center justify-center text-[var(--color-faint)]">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
-        {/if}
+          <div class="space-y-1.5">
+            <h2 class="text-base font-semibold tracking-tight">Discovery didn't load</h2>
+            <p class="max-w-sm text-sm text-[var(--color-muted)]">The daemon may still be warming up or briefly unreachable.</p>
+          </div>
+          <Button onclick={loadDiscovery}>Retry</Button>
+        </div>
       {/if}
     {/if}
   </div>

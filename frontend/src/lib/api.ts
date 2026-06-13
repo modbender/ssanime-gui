@@ -314,6 +314,8 @@ export interface DiscoveryItem {
   banner_image: string
   /** transparent clearLogo PNG used as the hero title; "" when the series has no logo */
   clear_logo_url: string
+  /** wide/landscape banner art variants for the hero; rotated per carousel loop. May be empty. */
+  wide_images?: string[]
   cover_color: string
   season: string
   season_year: number | null
