@@ -2,9 +2,9 @@
   import { Router, Route } from 'svelte-routing'
   import Sidebar from '$lib/components/Sidebar.svelte'
   import Home from './pages/Home.svelte'
-  import Downloads from './pages/Downloads.svelte'
+  import Library from './pages/Library.svelte'
   import SeriesDetail from './pages/SeriesDetail.svelte'
-  import Queue from './pages/Queue.svelte'
+  import Activity from './pages/Activity.svelte'
   import Profiles from './pages/Profiles.svelte'
   import Settings from './pages/Settings.svelte'
   import Logs from './pages/Logs.svelte'
@@ -12,7 +12,6 @@
   import Extensions from './pages/Extensions.svelte'
   import WelcomeModal from '$lib/components/WelcomeModal.svelte'
   import SourceGateModal from '$lib/components/SourceGateModal.svelte'
-  import ActivityDrawer from '$lib/components/ActivityDrawer.svelte'
   import { startSSE } from '$lib/sse.svelte'
   import { reloadSources } from '$lib/sources.svelte'
   import { activityState, startActivity } from '$lib/activity.svelte'
@@ -47,8 +46,8 @@
       <Route path="/">
         <Home />
       </Route>
-      <Route path="/downloads">
-        <Downloads />
+      <Route path="/library">
+        <Library />
       </Route>
       <Route path="/series/anilist/:anilistId" let:params>
         <SeriesDetail anilistId={params.anilistId} />
@@ -56,8 +55,8 @@
       <Route path="/series/:id" let:params>
         <SeriesDetail id={params.id} />
       </Route>
-      <Route path="/queue">
-        <Queue />
+      <Route path="/activity">
+        <Activity />
       </Route>
       <Route path="/profiles">
         <Profiles />
@@ -79,5 +78,4 @@
 
   <WelcomeModal />
   <SourceGateModal />
-  <ActivityDrawer />
 </Router>

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { navigate } from 'svelte-routing'
   import type { SeriesProgress } from '$lib/api'
-  import { derivedStatusColor, derivedStatusLabel, formatBytes, trackedStatus } from '$lib/utils'
+  import { formatBytes, watchBucket, watchStatusColor, watchStatusLabel } from '$lib/utils'
   import { sseState } from '$lib/sse.svelte'
 
   let {
@@ -17,7 +17,7 @@
   } = $props()
 
   const title = $derived(series.english_title || series.romaji_title || series.title)
-  const status = $derived(trackedStatus(series))
+  const bucket = $derived(watchBucket(series))
 
   // Live progress for the series' currently-active episode. SSE state is keyed by
   // episode id; both payloads carry series_id, so we pick the most-advanced one.
@@ -81,8 +81,8 @@
 
     <!-- bottom overlay: status pill + ep count -->
     <div class="absolute inset-x-0 bottom-0 p-2.5 flex items-end justify-between gap-2">
-      <span class={`inline-flex items-center border px-2 py-0.5 text-[10px] font-medium leading-none tracking-tight backdrop-blur-sm ${derivedStatusColor(status)}`}>
-        {derivedStatusLabel(status)}
+      <span class={`inline-flex items-center border px-2 py-0.5 text-[10px] font-medium leading-none tracking-tight backdrop-blur-sm ${watchStatusColor(bucket)}`}>
+        {watchStatusLabel(bucket)}
       </span>
       <span class="text-[10px] font-semibold text-white/90 tabular-nums drop-shadow">
         {series.episode_archived}/{series.episode_total}

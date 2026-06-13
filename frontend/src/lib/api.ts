@@ -63,6 +63,9 @@ const del = <T>(path: string) => request<T>('DELETE', path)
 
 // ---- Types (mirrors Go DTOs) ----
 
+/** AniList-style watch status; drives polling (only `watching` is polled). */
+export type WatchStatus = 'watching' | 'on_hold' | 'dropped'
+
 export interface SeriesProgress {
   id: number
   uuid: string
@@ -73,6 +76,8 @@ export interface SeriesProgress {
   favorite: boolean
   airing_status: string | null
   derived_status: string
+  /** watch status — `watching | on_hold | dropped`; Completed is derived, never stored. */
+  status: WatchStatus
   /** manual override layer: null = automatic, 'paused' | 'dropped' */
   user_status: string | null
   poster_path: string | null
@@ -142,6 +147,8 @@ export interface SeriesDetail {
   favorite: boolean
   airing_status: string | null
   derived_status: string
+  /** watch status — `watching | on_hold | dropped`; Completed is derived, never stored. */
+  status: WatchStatus
   /** manual override layer: null = automatic, 'paused' | 'dropped' */
   user_status: string | null
   poster_path: string | null
@@ -289,11 +296,6 @@ export interface StatsResponse {
   space_saved_bytes: number
 }
 
-export interface QueueSnapshot {
-  downloading: EpisodeDetail[]
-  encoding: EpisodeDetail[]
-}
-
 export interface LogsResponse {
   lines: string[]
 }
@@ -343,6 +345,16 @@ export interface TrackResponse {
   series: SeriesProgress
   series_id: number
   feed_id: number
+}
+
+/** A subscribed series plus its full episode record, for the Activity page. */
+export interface ActivitySeries extends SeriesProgress {
+  episodes: EpisodeDetail[]
+}
+
+export interface ActivityResponse {
+  /** Active-series-first; episodes within a series newest-first (backend-ordered). */
+  series: ActivitySeries[]
 }
 
 export interface AvailableEpisode {
@@ -410,7 +422,8 @@ export interface AnilistDetail {
 
 export const api = {
   // Series
-  listSeries: () => get<SeriesProgress[]>('/series'),
+  listSeries: (opts?: { subscribed?: boolean }) =>
+    get<SeriesProgress[]>(opts?.subscribed ? '/series?subscribed=true' : '/series'),
   createSeries: (body: {
     anilist_id?: number
     title?: string
@@ -439,7 +452,7 @@ export const api = {
   bulkEncode: (body: { episode_ids: number[]; profile_id?: number; resolutions?: number[] }) =>
     post<null>('/encode', body),
   encodeEpisode: (id: number) => post<null>(`/episodes/${id}/encode`),
-  retryEpisode: (id: number) => post<null>(`/episodes/${id}/retry`),
+  retryEpisode: (id: number) => post<{ episode: EpisodeDetail }>(`/episodes/${id}/retry`),
   deleteEpisode: (id: number) => del<null>(`/episodes/${id}`),
 
   // AniList full detail (cover/genres/episodes/relations/recommendations)
@@ -465,8 +478,8 @@ export const api = {
   getSettings: () => get<Settings>('/settings'),
   putSettings: (body: Settings) => put<Settings>('/settings', body),
 
-  // Queue / Stats / Logs
-  getQueue: () => get<QueueSnapshot>('/queue'),
+  // Activity / Stats / Logs
+  getActivity: () => get<ActivityResponse>('/activity'),
   getStats: () => get<StatsResponse>('/stats'),
   getLogs: () => get<LogsResponse>('/logs'),
   getVersion: () => get<VersionInfo>('/version'),
@@ -475,9 +488,9 @@ export const api = {
   getDiscovery: () => get<DiscoveryResponse>('/discovery'),
   getTracked: () => get<TrackedResponse>('/tracked'),
   trackSeries: (body: { anilist_id: number }) => post<TrackResponse>('/track', body),
-  pauseSeries: (id: number) => post<{ series: SeriesProgress }>(`/series/${id}/pause`, {}),
-  dropSeries: (id: number) => post<{ series: SeriesProgress }>(`/series/${id}/drop`, {}),
-  resumeSeries: (id: number) => post<{ series: SeriesProgress }>(`/series/${id}/resume`, {}),
+  setSeriesStatus: (id: number, status: WatchStatus) =>
+    post<{ series: SeriesProgress }>(`/series/${id}/status`, { status }),
+  unsubscribeSeries: (id: number) => postNoContent(`/series/${id}/unsubscribe`),
   getAvailable: (id: number) => get<AvailableResponse>(`/series/${id}/available`),
   downloadAvailable: (id: number, body: { source_url: string; number: number; resolution?: string }) =>
     post<EpisodeDetail>(`/series/${id}/available/download`, body),

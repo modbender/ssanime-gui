@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/modbender/ssanime-gui/internal/events"
 	"github.com/modbender/ssanime-gui/internal/source"
 	"github.com/modbender/ssanime-gui/internal/store"
 )
@@ -245,13 +246,18 @@ func (h *Handler) handleEncodeEpisode(w http.ResponseWriter, r *http.Request) {
 	h.enqueueEpisode(w, r.Context(), id)
 }
 
+// handleRetryEpisode requeues an errored episode: it is valid only when the
+// episode is in 'error'. It clears error_message, increments retry_count, sets
+// status 'queued', re-engages the series to 'watching', broadcasts
+// episode.status=queued, and returns {"episode": <EpisodeDetail>}. A non-error
+// episode is a 409.
 func (h *Handler) handleRetryEpisode(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r)
 	if !ok {
 		return
 	}
 	ctx := r.Context()
-	ep, err := h.store.Read().GetEpisode(ctx, id)
+	ep, err := h.store.Read().GetEpisodeWithSeries(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		WriteError(w, http.StatusNotFound, "episode not found")
 		return
@@ -260,15 +266,36 @@ func (h *Handler) handleRetryEpisode(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "failed to get episode")
 		return
 	}
-	if ep.Status != "error" {
-		WriteError(w, http.StatusBadRequest, fmt.Sprintf("episode status is %q, not error", ep.Status))
+	if ep.Episode.Status != "error" {
+		WriteError(w, http.StatusConflict, fmt.Sprintf("episode status is %q, not error", ep.Episode.Status))
 		return
 	}
 	if err := h.store.Write().IncrementEpisodeRetry(ctx, id); err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to increment retry count")
 		return
 	}
-	h.enqueueEpisode(w, ctx, id)
+	if err := h.store.Write().ClearEpisodeError(ctx, id); err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to clear error")
+		return
+	}
+	if err := h.store.Write().SetEpisodeStatus(ctx, store.SetEpisodeStatusParams{ID: id, Status: "queued"}); err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to requeue episode")
+		return
+	}
+	h.reengageSeries(ctx, ep.Episode.SeriesID)
+	h.hub.Broadcast(events.TypeEpisodeStatus, map[string]any{
+		"episode_id": id,
+		"series_id":  ep.Episode.SeriesID,
+		"status":     "queued",
+	})
+
+	fresh, err := h.store.Read().GetEpisode(ctx, id)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to load episode")
+		return
+	}
+	outputs, _ := h.store.Read().ListEncodedOutputsByEpisode(ctx, id)
+	WriteJSON(w, http.StatusOK, EpisodeRetryResponse{Episode: episodeToDetail(fresh, ep.SeriesTitle, outputs)})
 }
 
 func (h *Handler) enqueueEpisode(w http.ResponseWriter, ctx context.Context, id int64) {
@@ -296,12 +323,12 @@ func (h *Handler) enqueueEpisode(w http.ResponseWriter, ctx context.Context, id 
 	WriteJSON(w, http.StatusOK, map[string]any{"id": id, "status": "queued"})
 }
 
-// reengageSeries clears a series' manual user_status override (→ NULL) so a
-// manual episode download returns the series to fully-automatic. Best-effort:
-// a failure here doesn't fail the enqueue.
+// reengageSeries returns a series to the polled 'watching' watch status so a
+// manual episode download resumes full automation for future episodes too.
+// Best-effort: a failure here doesn't fail the enqueue.
 func (h *Handler) reengageSeries(ctx context.Context, seriesID int64) {
-	if err := h.store.Write().SetSeriesUserStatus(ctx, store.SetSeriesUserStatusParams{
-		ID: seriesID, UserStatus: nil,
+	if err := h.store.Write().SetSeriesWatchStatus(ctx, store.SetSeriesWatchStatusParams{
+		ID: seriesID, WatchStatus: watchStatusWatching,
 	}); err != nil {
 		h.logger.Warn("re-engage series after manual download", "series_id", seriesID, "err", err)
 	}

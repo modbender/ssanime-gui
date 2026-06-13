@@ -83,9 +83,9 @@ func TestTrackIdempotent(t *testing.T) {
 	srv, st := newTrackingServer(t)
 	s := addTrackedSeries(t, st, "Existing", 999)
 
-	// Pause it first, then re-track and confirm user_status is cleared.
-	if err := st.Write().SetSeriesUserStatus(context.Background(), store.SetSeriesUserStatusParams{ID: s.ID, UserStatus: strPtr(userStatusPaused)}); err != nil {
-		t.Fatalf("pause: %v", err)
+	// Put it on hold first, then re-track and confirm it returns to watching.
+	if err := st.Write().SetSeriesWatchStatus(context.Background(), store.SetSeriesWatchStatusParams{ID: s.ID, WatchStatus: watchStatusOnHold}); err != nil {
+		t.Fatalf("on_hold: %v", err)
 	}
 
 	rec := postJSON(t, srv, "/api/track", TrackRequest{AnilistID: 999})
@@ -94,8 +94,8 @@ func TestTrackIdempotent(t *testing.T) {
 	}
 
 	updated, _ := st.Read().GetSeries(context.Background(), s.ID)
-	if updated.UserStatus != nil {
-		t.Errorf("user_status = %v, want nil after re-track", *updated.UserStatus)
+	if updated.WatchStatus != watchStatusWatching {
+		t.Errorf("watch_status = %q, want watching after re-track", updated.WatchStatus)
 	}
 	feeds, _ := st.Read().ListFeedsBySeries(context.Background(), s.ID)
 	if len(feeds) != 1 {
@@ -103,8 +103,8 @@ func TestTrackIdempotent(t *testing.T) {
 	}
 }
 
-// TestPauseDropResumeStatus verifies the manual override endpoints write the
-// expected user_status values.
+// TestPauseDropResumeStatus verifies the legacy pause/drop/resume aliases write
+// the expected watch_status values (pause->on_hold, drop->dropped, resume->watching).
 func TestPauseDropResumeStatus(t *testing.T) {
 	srv, st := newTrackingServer(t)
 	s := addTrackedSeries(t, st, "Override Me", 555)
@@ -112,11 +112,11 @@ func TestPauseDropResumeStatus(t *testing.T) {
 
 	cases := []struct {
 		path string
-		want *string
+		want string
 	}{
-		{"/api/series/" + id + "/pause", strPtr(userStatusPaused)},
-		{"/api/series/" + id + "/drop", strPtr(userStatusDropped)},
-		{"/api/series/" + id + "/resume", nil},
+		{"/api/series/" + id + "/pause", watchStatusOnHold},
+		{"/api/series/" + id + "/drop", watchStatusDropped},
+		{"/api/series/" + id + "/resume", watchStatusWatching},
 	}
 	for _, c := range cases {
 		rec := postJSON(t, srv, c.path, nil)
@@ -124,12 +124,40 @@ func TestPauseDropResumeStatus(t *testing.T) {
 			t.Fatalf("%s: status=%d body=%s", c.path, rec.Code, rec.Body.String())
 		}
 		got, _ := st.Read().GetSeries(context.Background(), s.ID)
-		if c.want == nil {
-			if got.UserStatus != nil {
-				t.Errorf("%s: user_status = %v, want nil", c.path, *got.UserStatus)
-			}
-		} else if got.UserStatus == nil || *got.UserStatus != *c.want {
-			t.Errorf("%s: user_status = %v, want %q", c.path, got.UserStatus, *c.want)
+		if got.WatchStatus != c.want {
+			t.Errorf("%s: watch_status = %q, want %q", c.path, got.WatchStatus, c.want)
+		}
+	}
+}
+
+// TestSetSeriesStatus verifies POST /api/series/{id}/status writes the watch
+// status, surfaces it in the SeriesProgress "status" field, and rejects invalid
+// values with 400.
+func TestSetSeriesStatus(t *testing.T) {
+	srv, st := newTrackingServer(t)
+	s := addTrackedSeries(t, st, "Status Me", 556)
+	id := itoa(int(s.ID))
+
+	for _, status := range []string{watchStatusOnHold, watchStatusDropped, watchStatusWatching} {
+		rec := postJSON(t, srv, "/api/series/"+id+"/status", SetStatusRequest{Status: status})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("set %q: status=%d body=%s", status, rec.Code, rec.Body.String())
+		}
+		resp := decodeBody[SeriesStatusResponse](t, rec)
+		if resp.Data == nil || resp.Data.Series.Status != status {
+			t.Fatalf("set %q: response status = %v, want %q", status, resp.Data, status)
+		}
+		got, _ := st.Read().GetSeries(context.Background(), s.ID)
+		if got.WatchStatus != status {
+			t.Errorf("set %q: persisted watch_status = %q", status, got.WatchStatus)
+		}
+	}
+
+	// 'completed' and garbage are rejected (completed is derived, not settable).
+	for _, bad := range []string{"completed", "", "paused", "nonsense"} {
+		rec := postJSON(t, srv, "/api/series/"+id+"/status", SetStatusRequest{Status: bad})
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("set %q: status=%d, want 400", bad, rec.Code)
 		}
 	}
 }
@@ -149,9 +177,10 @@ func TestPausedSeriesSkippedByPoller(t *testing.T) {
 	}
 	s111, _ := st.Read().GetSeriesByAnilistID(ctx, i64ptrLocal(111))
 
-	// Pause the first; it must drop out of the due-for-poll set.
-	if err := st.Write().SetSeriesUserStatus(ctx, store.SetSeriesUserStatusParams{ID: s111.ID, UserStatus: strPtr(userStatusPaused)}); err != nil {
-		t.Fatalf("pause: %v", err)
+	// Put the first on hold; it must drop out of the due-for-poll set (the gate now
+	// polls watch_status = 'watching' only).
+	if err := st.Write().SetSeriesWatchStatus(ctx, store.SetSeriesWatchStatusParams{ID: s111.ID, WatchStatus: watchStatusOnHold}); err != nil {
+		t.Fatalf("on_hold: %v", err)
 	}
 
 	now := int64(1 << 40) // far future so feeds are due
@@ -180,10 +209,10 @@ func TestTrackedBuckets(t *testing.T) {
 	dropped := addTrackedSeries(t, st, "Dropped One", 3)
 	_ = active
 
-	if err := st.Write().SetSeriesUserStatus(ctx, store.SetSeriesUserStatusParams{ID: paused.ID, UserStatus: strPtr(userStatusPaused)}); err != nil {
-		t.Fatalf("pause: %v", err)
+	if err := st.Write().SetSeriesWatchStatus(ctx, store.SetSeriesWatchStatusParams{ID: paused.ID, WatchStatus: watchStatusOnHold}); err != nil {
+		t.Fatalf("on_hold: %v", err)
 	}
-	if err := st.Write().SetSeriesUserStatus(ctx, store.SetSeriesUserStatusParams{ID: dropped.ID, UserStatus: strPtr(userStatusDropped)}); err != nil {
+	if err := st.Write().SetSeriesWatchStatus(ctx, store.SetSeriesWatchStatusParams{ID: dropped.ID, WatchStatus: watchStatusDropped}); err != nil {
 		t.Fatalf("drop: %v", err)
 	}
 
@@ -214,8 +243,8 @@ func TestManualEnqueueReengages(t *testing.T) {
 	ctx := context.Background()
 	s := addTrackedSeries(t, st, "Reengage Me", 42)
 
-	if err := st.Write().SetSeriesUserStatus(ctx, store.SetSeriesUserStatusParams{ID: s.ID, UserStatus: strPtr(userStatusPaused)}); err != nil {
-		t.Fatalf("pause: %v", err)
+	if err := st.Write().SetSeriesWatchStatus(ctx, store.SetSeriesWatchStatusParams{ID: s.ID, WatchStatus: watchStatusOnHold}); err != nil {
+		t.Fatalf("on_hold: %v", err)
 	}
 	magnet := "magnet:?xt=urn:btih:deadbeef"
 	ep, err := st.Write().CreateEpisode(ctx, store.CreateEpisodeParams{
@@ -231,8 +260,8 @@ func TestManualEnqueueReengages(t *testing.T) {
 	}
 
 	updated, _ := st.Read().GetSeries(ctx, s.ID)
-	if updated.UserStatus != nil {
-		t.Errorf("user_status = %v, want nil after manual enqueue", *updated.UserStatus)
+	if updated.WatchStatus != watchStatusWatching {
+		t.Errorf("watch_status = %q, want watching after manual enqueue", updated.WatchStatus)
 	}
 }
 
@@ -267,8 +296,8 @@ func TestDownloadAvailableCreatesAndReengages(t *testing.T) {
 	ctx := context.Background()
 	s := addTrackedSeries(t, st, "Available DL", 7777)
 
-	if err := st.Write().SetSeriesUserStatus(ctx, store.SetSeriesUserStatusParams{ID: s.ID, UserStatus: strPtr(userStatusPaused)}); err != nil {
-		t.Fatalf("pause: %v", err)
+	if err := st.Write().SetSeriesWatchStatus(ctx, store.SetSeriesWatchStatusParams{ID: s.ID, WatchStatus: watchStatusOnHold}); err != nil {
+		t.Fatalf("on_hold: %v", err)
 	}
 
 	body := DownloadAvailableRequest{
@@ -303,10 +332,10 @@ func TestDownloadAvailableCreatesAndReengages(t *testing.T) {
 		t.Errorf("magnet = %v, want %q", created.Magnet, body.SourceURL)
 	}
 
-	// The paused override must be cleared (series re-engaged to Active).
+	// The on-hold series must be re-engaged to watching.
 	updated, _ := st.Read().GetSeries(ctx, s.ID)
-	if updated.UserStatus != nil {
-		t.Errorf("user_status = %v, want nil after download", *updated.UserStatus)
+	if updated.WatchStatus != watchStatusWatching {
+		t.Errorf("watch_status = %q, want watching after download", updated.WatchStatus)
 	}
 
 	// Idempotent: a second identical call reuses the row (200) and does not add one.
@@ -321,6 +350,193 @@ func TestDownloadAvailableCreatesAndReengages(t *testing.T) {
 	eps, _ := st.Read().ListEpisodesBySeries(ctx, s.ID)
 	if len(eps) != 1 {
 		t.Fatalf("expected exactly one episode after duplicate download, got %d", len(eps))
+	}
+}
+
+// TestUnsubscribeCascade verifies POST /api/series/{id}/unsubscribe deletes the
+// series and all child rows (episodes, feeds, encoded_outputs, screenshots) via FK
+// cascade in one write, leaves a sibling series untouched, and returns 204.
+func TestUnsubscribeCascade(t *testing.T) {
+	srv, st := newTrackingServer(t)
+	ctx := context.Background()
+
+	// Target series with a feed, an episode, an encoded output, and a screenshot.
+	target := addTrackedSeries(t, st, "Cascade Target", 8001)
+	if _, err := st.Write().CreateFeed(ctx, store.CreateFeedParams{
+		Uuid: mustUUID(), SeriesID: target.ID, Type: "scrape",
+		Url: "ssanime://test/cascade", IntervalSeconds: 3600, Enabled: 1,
+	}); err != nil {
+		t.Fatalf("create feed: %v", err)
+	}
+	ep, err := st.Write().CreateEpisode(ctx, store.CreateEpisodeParams{
+		Uuid: mustUUID(), SeriesID: target.ID, SourceKind: "torrent", Status: "archived",
+		EpisodeNo: i64ptrLocal(1),
+	})
+	if err != nil {
+		t.Fatalf("create episode: %v", err)
+	}
+	if _, err := st.Write().CreateEncodedOutput(ctx, store.CreateEncodedOutputParams{
+		Uuid: mustUUID(), EpisodeID: ep.ID, Resolution: 1080, Status: "archived",
+	}); err != nil {
+		t.Fatalf("create encoded output: %v", err)
+	}
+	if _, err := st.Write().CreateScreenshot(ctx, store.CreateScreenshotParams{
+		Uuid: mustUUID(), EpisodeID: ep.ID, SeriesID: target.ID, Path: "/tmp/shot.png",
+	}); err != nil {
+		t.Fatalf("create screenshot: %v", err)
+	}
+
+	// A sibling series that must survive the cascade.
+	sibling := addTrackedSeries(t, st, "Cascade Sibling", 8002)
+	sibEp, err := st.Write().CreateEpisode(ctx, store.CreateEpisodeParams{
+		Uuid: mustUUID(), SeriesID: sibling.ID, SourceKind: "torrent", Status: "queued",
+		EpisodeNo: i64ptrLocal(1),
+	})
+	if err != nil {
+		t.Fatalf("create sibling episode: %v", err)
+	}
+
+	rec := postJSON(t, srv, "/api/series/"+itoa(int(target.ID))+"/unsubscribe", nil)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("unsubscribe: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// The series row is gone.
+	if _, err := st.Read().GetSeries(ctx, target.ID); err == nil {
+		t.Errorf("series %d still present after unsubscribe", target.ID)
+	}
+	// All children are gone (FK cascade).
+	if feeds, _ := st.Read().ListFeedsBySeries(ctx, target.ID); len(feeds) != 0 {
+		t.Errorf("feeds not cascaded: %d remain", len(feeds))
+	}
+	if eps, _ := st.Read().ListEpisodesBySeries(ctx, target.ID); len(eps) != 0 {
+		t.Errorf("episodes not cascaded: %d remain", len(eps))
+	}
+	if outs, _ := st.Read().ListEncodedOutputsByEpisode(ctx, ep.ID); len(outs) != 0 {
+		t.Errorf("encoded_outputs not cascaded: %d remain", len(outs))
+	}
+
+	// The sibling and its episode are untouched.
+	if _, err := st.Read().GetSeries(ctx, sibling.ID); err != nil {
+		t.Errorf("sibling series deleted: %v", err)
+	}
+	if _, err := st.Read().GetEpisode(ctx, sibEp.ID); err != nil {
+		t.Errorf("sibling episode deleted: %v", err)
+	}
+
+	// Unsubscribing a missing series is a 404.
+	rec404 := postJSON(t, srv, "/api/series/"+itoa(int(target.ID))+"/unsubscribe", nil)
+	if rec404.Code != http.StatusNotFound {
+		t.Errorf("re-unsubscribe: status=%d, want 404", rec404.Code)
+	}
+}
+
+// TestRetryErroredEpisode verifies POST /api/episodes/{id}/retry on an errored
+// episode clears the error, requeues it, and returns the EpisodeDetail; a
+// non-errored episode is a 409.
+func TestRetryErroredEpisode(t *testing.T) {
+	srv, st := newTrackingServer(t)
+	ctx := context.Background()
+	s := addTrackedSeries(t, st, "Retry Me", 9001)
+
+	ep, err := st.Write().CreateEpisode(ctx, store.CreateEpisodeParams{
+		Uuid: mustUUID(), SeriesID: s.ID, SourceKind: "torrent", Status: "queued",
+		EpisodeNo: i64ptrLocal(1),
+	})
+	if err != nil {
+		t.Fatalf("create episode: %v", err)
+	}
+	msg := "download failed: no seeders"
+	if err := st.Write().SetEpisodeError(ctx, store.SetEpisodeErrorParams{ID: ep.ID, ErrorMessage: &msg}); err != nil {
+		t.Fatalf("set error: %v", err)
+	}
+
+	rec := postJSON(t, srv, "/api/episodes/"+itoa(int(ep.ID))+"/retry", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("retry: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	resp := decodeBody[EpisodeRetryResponse](t, rec)
+	if resp.Data == nil {
+		t.Fatalf("no data: %s", rec.Body.String())
+	}
+	if resp.Data.Episode.Status != "queued" {
+		t.Errorf("episode status = %q, want queued", resp.Data.Episode.Status)
+	}
+	if resp.Data.Episode.ErrorMessage != nil {
+		t.Errorf("error_message = %v, want nil after retry", *resp.Data.Episode.ErrorMessage)
+	}
+
+	fresh, _ := st.Read().GetEpisode(ctx, ep.ID)
+	if fresh.Status != "queued" || fresh.ErrorMessage != nil {
+		t.Errorf("persisted = (%q, %v), want (queued, nil)", fresh.Status, fresh.ErrorMessage)
+	}
+	if fresh.RetryCount != 1 {
+		t.Errorf("retry_count = %d, want 1", fresh.RetryCount)
+	}
+
+	// Retrying a non-error (now queued) episode is a 409.
+	rec409 := postJSON(t, srv, "/api/episodes/"+itoa(int(ep.ID))+"/retry", nil)
+	if rec409.Code != http.StatusConflict {
+		t.Errorf("retry non-error: status=%d, want 409", rec409.Code)
+	}
+}
+
+// TestActivityOrdering verifies GET /api/activity lists all subscribed series with
+// their episodes, floats a series with active pipeline work to the top, and orders
+// episodes newest-first within a series.
+func TestActivityOrdering(t *testing.T) {
+	srv, st := newTrackingServer(t)
+	ctx := context.Background()
+
+	// Idle series: only an archived episode (no active pipeline work).
+	idle := addTrackedSeries(t, st, "Idle Series", 10001)
+	if _, err := st.Write().CreateEpisode(ctx, store.CreateEpisodeParams{
+		Uuid: mustUUID(), SeriesID: idle.ID, SourceKind: "torrent", Status: "archived",
+		EpisodeNo: i64ptrLocal(1),
+	}); err != nil {
+		t.Fatalf("idle episode: %v", err)
+	}
+
+	// Active series: a downloading episode -> must float to the top.
+	active := addTrackedSeries(t, st, "Active Series", 10002)
+	ep1, err := st.Write().CreateEpisode(ctx, store.CreateEpisodeParams{
+		Uuid: mustUUID(), SeriesID: active.ID, SourceKind: "torrent", Status: "archived",
+		EpisodeNo: i64ptrLocal(1),
+	})
+	if err != nil {
+		t.Fatalf("active ep1: %v", err)
+	}
+	ep2, err := st.Write().CreateEpisode(ctx, store.CreateEpisodeParams{
+		Uuid: mustUUID(), SeriesID: active.ID, SourceKind: "torrent", Status: "downloading",
+		EpisodeNo: i64ptrLocal(2),
+	})
+	if err != nil {
+		t.Fatalf("active ep2: %v", err)
+	}
+
+	rec := getJSON(t, srv, "/api/activity")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("activity: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	resp := decodeBody[ActivityResponse](t, rec)
+	if resp.Data == nil {
+		t.Fatalf("no data: %s", rec.Body.String())
+	}
+	if len(resp.Data.Series) != 2 {
+		t.Fatalf("series count = %d, want 2", len(resp.Data.Series))
+	}
+	// Active series first.
+	if resp.Data.Series[0].ID != active.ID {
+		t.Errorf("first series = %d, want active series %d", resp.Data.Series[0].ID, active.ID)
+	}
+	// Every series carries the frozen status field.
+	if resp.Data.Series[0].Status != watchStatusWatching {
+		t.Errorf("status = %q, want watching", resp.Data.Series[0].Status)
+	}
+	// Episodes newest-first within the active series: ep2 (modified later) before ep1.
+	eps := resp.Data.Series[0].Episodes
+	if len(eps) != 2 || eps[0].ID != ep2.ID || eps[1].ID != ep1.ID {
+		t.Errorf("episode order = %v, want [%d, %d]", eps, ep2.ID, ep1.ID)
 	}
 }
 

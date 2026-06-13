@@ -94,6 +94,7 @@ type SeriesProgress struct {
 	Subscribed        bool    `json:"subscribed"`
 	Favorite          bool    `json:"favorite"`
 	AiringStatus      *string `json:"airing_status"`
+	Status            string  `json:"status"`
 	DerivedStatus     string  `json:"derived_status"`
 	UserStatus        *string `json:"user_status"`
 	PosterPath        *string `json:"poster_path"`
@@ -125,6 +126,7 @@ type SeriesDetail struct {
 	Subscribed       bool            `json:"subscribed"`
 	Favorite         bool            `json:"favorite"`
 	AiringStatus     *string         `json:"airing_status"`
+	Status           string          `json:"status"`
 	DerivedStatus    string          `json:"derived_status"`
 	UserStatus       *string         `json:"user_status"`
 	PosterPath       *string         `json:"poster_path"`
@@ -617,9 +619,37 @@ type TrackResponse struct {
 	FeedID   int64          `json:"feed_id"`
 }
 
-// SeriesStatusResponse wraps a single series for the pause/drop/resume endpoints.
+// SeriesStatusResponse wraps a single series for the pause/drop/resume and
+// set-status endpoints.
 type SeriesStatusResponse struct {
 	Series SeriesProgress `json:"series"`
+}
+
+// SetStatusRequest is the POST /api/series/{id}/status body: the new watch status
+// (watching | on_hold | dropped). 'completed' is derived and not settable here.
+type SetStatusRequest struct {
+	Status string `json:"status"`
+}
+
+// EpisodeRetryResponse wraps the requeued episode for POST /api/episodes/{id}/retry.
+type EpisodeRetryResponse struct {
+	Episode EpisodeDetail `json:"episode"`
+}
+
+// ---- Activity ----
+
+// ActivitySeries is one subscribed series plus its full episode record for the
+// Activity page. It carries every SeriesProgress field (incl status, poster,
+// derived_status) and the series' episodes newest-first.
+type ActivitySeries struct {
+	SeriesProgress
+	Episodes []EpisodeDetail `json:"episodes"`
+}
+
+// ActivityResponse is the GET /api/activity payload: all subscribed series with
+// their episodes, ordered active-series-first then by most-recent activity.
+type ActivityResponse struct {
+	Series []ActivitySeries `json:"series"`
 }
 
 // ---- Available episodes (on-demand source check) ----
