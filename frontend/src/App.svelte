@@ -5,7 +5,6 @@
   import Downloads from './pages/Downloads.svelte'
   import SeriesDetail from './pages/SeriesDetail.svelte'
   import Queue from './pages/Queue.svelte'
-  import Feeds from './pages/Feeds.svelte'
   import Profiles from './pages/Profiles.svelte'
   import Settings from './pages/Settings.svelte'
   import Logs from './pages/Logs.svelte'
@@ -59,9 +58,6 @@
       </Route>
       <Route path="/queue">
         <Queue />
-      </Route>
-      <Route path="/feeds">
-        <Feeds />
       </Route>
       <Route path="/profiles">
         <Profiles />

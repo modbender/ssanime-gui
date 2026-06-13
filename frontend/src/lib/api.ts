@@ -192,26 +192,6 @@ export interface TorrentSearchResult {
   confirmed: boolean
 }
 
-export interface Feed {
-  id: number
-  uuid: string
-  series_id: number
-  type: string
-  site: string | null
-  url: string
-  quality: number | null
-  subtype: string | null
-  deinterlace: boolean
-  uncensored: boolean
-  bluray: boolean
-  title_regex: string | null
-  extra_tags: string | null
-  interval_seconds: number
-  offset_seconds: number
-  enabled: boolean
-  last_checked: number | null
-}
-
 export interface Profile {
   id: number
   uuid: string
@@ -473,12 +453,6 @@ export const api = {
     if (provider) params.set('provider', provider)
     return get<TorrentSearchResult[]>(`/search/torrents?${params}`)
   },
-
-  // Feeds
-  listFeeds: () => get<Feed[]>('/feeds'),
-  createFeed: (body: Partial<Feed>) => post<Feed>('/feeds', body),
-  patchFeed: (id: number, body: Partial<Feed>) => patch<Feed>(`/feeds/${id}`, body),
-  deleteFeed: (id: number) => del<null>(`/feeds/${id}`),
 
   // Profiles
   listProfiles: () => get<Profile[]>('/profiles'),
