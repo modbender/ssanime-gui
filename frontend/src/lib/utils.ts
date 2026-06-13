@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import type { WatchStatus } from '$lib/api'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -169,49 +170,40 @@ export function statusColor(status: string): string {
   }
 }
 
-export function derivedStatusColor(status: string): string {
-  switch (status) {
+/**
+ * The user-facing bucket of a subscribed series. `Completed` is derived (finished
+ * airing + all episodes archived) and wins over the watch status; otherwise the
+ * watch status (`watching | on_hold | dropped`) is shown. Returns one of
+ * `completed | watching | on_hold | dropped`, which feed the label/color helpers.
+ */
+export function watchBucket(s: {
+  status?: WatchStatus | null
+  derived_status?: string
+}): 'completed' | WatchStatus {
+  if (s.derived_status === 'completed') return 'completed'
+  return s.status ?? 'watching'
+}
+
+/** Display color (chip classes) for a watch bucket. */
+export function watchStatusColor(bucket: string): string {
+  switch (bucket) {
     case 'completed': return 'bg-green-500/15 text-green-300 border-green-500/30'
-    case 'airing': return 'bg-blue-500/15 text-blue-300 border-blue-500/30'
-    case 'active': return 'bg-blue-500/15 text-blue-300 border-blue-500/30'
-    case 'up_to_date': return 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
-    case 'incomplete': return 'bg-yellow-500/15 text-yellow-300 border-yellow-500/30'
-    case 'not_aired': return 'bg-gray-500/15 text-gray-400 border-gray-500/30'
-    case 'cancelled': return 'bg-red-500/15 text-red-300 border-red-500/30'
-    case 'paused': return 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+    case 'watching': return 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+    case 'on_hold': return 'bg-amber-500/15 text-amber-300 border-amber-500/30'
     case 'dropped': return 'bg-rose-500/15 text-rose-300 border-rose-500/30'
-    case 'error': return 'bg-red-500/15 text-red-300 border-red-500/30'
     default: return 'bg-gray-500/15 text-gray-400 border-gray-500/30'
   }
 }
 
-export function derivedStatusLabel(status: string): string {
+/** Display label for a watch bucket. */
+export function watchStatusLabel(bucket: string): string {
   const map: Record<string, string> = {
     completed: 'Completed',
-    airing: 'Airing',
-    active: 'Active',
-    up_to_date: 'Up to date',
-    incomplete: 'Incomplete',
-    not_aired: 'Not aired',
-    cancelled: 'Cancelled',
-    paused: 'Paused',
+    watching: 'Watching',
+    on_hold: 'On Hold',
     dropped: 'Dropped',
-    error: 'Error',
   }
-  return map[status] ?? status
-}
-
-/**
- * The user-facing status of a tracked series, honoring the manual override
- * layer (user_status) over the automatic derived_status. A series with a
- * manual override (paused/dropped) shows that; otherwise the derived status.
- */
-export function trackedStatus(s: {
-  user_status?: string | null
-  derived_status: string
-}): string {
-  if (s.user_status === 'paused' || s.user_status === 'dropped') return s.user_status
-  return s.derived_status
+  return map[bucket] ?? bucket
 }
 
 /**

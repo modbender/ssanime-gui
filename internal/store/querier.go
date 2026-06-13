@@ -79,12 +79,12 @@ type Querier interface {
 	ListFavoriteSeries(ctx context.Context) ([]Series, error)
 	ListFeeds(ctx context.Context) ([]Feed, error)
 	ListFeedsBySeries(ctx context.Context, seriesID int64) ([]Feed, error)
-	// ListFeedsDueForPoll returns enabled feeds whose series is subscribed, has no
-	// manual status override (user_status IS NULL - Paused/Dropped series are skipped
-	// so background automation never overrides a manual choice), and whose derived
-	// status still permits polling (not completed/cancelled/not_aired), and whose
-	// interval has elapsed. The completed/up_to_date split is computed in Go from
-	// airing_status + archive counts; this query enforces the cheap, durable filters.
+	// ListFeedsDueForPoll returns enabled feeds whose series is subscribed, is in the
+	// 'watching' watch status (on_hold/dropped series are skipped so background
+	// automation never overrides a manual choice), whose derived status still permits
+	// polling (not completed/cancelled/not_aired), and whose interval has elapsed. The
+	// completed/up_to_date split is computed in Go from airing_status + archive counts;
+	// this query enforces the cheap, durable filters.
 	ListFeedsDueForPoll(ctx context.Context, now *int64) ([]Feed, error)
 	ListQueuedEpisodes(ctx context.Context) ([]Episode, error)
 	ListScreenshotsByEpisode(ctx context.Context, episodeID int64) ([]Screenshot, error)
@@ -141,6 +141,9 @@ type Querier interface {
 	// SetSeriesUserStatus sets the manual override: NULL re-engages full automation,
 	// 'paused'/'dropped' make the series' feed dormant (the poller gate skips it).
 	SetSeriesUserStatus(ctx context.Context, arg SetSeriesUserStatusParams) error
+	// SetSeriesWatchStatus sets the watch status that solely drives polling: 'watching'
+	// (polled), 'on_hold'/'dropped' (never polled). 'completed' is never stored here.
+	SetSeriesWatchStatus(ctx context.Context, arg SetSeriesWatchStatusParams) error
 	SettingsExist(ctx context.Context) (bool, error)
 	UpdateDownloadClient(ctx context.Context, arg UpdateDownloadClientParams) (DownloadClient, error)
 	UpdateEncodeProfile(ctx context.Context, arg UpdateEncodeProfileParams) (EncodeProfile, error)

@@ -18,8 +18,6 @@
   import DiscoveryCard from '$lib/components/DiscoveryCard.svelte'
   import {
     statusColor,
-    derivedStatusColor,
-    derivedStatusLabel,
     formatBytes,
     formatDate,
     resolveAccent,
@@ -27,7 +25,9 @@
     accentForeground,
     accentText,
     accentTextRgb,
-    trackedStatus,
+    watchBucket,
+    watchStatusColor,
+    watchStatusLabel,
     titleCase,
     relativeTime,
     isFuture,
@@ -36,7 +36,6 @@
   import { sseState } from '$lib/sse.svelte'
   import { episodeOverall, episodeStage } from '$lib/pipeline.svelte'
   import { fillGreenMix } from '$lib/pipeline-math'
-  import { openDrawer } from '$lib/activity.svelte'
   import { getPreview, markTracked } from '$lib/discovery.svelte'
   import { requireSource } from '$lib/sources.svelte'
 
@@ -65,8 +64,10 @@
   // ---- Synopsis expand ----
   let synopsisExpanded = $state(false)
 
-  // ---- Manual status actions ----
+  // ---- Watch-status actions ----
   let statusBusy = $state(false)
+  let unsubscribeOpen = $state(false)
+  let unsubscribing = $state(false)
 
   // ---- Available episodes (on-demand source check) ----
   let available = $state<AvailableEpisode[]>([])
@@ -152,7 +153,7 @@
       const msg = String(e?.message ?? '').toLowerCase()
       if (msg.includes('already') || msg.includes('exist')) {
         markTracked(anilist)
-        navigate('/downloads')
+        navigate('/library')
       } else {
         alert(e.message)
       }
@@ -161,12 +162,12 @@
     }
   }
 
-  // ---- Pause / Drop / Resume ----
-  async function runStatus(fn: () => Promise<{ series: any }>) {
-    if (numId == null || statusBusy) return
+  // ---- Watch status (Watching / On Hold / Dropped) ----
+  async function setStatus(status: 'watching' | 'on_hold' | 'dropped') {
+    if (numId == null || statusBusy || series?.status === status) return
     statusBusy = true
     try {
-      await fn()
+      await api.setSeriesStatus(numId, status)
       await loadTracked()
     } catch (e: any) {
       alert(e.message)
@@ -174,9 +175,21 @@
       statusBusy = false
     }
   }
-  const pause = () => runStatus(() => api.pauseSeries(numId!))
-  const drop = () => runStatus(() => api.dropSeries(numId!))
-  const resume = () => runStatus(() => api.resumeSeries(numId!))
+
+  // ---- Unsubscribe (full DB cleanup; files kept) ----
+  async function unsubscribe() {
+    if (numId == null || unsubscribing) return
+    unsubscribing = true
+    try {
+      await api.unsubscribeSeries(numId)
+      unsubscribeOpen = false
+      navigate('/library')
+    } catch (e: any) {
+      alert(e.message)
+    } finally {
+      unsubscribing = false
+    }
+  }
 
   // ---- Available episodes ----
   async function loadAvailable() {
@@ -340,9 +353,8 @@
   )
   const totalCount = $derived(series?.episodes.length ?? 0)
 
-  // The displayed status honors the manual override layer.
-  const status = $derived(series ? trackedStatus(series) : null)
-  const isManual = $derived(status === 'paused' || status === 'dropped')
+  // The displayed status bucket (Completed derived, else watch status).
+  const bucket = $derived(series ? watchBucket(series) : null)
 
   function fmtAiring(s: string | null | undefined): string | null {
     if (!s) return null
@@ -530,9 +542,9 @@
 
       <!-- Back affordance -->
       <div class="relative px-6 sm:px-10 pt-5">
-        <Button variant="ghost" size="sm" onclick={() => navigate(series ? '/downloads' : '/')}>
+        <Button variant="ghost" size="sm" onclick={() => navigate(series ? '/library' : '/')}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          {series ? 'Downloads' : 'Home'}
+          {series ? 'Library' : 'Home'}
         </Button>
       </div>
 
@@ -583,9 +595,9 @@
 
             <!-- meta chips -->
             <div class="mt-5 flex flex-wrap items-center gap-2">
-              {#if series && status}
-                <span class={`inline-flex items-center border px-2.5 py-1 text-[11px] font-medium backdrop-blur-sm ${derivedStatusColor(status)}`}>
-                  {derivedStatusLabel(status)}
+              {#if series && bucket}
+                <span class={`inline-flex items-center border px-2.5 py-1 text-[11px] font-medium backdrop-blur-sm ${watchStatusColor(bucket)}`}>
+                  {watchStatusLabel(bucket)}
                 </span>
               {/if}
               {#if format}
@@ -616,10 +628,10 @@
                 <Button onclick={() => track(numAnilist!)} disabled={tracking}>
                   {#if tracking}
                     <Spinner size={14}/>
-                    Tracking…
+                    Subscribing…
                   {:else}
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    Download &amp; track
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Subscribe
                   {/if}
                 </Button>
               {:else if !series && numAnilist != null}
@@ -627,35 +639,39 @@
                 <Button onclick={() => track(numAnilist!)} disabled={tracking}>
                   {#if tracking}
                     <Spinner size={14}/>
-                    Tracking…
+                    Subscribing…
                   {:else}
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    Download &amp; track
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Subscribe
                   {/if}
                 </Button>
               {:else if series}
-                <!-- Tracked: manual status controls -->
-                {#if isManual}
-                  <Button onclick={resume} disabled={statusBusy}>
-                    {#if statusBusy}<Spinner size={14}/>{:else}
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>
-                    {/if}
-                    Resume
-                  </Button>
-                {:else}
-                  <Button variant="outline" onclick={pause} disabled={statusBusy} title="Pause auto-download (keeps files)">
-                    {#if statusBusy}<Spinner size={14}/>{:else}
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25"><path d="M6 4h3v16H6zM15 4h3v16h-3z"/></svg>
-                    {/if}
-                    Pause
-                  </Button>
-                {/if}
-                {#if status !== 'dropped'}
-                  <Button variant="ghost" onclick={drop} disabled={statusBusy} title="Drop (keeps files on disk)">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12" stroke-linecap="round"/></svg>
-                    Drop
-                  </Button>
-                {/if}
+                <!-- Tracked: watch-status switch -->
+                <div
+                  class="flex shrink-0 overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface-2)]"
+                  role="group"
+                  aria-label="Watch status"
+                >
+                  {#each [{ value: 'watching', label: 'Watching' }, { value: 'on_hold', label: 'On Hold' }, { value: 'dropped', label: 'Dropped' }] as opt (opt.value)}
+                    {@const on = series.status === opt.value}
+                    <button
+                      type="button"
+                      class="px-3 py-1.5 text-[13px] font-medium transition-colors
+                        {on
+                          ? 'bg-[rgb(var(--accent-rgb)/0.2)] text-[var(--color-text)]'
+                          : 'text-[var(--color-muted)] hover:bg-white/5 hover:text-[var(--color-text)]'}
+                        disabled:opacity-50 disabled:cursor-not-allowed"
+                      aria-pressed={on}
+                      disabled={statusBusy}
+                      onclick={() => setStatus(opt.value as 'watching' | 'on_hold' | 'dropped')}
+                    >{opt.label}</button>
+                  {/each}
+                </div>
+
+                <Button variant="ghost" onclick={() => (unsubscribeOpen = true)} title="Unsubscribe (removes tracking; keeps files)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0M1 1l22 22" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  Unsubscribe
+                </Button>
 
                 <Button variant="secondary" onclick={scan} disabled={scanning}>
                   {#if scanning}<Spinner size={14}/>{:else}
@@ -687,9 +703,9 @@
               {/if}
             </div>
 
-            {#if series && isManual}
+            {#if series && (series.status === 'on_hold' || series.status === 'dropped')}
               <p class="mt-3 text-xs text-[var(--color-muted)] max-w-xl">
-                {status === 'paused' ? 'Paused' : 'Dropped'} — background auto-download is off. Files are kept. Downloading an episode below re-engages tracking.
+                {series.status === 'on_hold' ? 'On Hold' : 'Dropped'} — background auto-download is off. Files are kept. Set it back to Watching to resume polling.
               </p>
             {/if}
           </div>
@@ -865,16 +881,6 @@
                     style="left: {overall}%; background: rgb(from var(--fill-color) r g b / 0.5);"
                   ></div>
                 {/if}
-              {/if}
-
-              <!-- click-through overlay: opens the Activity drawer for this episode -->
-              {#if p}
-                <button
-                  type="button"
-                  class="absolute inset-0 z-[1] cursor-pointer"
-                  onclick={() => openDrawer(p.id)}
-                  aria-label={`Activity for ${ep.title || (ep.number != null ? `Episode ${ep.number}` : 'Special')}`}
-                ></button>
               {/if}
 
               <!-- ✓ completion badge -->
@@ -1090,5 +1096,21 @@
         <p class="mt-2 text-xs text-[var(--color-warning)]">Select at least one resolution.</p>
       {/if}
     </div>
+  </div>
+</Modal>
+
+<!-- ─── Unsubscribe confirmation ───────────────────────────────── -->
+<Modal bind:open={unsubscribeOpen} title="Unsubscribe from {title}?">
+  {#snippet footer()}
+    <Button variant="ghost" onclick={() => { unsubscribeOpen = false }}>Cancel</Button>
+    <Button variant="destructive" onclick={unsubscribe} disabled={unsubscribing}>
+      {#if unsubscribing}<Spinner size={14}/>{/if}
+      Unsubscribe
+    </Button>
+  {/snippet}
+
+  <div class="space-y-3 text-sm text-[var(--color-text-dim)]">
+    <p>This removes the series from your library and stops all tracking. Its episodes, feeds, and encode records are deleted.</p>
+    <p class="text-[var(--color-muted)]">Downloaded and encoded files on disk are <span class="font-medium text-[var(--color-text)]">kept</span> — they remain in your library folder as orphaned files.</p>
   </div>
 </Modal>

@@ -130,6 +130,7 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 		// Discovery home + tracking
 		api.Get("/discovery", h.handleDiscovery)
 		api.Get("/tracked", h.handleGetTracked)
+		api.Get("/activity", h.handleActivity)
 		api.Post("/track", h.handleTrackSeries)
 
 		// AniList detail (series page; tracked + untracked alike)
@@ -148,6 +149,8 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 				r.Post("/refresh", h.handleRefreshSeries)
 				r.Get("/available", h.handleAvailableEpisodes)
 				r.Post("/available/download", h.handleDownloadAvailable)
+				r.Post("/status", h.handleSetSeriesStatus)
+				r.Post("/unsubscribe", h.handleUnsubscribeSeries)
 				r.Post("/pause", h.handlePauseSeries)
 				r.Post("/drop", h.handleDropSeries)
 				r.Post("/resume", h.handleResumeSeries)

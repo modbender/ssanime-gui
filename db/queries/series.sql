@@ -113,5 +113,10 @@ UPDATE series SET airing_status = ?, modified_at = unixepoch() WHERE id = ?;
 -- name: SetSeriesUserStatus :exec
 UPDATE series SET user_status = ?, modified_at = unixepoch() WHERE id = ?;
 
+-- SetSeriesWatchStatus sets the watch status that solely drives polling: 'watching'
+-- (polled), 'on_hold'/'dropped' (never polled). 'completed' is never stored here.
+-- name: SetSeriesWatchStatus :exec
+UPDATE series SET watch_status = ?, modified_at = unixepoch() WHERE id = ?;
+
 -- name: DeleteSeries :exec
 DELETE FROM series WHERE id = ?;

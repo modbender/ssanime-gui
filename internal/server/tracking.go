@@ -17,11 +17,20 @@ import (
 	"github.com/modbender/ssanime-gui/internal/store"
 )
 
-// User-status override values. NULL (absent) means fully automatic.
+// Watch-status values: the AniList-style state that solely drives polling.
+// 'completed' is derived (finished airing + all episodes archived), never stored.
 const (
-	userStatusPaused  = "paused"
-	userStatusDropped = "dropped"
+	watchStatusWatching = "watching"
+	watchStatusOnHold   = "on_hold"
+	watchStatusDropped  = "dropped"
 )
+
+// validWatchStatuses is the set accepted by POST /api/series/{id}/status.
+var validWatchStatuses = map[string]struct{}{
+	watchStatusWatching: {},
+	watchStatusOnHold:   {},
+	watchStatusDropped:  {},
+}
 
 // handleGetTracked groups tracked series into the home/Downloads buckets:
 // in_progress (Active), completed, paused, dropped. A manual user_status override
@@ -57,10 +66,10 @@ func (h *Handler) handleGetTracked(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		p := rowToProgress(row)
-		switch us := strings.ToLower(strPtrVal(row.UserStatus)); us {
-		case userStatusPaused:
+		switch strings.ToLower(row.WatchStatus) {
+		case watchStatusOnHold:
 			resp.Paused = append(resp.Paused, p)
-		case userStatusDropped:
+		case watchStatusDropped:
 			resp.Dropped = append(resp.Dropped, p)
 		default:
 			if p.DerivedStatus == "completed" {
@@ -81,6 +90,87 @@ func (h *Handler) handleGetTracked(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, http.StatusOK, resp)
+}
+
+// activePipelineStatuses are the episode statuses that count as live pipeline work
+// for the Activity page ordering (a series with any such episode floats to the top).
+var activePipelineStatuses = map[string]struct{}{
+	"queued":      {},
+	"downloading": {},
+	"downloaded":  {},
+	"encoding":    {},
+	"encoded":     {},
+}
+
+// handleActivity returns every subscribed series with its full episode record for
+// the Activity page. Ordering: series with any active pipeline episode first, then
+// by most-recent episode activity (max episode modified_at); episodes within a
+// series are newest-first.
+func (h *Handler) handleActivity(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	rows, err := h.store.Read().ListSeriesWithProgress(ctx)
+	if err != nil {
+		h.logger.Error("activity: list series", "err", err)
+		WriteError(w, http.StatusInternalServerError, "failed to list series")
+		return
+	}
+
+	type ranked struct {
+		s          ActivitySeries
+		active     bool
+		lastActive int64 // max episode modified_at, for the secondary sort
+	}
+	ranks := make([]ranked, 0, len(rows))
+
+	for _, row := range rows {
+		if row.Subscribed != 1 {
+			continue
+		}
+		eps, err := h.store.Read().ListEpisodesBySeries(ctx, row.ID)
+		if err != nil {
+			h.logger.Warn("activity: list episodes", "series_id", row.ID, "err", err)
+			continue
+		}
+		details := make([]EpisodeDetail, 0, len(eps))
+		var anyActive bool
+		var lastActive int64
+		for _, ep := range eps {
+			if _, ok := activePipelineStatuses[ep.Status]; ok {
+				anyActive = true
+			}
+			if ep.ModifiedAt > lastActive {
+				lastActive = ep.ModifiedAt
+			}
+			outputs, _ := h.store.Read().ListEncodedOutputsByEpisode(ctx, ep.ID)
+			details = append(details, episodeToDetail(ep, row.Title, outputs))
+		}
+		// Episodes newest-first (most-recently-modified first, tie-break by id desc).
+		sort.SliceStable(details, func(i, j int) bool {
+			if details[i].ModifiedAt != details[j].ModifiedAt {
+				return details[i].ModifiedAt > details[j].ModifiedAt
+			}
+			return details[i].ID > details[j].ID
+		})
+		ranks = append(ranks, ranked{
+			s:          ActivitySeries{SeriesProgress: rowToProgress(row), Episodes: details},
+			active:     anyActive,
+			lastActive: lastActive,
+		})
+	}
+
+	// Active-series first; then by most-recent episode activity (desc).
+	sort.SliceStable(ranks, func(i, j int) bool {
+		if ranks[i].active != ranks[j].active {
+			return ranks[i].active
+		}
+		return ranks[i].lastActive > ranks[j].lastActive
+	})
+
+	out := ActivityResponse{Series: make([]ActivitySeries, 0, len(ranks))}
+	for _, rk := range ranks {
+		out.Series = append(out.Series, rk.s)
+	}
+	WriteJSON(w, http.StatusOK, out)
 }
 
 // activeSeriesIDs returns the set of series ids with an episode currently
@@ -135,6 +225,12 @@ func (h *Handler) handleTrackSeries(w http.ResponseWriter, r *http.Request) {
 		}
 		if e := h.store.Write().SetSeriesUserStatus(ctx, store.SetSeriesUserStatusParams{ID: existing.ID, UserStatus: nil}); e != nil {
 			h.logger.Error("track: clear user_status", "id", existing.ID, "err", e)
+			WriteError(w, http.StatusInternalServerError, "failed to re-engage series")
+			return
+		}
+		// (Re)subscribe always lands on the polled watch status.
+		if e := h.store.Write().SetSeriesWatchStatus(ctx, store.SetSeriesWatchStatusParams{ID: existing.ID, WatchStatus: watchStatusWatching}); e != nil {
+			h.logger.Error("track: set watching", "id", existing.ID, "err", e)
 			WriteError(w, http.StatusInternalServerError, "failed to re-engage series")
 			return
 		}
@@ -235,25 +331,42 @@ func (h *Handler) ensureFeed(ctx context.Context, seriesID int64) (int64, error)
 	return feed.ID, nil
 }
 
-// handlePauseSeries / handleDropSeries / handleResumeSeries set or clear the
-// manual user_status override. Pause/Drop make the feed dormant via the poller
-// gate (user_status IS NULL); Resume re-engages full automation. No status change
-// ever deletes files.
+// handleSetSeriesStatus is the generalized watch-status setter: it accepts a body
+// {"status":"watching"|"on_hold"|"dropped"} and writes it. 'watching' is the only
+// status the poller acts on; 'on_hold'/'dropped' stay tracked but are never polled.
+// 'completed' is derived and rejected here. No status change ever deletes files.
+func (h *Handler) handleSetSeriesStatus(w http.ResponseWriter, r *http.Request) {
+	var req SetStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	status := strings.ToLower(strings.TrimSpace(req.Status))
+	if _, ok := validWatchStatuses[status]; !ok {
+		WriteError(w, http.StatusBadRequest, "status must be one of watching, on_hold, dropped")
+		return
+	}
+	h.setWatchStatus(w, r, status)
+}
+
+// handlePauseSeries / handleDropSeries / handleResumeSeries are thin aliases over
+// the watch-status setter, kept so existing clients keep working: pause -> on_hold,
+// drop -> dropped, resume -> watching. The poller polls 'watching' only.
 func (h *Handler) handlePauseSeries(w http.ResponseWriter, r *http.Request) {
-	h.setUserStatus(w, r, strPtr(userStatusPaused))
+	h.setWatchStatus(w, r, watchStatusOnHold)
 }
 
 func (h *Handler) handleDropSeries(w http.ResponseWriter, r *http.Request) {
-	h.setUserStatus(w, r, strPtr(userStatusDropped))
+	h.setWatchStatus(w, r, watchStatusDropped)
 }
 
 func (h *Handler) handleResumeSeries(w http.ResponseWriter, r *http.Request) {
-	h.setUserStatus(w, r, nil)
+	h.setWatchStatus(w, r, watchStatusWatching)
 }
 
-// setUserStatus is the shared body for pause/drop/resume: validate the series
-// exists, write the override, return the refreshed SeriesProgress.
-func (h *Handler) setUserStatus(w http.ResponseWriter, r *http.Request, status *string) {
+// setWatchStatus is the shared body: validate the series exists, write the watch
+// status, return the refreshed SeriesProgress.
+func (h *Handler) setWatchStatus(w http.ResponseWriter, r *http.Request, status string) {
 	id, ok := parseID(w, r)
 	if !ok {
 		return
@@ -266,8 +379,8 @@ func (h *Handler) setUserStatus(w http.ResponseWriter, r *http.Request, status *
 		WriteError(w, http.StatusInternalServerError, "failed to get series")
 		return
 	}
-	if err := h.store.Write().SetSeriesUserStatus(ctx, store.SetSeriesUserStatusParams{ID: id, UserStatus: status}); err != nil {
-		h.logger.Error("set user_status", "id", id, "status", strPtrVal(status), "err", err)
+	if err := h.store.Write().SetSeriesWatchStatus(ctx, store.SetSeriesWatchStatusParams{ID: id, WatchStatus: status}); err != nil {
+		h.logger.Error("set watch_status", "id", id, "status", status, "err", err)
 		WriteError(w, http.StatusInternalServerError, "failed to update status")
 		return
 	}
@@ -277,6 +390,36 @@ func (h *Handler) setUserStatus(w http.ResponseWriter, r *http.Request, status *
 		return
 	}
 	WriteJSON(w, http.StatusOK, SeriesStatusResponse{Series: progress})
+}
+
+// handleUnsubscribeSeries performs full DB cleanup for a series: a single
+// DELETE FROM series, which cascades via FK ON DELETE CASCADE to its feeds,
+// episodes, encoded_outputs, and screenshots (foreign_keys is ON on both pools).
+// Files on disk are NOT touched. It broadcasts series.updated with deleted:true so
+// the UI can drop the series from Library/Activity. Returns 204.
+func (h *Handler) handleUnsubscribeSeries(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	if _, err := h.store.Read().GetSeries(ctx, id); errors.Is(err, sql.ErrNoRows) {
+		WriteError(w, http.StatusNotFound, "series not found")
+		return
+	} else if err != nil {
+		WriteError(w, http.StatusInternalServerError, "failed to get series")
+		return
+	}
+	if err := h.store.Write().DeleteSeries(ctx, id); err != nil {
+		h.logger.Error("unsubscribe series", "id", id, "err", err)
+		WriteError(w, http.StatusInternalServerError, "failed to unsubscribe series")
+		return
+	}
+	h.hub.Broadcast(events.TypeSeriesUpdated, map[string]any{
+		"series_id": id,
+		"deleted":   true,
+	})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // handleAvailableEpisodes runs an on-demand source search for a series NOW
