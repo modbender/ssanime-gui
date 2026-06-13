@@ -1,0 +1,9 @@
+# The embedded frontend bundle (internal/server/dist) is a generated artifact
+# committed for go:embed. Treat it as binary so Windows core.autocrlf checkouts
+# don't churn it with spurious whitespace-only diffs against the LF the Vite
+# build emits on every rebuild.
+internal/server/dist/** binary
+
+# Cargo manifests are LF in-repo (matches the Rust toolchain); pin them so a
+# Windows checkout doesn't flip them to CRLF and show phantom modifications.
+*.toml text eol=lf

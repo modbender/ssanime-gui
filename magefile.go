@@ -14,6 +14,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"runtime"
 
 	"github.com/magefile/mage/mg"
@@ -138,11 +139,31 @@ func Sidecar() error {
 	return goBuild(hostBuildEnv(), ld, out)
 }
 
+// killStaleInstances stops any running ssanime daemon/desktop process so the
+// build can overwrite the binaries they lock. The daemon outlives the UI in the
+// tray by design, so a prior instance is commonly still alive at build time;
+// Windows refuses to delete or relink a running .exe, which makes the Tauri
+// bundler's sidecar copy fail with "Access is denied". No-op off Windows and
+// when nothing is running.
+func killStaleInstances() {
+	if runtime.GOOS != "windows" {
+		return
+	}
+	for _, name := range []string{"ssanime-desktop.exe", "ssanime.exe"} {
+		// Output is discarded (taskkill is noisy when nothing matches); a clean
+		// exit means a process was actually stopped.
+		if exec.Command("taskkill", "/F", "/IM", name).Run() == nil {
+			fmt.Println("stopped stale", name)
+		}
+	}
+}
+
 // Tauri builds the native desktop app. Depends on Frontend (embedded SPA) and
 // Sidecar (the bundled daemon), then runs the Tauri bundler. Installers land in
 // desktop/target/release/bundle/ (the cargo workspace root is desktop/, so the
 // target dir is desktop/target — NOT desktop/src-tauri/target).
 func Tauri() error {
+	killStaleInstances()
 	mg.SerialDeps(Frontend, Sidecar)
 	fmt.Println("bundling Tauri desktop app")
 	return inDir("desktop", func() error {
