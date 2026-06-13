@@ -318,11 +318,13 @@ func (h *Handler) handleAvailableEpisodes(w http.ResponseWriter, r *http.Request
 
 	// Keep the best release per episode number across all providers.
 	best := map[int]*source.AnimeTorrent{}
+	var warnings []string
 	for _, pid := range h.registry.List() {
 		p, _ := h.registry.Get(pid)
 		torrents, err := p.SmartSearch(ctx, opts)
 		if err != nil {
 			h.logger.Warn("available: provider error", "provider", pid, "series_id", id, "err", err)
+			warnings = append(warnings, fmt.Sprintf("%s: %s", pid, err))
 			continue
 		}
 		for _, t := range torrents {
@@ -355,7 +357,7 @@ func (h *Handler) handleAvailableEpisodes(w http.ResponseWriter, r *http.Request
 	}
 	sort.Slice(episodes, func(i, j int) bool { return episodes[i].Number < episodes[j].Number })
 
-	WriteJSON(w, http.StatusOK, AvailableResponse{Episodes: episodes})
+	WriteJSON(w, http.StatusOK, AvailableResponse{Episodes: episodes, Warnings: warnings})
 }
 
 // handleDownloadAvailable downloads one source-found episode (from the

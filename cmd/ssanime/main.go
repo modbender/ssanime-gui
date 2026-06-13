@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -44,6 +43,7 @@ import (
 	"github.com/modbender/ssanime-gui/internal/encode"
 	"github.com/modbender/ssanime-gui/internal/events"
 	"github.com/modbender/ssanime-gui/internal/extension"
+	"github.com/modbender/ssanime-gui/internal/logging"
 	"github.com/modbender/ssanime-gui/internal/metadata"
 	"github.com/modbender/ssanime-gui/internal/poller"
 	"github.com/modbender/ssanime-gui/internal/server"
@@ -74,13 +74,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger, logFile, err := buildLogger(cfg.DataDir)
+	logger, logBridge, logRing, logCloser, err := buildLogger(cfg.DataDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ssanime: open log file: %v\n", err)
 		os.Exit(1)
 	}
-	if logFile != nil {
-		defer logFile.Close()
+	if logCloser != nil {
+		defer logCloser.Close()
 	}
 
 	logger.Info("starting", "app", config.AppName, "dataDir", cfg.DataDir, "port", cfg.Port, "headless", headless)
@@ -97,7 +97,7 @@ func main() {
 		// Headless mode: used by the Tauri desktop shell. Run the full daemon
 		// (server + workers) but without the systray. Block until SIGINT or
 		// parent process kills us, then execute graceful LIFO shutdown.
-		runHeadless(cfg, logger)
+		runHeadless(cfg, logger, logBridge, logRing)
 		return
 	}
 
@@ -109,7 +109,7 @@ func main() {
 	// systray.Run MUST be called from the main goroutine.
 	// onReady fires in a separate goroutine (per fyne.io/systray contract).
 	systray.Run(
-		onReady(cfg, logger, noOpen, &daemonShutdown),
+		onReady(cfg, logger, logBridge, logRing, noOpen, &daemonShutdown),
 		onExit(&daemonShutdown, logger),
 	)
 }
@@ -117,8 +117,8 @@ func main() {
 // runHeadless starts the full daemon (store, hub, queues, HTTP server) without
 // a systray. It blocks until SIGINT or SIGTERM, then runs graceful LIFO shutdown.
 // This is the mode used when the Tauri desktop shell owns the process lifetime.
-func runHeadless(cfg *config.Config, logger *slog.Logger) {
-	shutdown, _, _, shutdownRequested := startDaemon(cfg, logger)
+func runHeadless(cfg *config.Config, logger *slog.Logger, logBridge *logging.HubBridge, logRing *logging.Ring) {
+	shutdown, _, _, shutdownRequested := startDaemon(cfg, logger, logBridge, logRing)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -159,7 +159,7 @@ func runHeadless(cfg *config.Config, logger *slog.Logger) {
 // onReady returns the systray onReady callback. It runs in its own goroutine.
 // It starts the HTTP server + workers, optionally opens the browser, then waits
 // for SIGINT. On signal it calls shutdown() and then systray.Quit() so main returns.
-func onReady(cfg *config.Config, logger *slog.Logger, noOpen bool, daemonShutdown *func()) func() {
+func onReady(cfg *config.Config, logger *slog.Logger, logBridge *logging.HubBridge, logRing *logging.Ring, noOpen bool, daemonShutdown *func()) func() {
 	return func() {
 		systray.SetIcon(icon.Data)
 		systray.SetTitle(config.DisplayName)
@@ -175,7 +175,7 @@ func onReady(cfg *config.Config, logger *slog.Logger, noOpen bool, daemonShutdow
 		var dlQ *download.Queue
 		var encQ *encode.Queue
 		var shutdownRequested <-chan struct{}
-		*daemonShutdown, dlQ, encQ, shutdownRequested = startDaemon(cfg, logger)
+		*daemonShutdown, dlQ, encQ, shutdownRequested = startDaemon(cfg, logger, logBridge, logRing)
 
 		// Auto-open the UI in the default browser once the listener is ready.
 		if !noOpen {
@@ -271,7 +271,7 @@ func onExit(daemonShutdown *func(), logger *slog.Logger) func() {
 // It starts the HTTP server in a goroutine and returns a shutdown func plus
 // references to the download and encode queues (so the tray can pause them).
 // The shutdown func tears everything down in LIFO order.
-func startDaemon(cfg *config.Config, logger *slog.Logger) (shutdown func(), dlQueue *download.Queue, encQueue *encode.Queue, shutdownRequested <-chan struct{}) {
+func startDaemon(cfg *config.Config, logger *slog.Logger, logBridge *logging.HubBridge, logRing *logging.Ring) (shutdown func(), dlQueue *download.Queue, encQueue *encode.Queue, shutdownRequested <-chan struct{}) {
 	var cleanups []func()
 	add := func(fn func()) { cleanups = append(cleanups, fn) }
 
@@ -316,6 +316,12 @@ func startDaemon(cfg *config.Config, logger *slog.Logger) (shutdown func(), dlQu
 	hub := events.NewHub(logger)
 	hub.Start()
 	add(hub.Stop)
+
+	// Wire the slog->hub bridge now that the hub is live, so subsequent log
+	// records stream to the in-app Logs view. Pre-attach records went to file only.
+	if logBridge != nil {
+		logBridge.Attach(hub)
+	}
 
 	// --- Source registry + DoH ---
 	resolver := doh.NewResolver("")
@@ -427,6 +433,7 @@ func startDaemon(cfg *config.Config, logger *slog.Logger) (shutdown func(), dlQu
 			Discovery:         discoverySvc,
 			AnilistDetail:     anilistClient,
 			Anizip:            anizip.New(),
+			Logs:              logRing,
 			OnShutdownRequest: onShutdownRequest,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
@@ -464,16 +471,13 @@ func waitForListener(port int, timeout time.Duration) {
 	}
 }
 
-// buildLogger builds a slog.Logger that writes to {dataDir}/ssanime.log and to
-// stdout. In -H=windowsgui builds stdout is a null handle, so the log file gets
-// all output. In console builds both destinations receive every line.
-func buildLogger(dataDir string) (*slog.Logger, *os.File, error) {
-	logPath := filepath.Join(dataDir, "ssanime.log")
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		return nil, nil, fmt.Errorf("open log file %s: %w", logPath, err)
-	}
-	w := io.MultiWriter(logFile, os.Stdout)
-	handler := slog.NewTextHandler(w, &slog.HandlerOptions{Level: slog.LevelInfo})
-	return slog.New(handler), logFile, nil
+// buildLogger builds the daemon slog.Logger: a rotating {dataDir}/ssanime.log
+// (10 MB/file, 30 backups, 30-day retention, gzip) mirrored to stdout, an
+// in-memory *logging.Ring of recent formatted lines that backs GET /api/logs, and
+// a HubBridge that streams Info+ records to the events hub for the in-app Logs
+// view. The bridge's hub side stays inert until startDaemon calls bridge.Attach
+// after the hub starts. The returned io.Closer flushes and closes the rotating sink.
+func buildLogger(dataDir string) (*slog.Logger, *logging.HubBridge, *logging.Ring, io.Closer, error) {
+	logger, bridge, ring, closer := logging.Build(dataDir)
+	return logger, bridge, ring, closer, nil
 }

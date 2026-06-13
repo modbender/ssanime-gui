@@ -375,6 +375,8 @@ export interface AvailableEpisode {
 
 export interface AvailableResponse {
   episodes: AvailableEpisode[]
+  /** Human-readable provider failures (e.g. dead source API). May be absent/empty. */
+  warnings?: string[]
 }
 
 // ---- Full AniList detail (series detail page) ----

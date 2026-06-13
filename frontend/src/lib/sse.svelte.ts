@@ -34,6 +34,8 @@ export interface LogEvent {
   level: string
   message: string
   ts: number
+  /** monotonic client-side id; ts is seconds-granular so same-second events would otherwise collide as list keys */
+  seq: number
 }
 
 // Global reactive SSE state.
@@ -56,6 +58,7 @@ export const sseState = $state({
 
 let es: EventSource | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+let logSeq = 0
 
 function connect() {
   if (es) {
@@ -101,7 +104,7 @@ function connect() {
 
   es.addEventListener('log', (e) => {
     try {
-      const data: LogEvent = JSON.parse(e.data)
+      const data: LogEvent = { ...JSON.parse(e.data), seq: logSeq++ }
       sseState.logs = [data, ...sseState.logs].slice(0, 500)
     } catch {}
   })

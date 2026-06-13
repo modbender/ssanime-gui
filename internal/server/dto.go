@@ -633,9 +633,12 @@ type AvailableEpisode struct {
 	Resolution string `json:"resolution"`
 }
 
-// AvailableResponse is the GET /api/series/{id}/available payload.
+// AvailableResponse is the GET /api/series/{id}/available payload. Warnings
+// carries one human-readable message per provider that failed, so a user with a
+// dead source sees the cause instead of a silently empty episode list.
 type AvailableResponse struct {
 	Episodes []AvailableEpisode `json:"episodes"`
+	Warnings []string           `json:"warnings,omitempty"`
 }
 
 // DownloadAvailableRequest is the POST /api/series/{id}/available/download body:

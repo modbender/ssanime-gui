@@ -70,6 +70,7 @@
 
   // ---- Available episodes (on-demand source check) ----
   let available = $state<AvailableEpisode[]>([])
+  let availableWarnings = $state<string[]>([])
   let availableLoading = $state(false)
   let availableChecked = $state(false)
   let downloadingEp = $state<string | null>(null) // keyed by source_url
@@ -131,7 +132,7 @@
     lastKey = key
     // Reset transient state so navigating between titles doesn't leak.
     detail = null; preview = null; series = null; error = ''
-    available = []; availableChecked = false; synopsisExpanded = false
+    available = []; availableWarnings = []; availableChecked = false; synopsisExpanded = false
     selected = new Set()
     if (numId != null) loadTracked()
     else if (numAnilist != null) loadPreview()
@@ -184,6 +185,7 @@
     try {
       const res = await api.getAvailable(numId)
       available = res.episodes ?? []
+      availableWarnings = res.warnings ?? []
     } catch (e: any) {
       alert(e.message || 'Source check failed.')
     } finally {
@@ -782,6 +784,28 @@
         {/if}
       </div>
 
+      {#if availableWarnings.length}
+        <div
+          class="mb-4 flex gap-3 border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/10 px-4 py-3"
+          role="alert"
+        >
+          <svg class="mt-0.5 shrink-0 text-[var(--color-warning)]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M12 9v4M12 17h.01" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <div class="min-w-0 flex-1 space-y-1.5">
+            <p class="text-sm font-medium text-[var(--color-warning)]">
+              Some sources failed — you may not see all (or any) episodes.
+            </p>
+            <ul class="space-y-0.5">
+              {#each availableWarnings as w (w)}
+                <li class="break-all font-mono text-[11px] leading-relaxed text-[var(--color-text-dim)]/70">{w}</li>
+              {/each}
+            </ul>
+          </div>
+        </div>
+      {/if}
+
       {#if mergedEpisodes.length === 0}
         {#if detailLoading}
           <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -802,9 +826,11 @@
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </div>
             <div class="space-y-1.5">
-              <h3 class="text-base font-semibold tracking-tight">No episodes yet</h3>
+              <h3 class="text-base font-semibold tracking-tight">
+                {availableWarnings.length ? 'Source check failed' : 'No episodes yet'}
+              </h3>
               <p class="max-w-sm text-sm text-[var(--color-muted)]">
-                {#if series}The auto-downloader will grab new episodes as they air. Or run a source check above.{:else}Episode data will appear once it's available.{/if}
+                {#if availableWarnings.length}The source(s) errored, so no episodes could be listed — this is a source problem, not an empty catalogue. See the warning above.{:else if series}The auto-downloader will grab new episodes as they air. Or run a source check above.{:else}Episode data will appear once it's available.{/if}
               </p>
             </div>
           </div>

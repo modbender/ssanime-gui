@@ -38,8 +38,8 @@
       level: guessLevel(line),
       ts: null,
     })),
-    ...liveEvents.map((e, i) => ({
-      key: `l-${i}-${e.ts}`,
+    ...liveEvents.map((e) => ({
+      key: `l-${e.seq}`,
       text: `${levelTag(e.level)} ${e.message}`,
       level: e.level,
       ts: e.ts,
