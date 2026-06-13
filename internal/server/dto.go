@@ -471,6 +471,10 @@ type DiscoveryItem struct {
 	// cards carry "". The frontend hero shows the logo instead of the text title
 	// when present.
 	ClearLogoURL string `json:"clear_logo_url"`
+	// WideImages is an ordered list of wide hero artwork URLs (ani.zip Fanart then
+	// Banner, CSP-safe TVDB hosts), best/sharpest first. Empty when none; only the
+	// hero feed's top items are enriched. The hero rotates through these per loop.
+	WideImages []string `json:"wide_images"`
 }
 
 // DiscoveryRow is one home carousel: a feed key + title + its items. An empty

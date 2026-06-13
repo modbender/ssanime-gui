@@ -102,75 +102,101 @@ func TestGetEpisodesParsesAndSorts(t *testing.T) {
 	}
 }
 
-// logoBody mirrors the real ani.zip /mappings "images" array: a flat list of
-// artwork entries discriminated by coverType, with a transparent Clearlogo on
-// the allowlisted TVDB host.
-const logoBody = `{
+// heroBody mirrors the real ani.zip /mappings "images" array: a flat list of
+// artwork entries discriminated by coverType. It interleaves the wide types
+// (Fanart, Banner) and includes a duplicate Banner and a non-allowlisted Fanart
+// so a test can assert the dedupe, host-filter, and Fanart-before-Banner order.
+const heroBody = `{
   "images": [
-    {"coverType": "Banner", "url": "https://artworks.thetvdb.com/banners/v4/series/81797/banners/x.jpg"},
+    {"coverType": "Banner", "url": "https://artworks.thetvdb.com/banners/v4/series/81797/banners/b1.jpg"},
+    {"coverType": "Fanart", "url": "https://artworks.thetvdb.com/banners/v4/series/81797/backgrounds/f1.jpg"},
     {"coverType": "Clearlogo", "url": "https://artworks.thetvdb.com/banners/v4/series/81797/clearlogo/abc.png"},
-    {"coverType": "Poster", "url": "https://artworks.thetvdb.com/banners/v4/series/81797/posters/y.jpg"}
+    {"coverType": "Poster", "url": "https://artworks.thetvdb.com/banners/v4/series/81797/posters/y.jpg"},
+    {"coverType": "Fanart", "url": "https://evil.example.com/f-bad.jpg"},
+    {"coverType": "Fanart", "url": "https://artworks.thetvdb.com/banners/v4/series/81797/backgrounds/f2.jpg"},
+    {"coverType": "Banner", "url": "https://artworks.thetvdb.com/banners/v4/series/81797/banners/b1.jpg"}
   ],
   "episodes": {}
 }`
 
-func TestGetClearLogoExtractsClearlogo(t *testing.T) {
+func TestGetHeroArtExtractsLogoAndWide(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(logoBody))
+		_, _ = w.Write([]byte(heroBody))
 	})
-	logo, err := c.GetClearLogo(context.Background(), 21)
+	logo, wide, err := c.GetHeroArt(context.Background(), 21)
 	if err != nil {
-		t.Fatalf("GetClearLogo: %v", err)
+		t.Fatalf("GetHeroArt: %v", err)
 	}
-	want := "https://artworks.thetvdb.com/banners/v4/series/81797/clearlogo/abc.png"
-	if logo != want {
-		t.Errorf("logo = %q, want %q", logo, want)
+	wantLogo := "https://artworks.thetvdb.com/banners/v4/series/81797/clearlogo/abc.png"
+	if logo != wantLogo {
+		t.Errorf("logo = %q, want %q", logo, wantLogo)
+	}
+	// Fanart first (in source order, non-allowlisted host dropped), then Banner
+	// (the duplicate b1 deduped); Poster and Clearlogo excluded.
+	want := []string{
+		"https://artworks.thetvdb.com/banners/v4/series/81797/backgrounds/f1.jpg",
+		"https://artworks.thetvdb.com/banners/v4/series/81797/backgrounds/f2.jpg",
+		"https://artworks.thetvdb.com/banners/v4/series/81797/banners/b1.jpg",
+	}
+	if len(wide) != len(want) {
+		t.Fatalf("wide = %v, want %v", wide, want)
+	}
+	for i := range want {
+		if wide[i] != want[i] {
+			t.Errorf("wide[%d] = %q, want %q (full=%v)", i, wide[i], want[i], wide)
+		}
 	}
 }
 
-func TestGetClearLogoNoLogoIsEmpty(t *testing.T) {
-	// Same payload minus the Clearlogo entry: must yield "" (no error).
+func TestGetHeroArtNoLogoIsEmpty(t *testing.T) {
+	// Payload with only wide art (no Clearlogo): logo "" with no error, wide kept.
 	body := `{"images":[{"coverType":"Banner","url":"https://artworks.thetvdb.com/banners/v4/series/1/banners/x.jpg"}],"episodes":{}}`
 	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(body))
 	})
-	logo, err := c.GetClearLogo(context.Background(), 21)
+	logo, wide, err := c.GetHeroArt(context.Background(), 21)
 	if err != nil {
-		t.Fatalf("GetClearLogo: %v", err)
+		t.Fatalf("GetHeroArt: %v", err)
 	}
 	if logo != "" {
 		t.Errorf("logo = %q, want empty when no Clearlogo present", logo)
 	}
+	if len(wide) != 1 {
+		t.Errorf("wide = %v, want the single allowlisted Banner", wide)
+	}
 }
 
-func TestGetClearLogoNonAllowlistedHostDropped(t *testing.T) {
+func TestGetHeroArtNonAllowlistedHostDropped(t *testing.T) {
 	// A Clearlogo served from a non-allowlisted host is dropped by safeImageURL.
 	body := `{"images":[{"coverType":"Clearlogo","url":"https://evil.example.com/logo.png"}],"episodes":{}}`
 	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(body))
 	})
-	logo, err := c.GetClearLogo(context.Background(), 21)
+	logo, wide, err := c.GetHeroArt(context.Background(), 21)
 	if err != nil {
-		t.Fatalf("GetClearLogo: %v", err)
+		t.Fatalf("GetHeroArt: %v", err)
 	}
 	if logo != "" {
 		t.Errorf("logo = %q, want empty for non-allowlisted host", logo)
 	}
+	if len(wide) != 0 {
+		t.Errorf("wide = %v, want empty", wide)
+	}
 }
 
-func TestGetClearLogoNotFoundIsEmpty(t *testing.T) {
+func TestGetHeroArtNotFoundIsEmpty(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
-	logo, err := c.GetClearLogo(context.Background(), 999999)
+	logo, wide, err := c.GetHeroArt(context.Background(), 999999)
 	if err != nil {
 		t.Fatalf("404 should not be an error: %v", err)
 	}
-	if logo != "" {
-		t.Errorf("logo = %q, want empty for unmapped id", logo)
+	if logo != "" || wide != nil {
+		t.Errorf("got logo=%q wide=%v, want empty for unmapped id", logo, wide)
 	}
 }
 

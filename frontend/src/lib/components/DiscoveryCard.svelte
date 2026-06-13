@@ -104,7 +104,7 @@
             Tracking…
           {:else}
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Download &amp; track
+            Subscribe
           {/if}
         </button>
       {/if}

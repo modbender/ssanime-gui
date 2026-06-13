@@ -45,11 +45,12 @@ type AniList interface {
 	ListByFeed(ctx context.Context, spec anilist.FeedSpec) ([]anilist.Media, error)
 }
 
-// LogoFetcher resolves a transparent series-logo URL for an AniList id (ani.zip
-// "Clearlogo"). The *anizip.Client satisfies it; tests stub it. It is optional —
-// when nil the service skips hero logo enrichment entirely.
+// LogoFetcher resolves the hero artwork for an AniList id from ani.zip in one
+// call: the transparent series logo ("Clearlogo") plus the ordered wide hero
+// images ("Fanart" then "Banner"). The *anizip.Client satisfies it; tests stub
+// it. It is optional — when nil the service skips hero enrichment entirely.
 type LogoFetcher interface {
-	GetClearLogo(ctx context.Context, anilistID int) (string, error)
+	GetHeroArt(ctx context.Context, anilistID int) (clearLogo string, wide []string, err error)
 }
 
 // FeedKey is the stable string identity of a discovery feed (the wire `key`).
@@ -256,11 +257,12 @@ func (s *Service) RefreshAll(ctx context.Context) {
 	}
 }
 
-// enrichHeroLogos fills ClearLogoURL on the leading items of the hero feed
-// (capped at heroEnrichCap) via concurrent best-effort ani.zip lookups. It
-// mutates media in place. Every lookup is independent and failure-tolerant: a
-// timeout, error, or missing logo leaves that item's ClearLogoURL "" and never
-// fails the refresh. A no-op when no LogoFetcher is configured.
+// enrichHeroLogos fills ClearLogoURL and WideImages on the leading items of the
+// hero feed (capped at heroEnrichCap) via concurrent best-effort ani.zip
+// lookups — one call per item yields both. It mutates media in place. Every
+// lookup is independent and failure-tolerant: a timeout, error, or missing
+// artwork leaves that item's fields empty and never fails the refresh. A no-op
+// when no LogoFetcher is configured.
 func (s *Service) enrichHeroLogos(ctx context.Context, media []anilist.Media) {
 	if s.logos == nil {
 		return
@@ -281,19 +283,20 @@ func (s *Service) enrichHeroLogos(ctx context.Context, media []anilist.Media) {
 			defer func() {
 				// A panic in the fetcher must not take down the refresh goroutine.
 				if rec := recover(); rec != nil {
-					s.logger.Info("discovery: clearLogo lookup panicked",
+					s.logger.Info("discovery: hero art lookup panicked",
 						"anilist_id", item.ID, "panic", rec)
 				}
 			}()
 			lctx, cancel := context.WithTimeout(ctx, logoLookupTimeout)
 			defer cancel()
-			logo, err := s.logos.GetClearLogo(lctx, item.ID)
+			logo, wide, err := s.logos.GetHeroArt(lctx, item.ID)
 			if err != nil {
-				s.logger.Info("discovery: clearLogo lookup failed",
+				s.logger.Info("discovery: hero art lookup failed",
 					"anilist_id", item.ID, "err", err)
 				return
 			}
 			item.ClearLogoURL = logo
+			item.WideImages = wide
 		}(&media[i])
 	}
 	wg.Wait()

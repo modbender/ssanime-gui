@@ -49,6 +49,11 @@ func mediaToDiscoveryItem(m anilist.Media) DiscoveryItem {
 		Season:       m.Season,
 		IsAdult:      m.IsAdult,
 		ClearLogoURL: m.ClearLogoURL,
+		WideImages:   m.WideImages,
+	}
+	// Serialize as a JSON array, never null, when the item carries no wide art.
+	if item.WideImages == nil {
+		item.WideImages = []string{}
 	}
 	if m.EpisodeCount > 0 {
 		ec := m.EpisodeCount
