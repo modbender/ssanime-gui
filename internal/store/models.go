@@ -189,7 +189,6 @@ type Series struct {
 	ModifiedAt          int64   `json:"modified_at"`
 	CoverColor          *string `json:"cover_color"`
 	MetadataRefreshedAt *int64  `json:"metadata_refreshed_at"`
-	UserStatus          *string `json:"user_status"`
 	WatchStatus         string  `json:"watch_status"`
 }
 

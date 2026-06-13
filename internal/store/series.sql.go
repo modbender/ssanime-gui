@@ -19,7 +19,7 @@ INSERT INTO series (
 ) VALUES (
     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
-RETURNING id, uuid, title, feed_title, alt_titles, season_number, subscribed, favorite, airing_status, poster_path, poster_portrait, default_profile_id, anilist_id, mal_id, romaji_title, english_title, format, status, episode_count, synonyms, cover_image_url, banner_image_url, season, season_year, added_at, modified_at, cover_color, metadata_refreshed_at, user_status, watch_status
+RETURNING id, uuid, title, feed_title, alt_titles, season_number, subscribed, favorite, airing_status, poster_path, poster_portrait, default_profile_id, anilist_id, mal_id, romaji_title, english_title, format, status, episode_count, synonyms, cover_image_url, banner_image_url, season, season_year, added_at, modified_at, cover_color, metadata_refreshed_at, watch_status
 `
 
 type CreateSeriesParams struct {
@@ -108,7 +108,6 @@ func (q *Queries) CreateSeries(ctx context.Context, arg CreateSeriesParams) (Ser
 		&i.ModifiedAt,
 		&i.CoverColor,
 		&i.MetadataRefreshedAt,
-		&i.UserStatus,
 		&i.WatchStatus,
 	)
 	return i, err
@@ -124,7 +123,7 @@ func (q *Queries) DeleteSeries(ctx context.Context, id int64) error {
 }
 
 const getSeries = `-- name: GetSeries :one
-SELECT id, uuid, title, feed_title, alt_titles, season_number, subscribed, favorite, airing_status, poster_path, poster_portrait, default_profile_id, anilist_id, mal_id, romaji_title, english_title, format, status, episode_count, synonyms, cover_image_url, banner_image_url, season, season_year, added_at, modified_at, cover_color, metadata_refreshed_at, user_status, watch_status FROM series WHERE id = ?
+SELECT id, uuid, title, feed_title, alt_titles, season_number, subscribed, favorite, airing_status, poster_path, poster_portrait, default_profile_id, anilist_id, mal_id, romaji_title, english_title, format, status, episode_count, synonyms, cover_image_url, banner_image_url, season, season_year, added_at, modified_at, cover_color, metadata_refreshed_at, watch_status FROM series WHERE id = ?
 `
 
 func (q *Queries) GetSeries(ctx context.Context, id int64) (Series, error) {
@@ -159,14 +158,13 @@ func (q *Queries) GetSeries(ctx context.Context, id int64) (Series, error) {
 		&i.ModifiedAt,
 		&i.CoverColor,
 		&i.MetadataRefreshedAt,
-		&i.UserStatus,
 		&i.WatchStatus,
 	)
 	return i, err
 }
 
 const getSeriesByAnilistID = `-- name: GetSeriesByAnilistID :one
-SELECT id, uuid, title, feed_title, alt_titles, season_number, subscribed, favorite, airing_status, poster_path, poster_portrait, default_profile_id, anilist_id, mal_id, romaji_title, english_title, format, status, episode_count, synonyms, cover_image_url, banner_image_url, season, season_year, added_at, modified_at, cover_color, metadata_refreshed_at, user_status, watch_status FROM series WHERE anilist_id = ?
+SELECT id, uuid, title, feed_title, alt_titles, season_number, subscribed, favorite, airing_status, poster_path, poster_portrait, default_profile_id, anilist_id, mal_id, romaji_title, english_title, format, status, episode_count, synonyms, cover_image_url, banner_image_url, season, season_year, added_at, modified_at, cover_color, metadata_refreshed_at, watch_status FROM series WHERE anilist_id = ?
 `
 
 func (q *Queries) GetSeriesByAnilistID(ctx context.Context, anilistID *int64) (Series, error) {
@@ -201,14 +199,13 @@ func (q *Queries) GetSeriesByAnilistID(ctx context.Context, anilistID *int64) (S
 		&i.ModifiedAt,
 		&i.CoverColor,
 		&i.MetadataRefreshedAt,
-		&i.UserStatus,
 		&i.WatchStatus,
 	)
 	return i, err
 }
 
 const getSeriesByTitle = `-- name: GetSeriesByTitle :one
-SELECT id, uuid, title, feed_title, alt_titles, season_number, subscribed, favorite, airing_status, poster_path, poster_portrait, default_profile_id, anilist_id, mal_id, romaji_title, english_title, format, status, episode_count, synonyms, cover_image_url, banner_image_url, season, season_year, added_at, modified_at, cover_color, metadata_refreshed_at, user_status, watch_status FROM series WHERE title = ?
+SELECT id, uuid, title, feed_title, alt_titles, season_number, subscribed, favorite, airing_status, poster_path, poster_portrait, default_profile_id, anilist_id, mal_id, romaji_title, english_title, format, status, episode_count, synonyms, cover_image_url, banner_image_url, season, season_year, added_at, modified_at, cover_color, metadata_refreshed_at, watch_status FROM series WHERE title = ?
 `
 
 func (q *Queries) GetSeriesByTitle(ctx context.Context, title string) (Series, error) {
@@ -243,14 +240,13 @@ func (q *Queries) GetSeriesByTitle(ctx context.Context, title string) (Series, e
 		&i.ModifiedAt,
 		&i.CoverColor,
 		&i.MetadataRefreshedAt,
-		&i.UserStatus,
 		&i.WatchStatus,
 	)
 	return i, err
 }
 
 const getSeriesByUUID = `-- name: GetSeriesByUUID :one
-SELECT id, uuid, title, feed_title, alt_titles, season_number, subscribed, favorite, airing_status, poster_path, poster_portrait, default_profile_id, anilist_id, mal_id, romaji_title, english_title, format, status, episode_count, synonyms, cover_image_url, banner_image_url, season, season_year, added_at, modified_at, cover_color, metadata_refreshed_at, user_status, watch_status FROM series WHERE uuid = ?
+SELECT id, uuid, title, feed_title, alt_titles, season_number, subscribed, favorite, airing_status, poster_path, poster_portrait, default_profile_id, anilist_id, mal_id, romaji_title, english_title, format, status, episode_count, synonyms, cover_image_url, banner_image_url, season, season_year, added_at, modified_at, cover_color, metadata_refreshed_at, watch_status FROM series WHERE uuid = ?
 `
 
 func (q *Queries) GetSeriesByUUID(ctx context.Context, uuid string) (Series, error) {
@@ -285,14 +281,13 @@ func (q *Queries) GetSeriesByUUID(ctx context.Context, uuid string) (Series, err
 		&i.ModifiedAt,
 		&i.CoverColor,
 		&i.MetadataRefreshedAt,
-		&i.UserStatus,
 		&i.WatchStatus,
 	)
 	return i, err
 }
 
 const listFavoriteSeries = `-- name: ListFavoriteSeries :many
-SELECT id, uuid, title, feed_title, alt_titles, season_number, subscribed, favorite, airing_status, poster_path, poster_portrait, default_profile_id, anilist_id, mal_id, romaji_title, english_title, format, status, episode_count, synonyms, cover_image_url, banner_image_url, season, season_year, added_at, modified_at, cover_color, metadata_refreshed_at, user_status, watch_status FROM series WHERE favorite = 1 ORDER BY title ASC
+SELECT id, uuid, title, feed_title, alt_titles, season_number, subscribed, favorite, airing_status, poster_path, poster_portrait, default_profile_id, anilist_id, mal_id, romaji_title, english_title, format, status, episode_count, synonyms, cover_image_url, banner_image_url, season, season_year, added_at, modified_at, cover_color, metadata_refreshed_at, watch_status FROM series WHERE favorite = 1 ORDER BY title ASC
 `
 
 func (q *Queries) ListFavoriteSeries(ctx context.Context) ([]Series, error) {
@@ -333,7 +328,6 @@ func (q *Queries) ListFavoriteSeries(ctx context.Context) ([]Series, error) {
 			&i.ModifiedAt,
 			&i.CoverColor,
 			&i.MetadataRefreshedAt,
-			&i.UserStatus,
 			&i.WatchStatus,
 		); err != nil {
 			return nil, err
@@ -350,7 +344,7 @@ func (q *Queries) ListFavoriteSeries(ctx context.Context) ([]Series, error) {
 }
 
 const listSeries = `-- name: ListSeries :many
-SELECT id, uuid, title, feed_title, alt_titles, season_number, subscribed, favorite, airing_status, poster_path, poster_portrait, default_profile_id, anilist_id, mal_id, romaji_title, english_title, format, status, episode_count, synonyms, cover_image_url, banner_image_url, season, season_year, added_at, modified_at, cover_color, metadata_refreshed_at, user_status, watch_status FROM series ORDER BY title ASC
+SELECT id, uuid, title, feed_title, alt_titles, season_number, subscribed, favorite, airing_status, poster_path, poster_portrait, default_profile_id, anilist_id, mal_id, romaji_title, english_title, format, status, episode_count, synonyms, cover_image_url, banner_image_url, season, season_year, added_at, modified_at, cover_color, metadata_refreshed_at, watch_status FROM series ORDER BY title ASC
 `
 
 func (q *Queries) ListSeries(ctx context.Context) ([]Series, error) {
@@ -391,7 +385,6 @@ func (q *Queries) ListSeries(ctx context.Context) ([]Series, error) {
 			&i.ModifiedAt,
 			&i.CoverColor,
 			&i.MetadataRefreshedAt,
-			&i.UserStatus,
 			&i.WatchStatus,
 		); err != nil {
 			return nil, err
@@ -408,7 +401,7 @@ func (q *Queries) ListSeries(ctx context.Context) ([]Series, error) {
 }
 
 const listSeriesForMetadataRefresh = `-- name: ListSeriesForMetadataRefresh :many
-SELECT id, uuid, title, feed_title, alt_titles, season_number, subscribed, favorite, airing_status, poster_path, poster_portrait, default_profile_id, anilist_id, mal_id, romaji_title, english_title, format, status, episode_count, synonyms, cover_image_url, banner_image_url, season, season_year, added_at, modified_at, cover_color, metadata_refreshed_at, user_status, watch_status FROM series
+SELECT id, uuid, title, feed_title, alt_titles, season_number, subscribed, favorite, airing_status, poster_path, poster_portrait, default_profile_id, anilist_id, mal_id, romaji_title, english_title, format, status, episode_count, synonyms, cover_image_url, banner_image_url, season, season_year, added_at, modified_at, cover_color, metadata_refreshed_at, watch_status FROM series
 WHERE anilist_id IS NOT NULL
   AND subscribed = 1
   AND (airing_status IS NULL OR airing_status NOT IN ('FINISHED', 'CANCELLED'))
@@ -463,7 +456,6 @@ func (q *Queries) ListSeriesForMetadataRefresh(ctx context.Context, arg ListSeri
 			&i.ModifiedAt,
 			&i.CoverColor,
 			&i.MetadataRefreshedAt,
-			&i.UserStatus,
 			&i.WatchStatus,
 		); err != nil {
 			return nil, err
@@ -481,7 +473,7 @@ func (q *Queries) ListSeriesForMetadataRefresh(ctx context.Context, arg ListSeri
 
 const listSeriesWithProgress = `-- name: ListSeriesWithProgress :many
 SELECT
-    s.id, s.uuid, s.title, s.feed_title, s.alt_titles, s.season_number, s.subscribed, s.favorite, s.airing_status, s.poster_path, s.poster_portrait, s.default_profile_id, s.anilist_id, s.mal_id, s.romaji_title, s.english_title, s.format, s.status, s.episode_count, s.synonyms, s.cover_image_url, s.banner_image_url, s.season, s.season_year, s.added_at, s.modified_at, s.cover_color, s.metadata_refreshed_at, s.user_status, s.watch_status,
+    s.id, s.uuid, s.title, s.feed_title, s.alt_titles, s.season_number, s.subscribed, s.favorite, s.airing_status, s.poster_path, s.poster_portrait, s.default_profile_id, s.anilist_id, s.mal_id, s.romaji_title, s.english_title, s.format, s.status, s.episode_count, s.synonyms, s.cover_image_url, s.banner_image_url, s.season, s.season_year, s.added_at, s.modified_at, s.cover_color, s.metadata_refreshed_at, s.watch_status,
     COUNT(DISTINCT e.id) AS episode_total,
     COUNT(DISTINCT CASE
         WHEN e.status = 'archived' THEN e.id
@@ -528,7 +520,6 @@ type ListSeriesWithProgressRow struct {
 	ModifiedAt          int64       `json:"modified_at"`
 	CoverColor          *string     `json:"cover_color"`
 	MetadataRefreshedAt *int64      `json:"metadata_refreshed_at"`
-	UserStatus          *string     `json:"user_status"`
 	WatchStatus         string      `json:"watch_status"`
 	EpisodeTotal        int64       `json:"episode_total"`
 	EpisodeArchived     int64       `json:"episode_archived"`
@@ -576,7 +567,6 @@ func (q *Queries) ListSeriesWithProgress(ctx context.Context) ([]ListSeriesWithP
 			&i.ModifiedAt,
 			&i.CoverColor,
 			&i.MetadataRefreshedAt,
-			&i.UserStatus,
 			&i.WatchStatus,
 			&i.EpisodeTotal,
 			&i.EpisodeArchived,
@@ -597,7 +587,7 @@ func (q *Queries) ListSeriesWithProgress(ctx context.Context) ([]ListSeriesWithP
 }
 
 const listSubscribedSeries = `-- name: ListSubscribedSeries :many
-SELECT id, uuid, title, feed_title, alt_titles, season_number, subscribed, favorite, airing_status, poster_path, poster_portrait, default_profile_id, anilist_id, mal_id, romaji_title, english_title, format, status, episode_count, synonyms, cover_image_url, banner_image_url, season, season_year, added_at, modified_at, cover_color, metadata_refreshed_at, user_status, watch_status FROM series WHERE subscribed = 1 ORDER BY title ASC
+SELECT id, uuid, title, feed_title, alt_titles, season_number, subscribed, favorite, airing_status, poster_path, poster_portrait, default_profile_id, anilist_id, mal_id, romaji_title, english_title, format, status, episode_count, synonyms, cover_image_url, banner_image_url, season, season_year, added_at, modified_at, cover_color, metadata_refreshed_at, watch_status FROM series WHERE subscribed = 1 ORDER BY title ASC
 `
 
 func (q *Queries) ListSubscribedSeries(ctx context.Context) ([]Series, error) {
@@ -638,7 +628,6 @@ func (q *Queries) ListSubscribedSeries(ctx context.Context) ([]Series, error) {
 			&i.ModifiedAt,
 			&i.CoverColor,
 			&i.MetadataRefreshedAt,
-			&i.UserStatus,
 			&i.WatchStatus,
 		); err != nil {
 			return nil, err
@@ -696,22 +685,6 @@ func (q *Queries) SetSeriesSubscribed(ctx context.Context, arg SetSeriesSubscrib
 	return err
 }
 
-const setSeriesUserStatus = `-- name: SetSeriesUserStatus :exec
-UPDATE series SET user_status = ?, modified_at = unixepoch() WHERE id = ?
-`
-
-type SetSeriesUserStatusParams struct {
-	UserStatus *string `json:"user_status"`
-	ID         int64   `json:"id"`
-}
-
-// SetSeriesUserStatus sets the manual override: NULL re-engages full automation,
-// 'paused'/'dropped' make the series' feed dormant (the poller gate skips it).
-func (q *Queries) SetSeriesUserStatus(ctx context.Context, arg SetSeriesUserStatusParams) error {
-	_, err := q.db.ExecContext(ctx, setSeriesUserStatus, arg.UserStatus, arg.ID)
-	return err
-}
-
 const setSeriesWatchStatus = `-- name: SetSeriesWatchStatus :exec
 UPDATE series SET watch_status = ?, modified_at = unixepoch() WHERE id = ?
 `
@@ -737,7 +710,7 @@ UPDATE series SET
     episode_count = ?, synonyms = ?, cover_image_url = ?, banner_image_url = ?,
     cover_color = ?, season = ?, season_year = ?, modified_at = unixepoch()
 WHERE id = ?
-RETURNING id, uuid, title, feed_title, alt_titles, season_number, subscribed, favorite, airing_status, poster_path, poster_portrait, default_profile_id, anilist_id, mal_id, romaji_title, english_title, format, status, episode_count, synonyms, cover_image_url, banner_image_url, season, season_year, added_at, modified_at, cover_color, metadata_refreshed_at, user_status, watch_status
+RETURNING id, uuid, title, feed_title, alt_titles, season_number, subscribed, favorite, airing_status, poster_path, poster_portrait, default_profile_id, anilist_id, mal_id, romaji_title, english_title, format, status, episode_count, synonyms, cover_image_url, banner_image_url, season, season_year, added_at, modified_at, cover_color, metadata_refreshed_at, watch_status
 `
 
 type UpdateSeriesParams struct {
@@ -824,7 +797,6 @@ func (q *Queries) UpdateSeries(ctx context.Context, arg UpdateSeriesParams) (Ser
 		&i.ModifiedAt,
 		&i.CoverColor,
 		&i.MetadataRefreshedAt,
-		&i.UserStatus,
 		&i.WatchStatus,
 	)
 	return i, err

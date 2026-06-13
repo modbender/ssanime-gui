@@ -4,6 +4,7 @@
     type DiscoveryRow,
     type DiscoveryItem,
     type SeriesProgress,
+    type ActivitySeries,
   } from '$lib/api'
   import Hero from '$lib/components/Hero.svelte'
   import Carousel from '$lib/components/Carousel.svelte'
@@ -12,12 +13,18 @@
   import DiscoveryCard from '$lib/components/DiscoveryCard.svelte'
   import { markTracked, trackedAnilistIds } from '$lib/discovery.svelte'
   import { requireSource } from '$lib/sources.svelte'
+  import { sseState } from '$lib/sse.svelte'
 
   let rows = $state<DiscoveryRow[]>([])
-  let inProgress = $state<SeriesProgress[]>([])
+  let activitySeries = $state<ActivitySeries[]>([])
   let discoveryLoading = $state(true)
-  let trackedLoading = $state(true)
   let trackingId = $state<number | null>(null)
+
+  // Episode statuses that count as "in the active pipeline" for the
+  // Currently-downloading row (a series shows once any episode is mid-flight).
+  const ACTIVE_PIPELINE = new Set([
+    'queued', 'downloading', 'downloaded', 'encoding', 'encoded',
+  ])
 
   // Number of placeholder rows to show while the discovery cache is cold.
   const SKELETON_ROWS = ['Trending now', 'Popular this season', 'All-time popular', 'Action']
@@ -35,12 +42,10 @@
     }
   }
 
-  async function loadTracked() {
-    trackedLoading = true
+  // Seed the optimistic tracked-set so discovery cards paint as tracked.
+  async function loadTrackedSeed() {
     try {
       const res = await api.getTracked()
-      inProgress = res.in_progress ?? []
-      // Seed the optimistic tracked-set from what's actually tracked.
       for (const s of [
         ...(res.in_progress ?? []),
         ...(res.completed ?? []),
@@ -50,15 +55,50 @@
         if (s.anilist_id != null) trackedAnilistIds.add(s.anilist_id)
       }
     } catch {
-      inProgress = []
-    } finally {
-      trackedLoading = false
+      // Non-fatal: discovery still works without optimistic tracked flags.
     }
   }
 
+  // Currently-downloading row: any series (subscribed OR manually-downloaded)
+  // with at least one episode in the active pipeline. Sourced from /api/activity,
+  // which now includes unsubscribed-but-has-episodes series.
+  let activityInFlight = false
+  async function refreshActivity() {
+    if (activityInFlight) return
+    activityInFlight = true
+    try {
+      const res = await api.getActivity()
+      activitySeries = res.series ?? []
+    } catch {
+      // Transient daemon hiccup — keep the last snapshot; SSE keeps it live.
+    } finally {
+      activityInFlight = false
+    }
+  }
+
+  // Live effective status (SSE override over the snapshot) drives membership so a
+  // freshly-finished series drops out without a refetch.
+  const inProgress = $derived(
+    activitySeries.filter((s) =>
+      (s.episodes ?? []).some((ep) =>
+        ACTIVE_PIPELINE.has(sseState.episodeStatus[ep.id] ?? ep.status),
+      ),
+    ),
+  )
+
   $effect(() => {
     loadDiscovery()
-    loadTracked()
+    loadTrackedSeed()
+    refreshActivity()
+  })
+
+  // A status transition changes which series are active; refetch on SSE churn.
+  let lastSignal = -1
+  $effect(() => {
+    const signal = Object.values(sseState.episodeStatus).join('|').length
+    if (signal === lastSignal) return
+    lastSignal = signal
+    refreshActivity()
   })
 
   // The hero pulls from the trending row (top items, rotating).
@@ -75,10 +115,9 @@
     // Optimistic: flip the card to tracked immediately.
     markTracked(item.anilist_id)
     try {
-      const res = await api.trackSeries({ anilist_id: item.anilist_id })
-      // Insert the returned series at the head of "Currently downloading"
-      // (deduping if an idempotent track returned an already-present series).
-      inProgress = [res.series, ...inProgress.filter((s) => s.id !== res.series.id)]
+      await api.trackSeries({ anilist_id: item.anilist_id })
+      // Pull the now-tracked series into the activity-backed downloading row.
+      refreshActivity()
     } catch (e: any) {
       // 409 / already-tracked: backend may surface this as an error string.
       // Treat "already" as success; otherwise roll back the optimistic flag.
@@ -86,8 +125,8 @@
       if (!msg.includes('already') && !msg.includes('exist')) {
         trackedAnilistIds.delete(item.anilist_id)
       }
-      // Refresh tracked so the row reflects reality either way.
-      loadTracked()
+      // Refresh either way so the row reflects reality.
+      refreshActivity()
     } finally {
       trackingId = null
     }
@@ -112,7 +151,8 @@
   {/if}
 
   <div class="px-6 sm:px-10 pb-16 -mt-2 space-y-12">
-    <!-- CURRENTLY DOWNLOADING — hidden when empty; home stays full via discovery -->
+    <!-- CURRENTLY DOWNLOADING — always present (mirror of a persistent row);
+         shows a tasteful idle state instead of a bare empty carousel. -->
     {#if inProgress.length > 0}
       <Carousel title="Currently downloading" count={inProgress.length}>
         {#each inProgress as s (s.id)}
@@ -121,6 +161,18 @@
           </div>
         {/each}
       </Carousel>
+    {:else}
+      <section>
+        <h2 class="mb-3 text-[15px] font-semibold tracking-tight text-[var(--color-text)]">Currently downloading</h2>
+        <div class="flex items-center gap-4 border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-6">
+          <div class="flex h-11 w-11 shrink-0 items-center justify-center bg-white/[0.04] text-[var(--color-faint)] ring-1 ring-white/10">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <p class="text-sm text-[var(--color-muted)]">
+            Nothing downloading — subscribe to a series or grab an episode from its page.
+          </p>
+        </div>
+      </section>
     {/if}
 
     <!-- DISCOVERY ROWS -->

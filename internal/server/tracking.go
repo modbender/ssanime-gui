@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/modbender/ssanime-gui/internal/anilist"
 	"github.com/modbender/ssanime-gui/internal/events"
 	"github.com/modbender/ssanime-gui/internal/source"
 	"github.com/modbender/ssanime-gui/internal/store"
@@ -32,11 +33,10 @@ var validWatchStatuses = map[string]struct{}{
 	watchStatusDropped:  {},
 }
 
-// handleGetTracked groups tracked series into the home/Downloads buckets:
-// in_progress (Active), completed, paused, dropped. A manual user_status override
-// wins the bucket; otherwise the derived status decides. Series actively
-// downloading or encoding are floated to the head of in_progress so the home's
-// "Currently downloading" row leads with live work.
+// handleGetTracked groups subscribed series into the home/Downloads buckets:
+// in_progress (Active), completed, paused, dropped — bucketed by watch_status and
+// the derived status. Series actively downloading or encoding are floated to the
+// head of in_progress so the home's "Currently downloading" row leads with live work.
 func (h *Handler) handleGetTracked(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	rows, err := h.store.Read().ListSeriesWithProgress(ctx)
@@ -102,10 +102,11 @@ var activePipelineStatuses = map[string]struct{}{
 	"encoded":     {},
 }
 
-// handleActivity returns every subscribed series with its full episode record for
-// the Activity page. Ordering: series with any active pipeline episode first, then
-// by most-recent episode activity (max episode modified_at); episodes within a
-// series are newest-first.
+// handleActivity returns every in-library series (subscribed OR has episodes) with
+// its full episode record for the Activity page, so manually-downloaded
+// unsubscribed series appear too. Ordering: series with any active pipeline episode
+// first, then by most-recent episode activity (max episode modified_at); episodes
+// within a series are newest-first.
 func (h *Handler) handleActivity(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	rows, err := h.store.Read().ListSeriesWithProgress(ctx)
@@ -123,7 +124,7 @@ func (h *Handler) handleActivity(w http.ResponseWriter, r *http.Request) {
 	ranks := make([]ranked, 0, len(rows))
 
 	for _, row := range rows {
-		if row.Subscribed != 1 {
+		if row.Subscribed != 1 && row.EpisodeTotal == 0 {
 			continue
 		}
 		eps, err := h.store.Read().ListEpisodesBySeries(ctx, row.ID)
@@ -190,12 +191,52 @@ func (h *Handler) activeSeriesIDs(ctx context.Context) map[int64]struct{} {
 	return out
 }
 
-// handleTrackSeries is the single "Download & track" creation path. It creates
-// (or upgrades) the series subscribed, auto-creates its feed if missing, clears
-// any manual status override, and lets the running poller take over. Idempotent:
-// re-tracking an existing series upgrades it and returns 200; a fresh series
-// returns 201. AniList being unreachable is tolerated — the series is created
-// with available data and the metadata refresher fills in later.
+// ensureSeries returns the series row for an AniList id, creating it from AniList
+// media when absent. The created row is NOT subscribed (subscribed = 0) and gets
+// no feed — it is just the metadata row that backs episodes and the AniList-keyed
+// selective-download path. Subscribe layers subscription on top. AniList being
+// unreachable is tolerated: the row is created with a placeholder title and the
+// metadata refresher fills it in later. created reports whether a new row was made.
+func (h *Handler) ensureSeries(ctx context.Context, anilistID int64) (store.Series, bool, error) {
+	existing, err := h.store.Read().GetSeriesByAnilistID(ctx, &anilistID)
+	switch {
+	case err == nil:
+		return existing, false, nil
+	case errors.Is(err, sql.ErrNoRows):
+		now := time.Now().Unix()
+		params := store.CreateSeriesParams{
+			Uuid:         mustUUID(),
+			SeasonNumber: 1,
+			Subscribed:   0,
+			Favorite:     0,
+		}
+		if h.anilist != nil {
+			if m, e := h.anilist.GetMedia(ctx, int(anilistID)); e == nil {
+				applyMediaToCreate(&params, m)
+				params.MetadataRefreshedAt = &now
+			} else {
+				h.logger.Warn("ensure series: anilist fetch failed (proceeding without metadata)", "anilist_id", anilistID, "err", e)
+			}
+		}
+		if params.Title == "" {
+			params.AnilistID = &anilistID
+			params.Title = fmt.Sprintf("AniList #%d", anilistID)
+		}
+		s, e := h.store.Write().CreateSeries(ctx, params)
+		if e != nil {
+			return store.Series{}, false, e
+		}
+		return s, true, nil
+	default:
+		return store.Series{}, false, err
+	}
+}
+
+// handleTrackSeries is the single "Subscribe & track" path. It ensures the series
+// row exists (creating it from AniList if new), then layers subscription on top:
+// subscribed = 1, watch_status = watching, plus an enabled auto-feed so the poller
+// auto-fetches new episodes. Idempotent: re-subscribing an existing series returns
+// 200; a fresh series returns 201.
 func (h *Handler) handleTrackSeries(w http.ResponseWriter, r *http.Request) {
 	var req TrackRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -208,81 +249,38 @@ func (h *Handler) handleTrackSeries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	now := time.Now().Unix()
-	anilistID := req.AnilistID
 
-	created := false
-	existing, err := h.store.Read().GetSeriesByAnilistID(ctx, &anilistID)
-	switch {
-	case err == nil:
-		// Re-track: upgrade to subscribed + clear any manual override.
-		if existing.Subscribed != 1 {
-			if e := h.store.Write().SetSeriesSubscribed(ctx, store.SetSeriesSubscribedParams{ID: existing.ID, Subscribed: 1}); e != nil {
-				h.logger.Error("track: subscribe existing", "id", existing.ID, "err", e)
-				WriteError(w, http.StatusInternalServerError, "failed to subscribe series")
-				return
-			}
-		}
-		if e := h.store.Write().SetSeriesUserStatus(ctx, store.SetSeriesUserStatusParams{ID: existing.ID, UserStatus: nil}); e != nil {
-			h.logger.Error("track: clear user_status", "id", existing.ID, "err", e)
-			WriteError(w, http.StatusInternalServerError, "failed to re-engage series")
-			return
-		}
-		// (Re)subscribe always lands on the polled watch status.
-		if e := h.store.Write().SetSeriesWatchStatus(ctx, store.SetSeriesWatchStatusParams{ID: existing.ID, WatchStatus: watchStatusWatching}); e != nil {
-			h.logger.Error("track: set watching", "id", existing.ID, "err", e)
-			WriteError(w, http.StatusInternalServerError, "failed to re-engage series")
-			return
-		}
-	case errors.Is(err, sql.ErrNoRows):
-		// Fresh create: subscribed from the start.
-		params := store.CreateSeriesParams{
-			Uuid:         mustUUID(),
-			SeasonNumber: 1,
-			Subscribed:   1,
-			Favorite:     0,
-		}
-		if h.anilist != nil {
-			if m, e := h.anilist.GetMedia(ctx, int(anilistID)); e == nil {
-				applyMediaToCreate(&params, m)
-				params.MetadataRefreshedAt = &now
-			} else {
-				h.logger.Warn("track: anilist fetch failed (proceeding without metadata)", "anilist_id", anilistID, "err", e)
-				params.AnilistID = &anilistID
-				params.Title = fmt.Sprintf("AniList #%d", anilistID)
-			}
-		} else {
-			params.AnilistID = &anilistID
-			params.Title = fmt.Sprintf("AniList #%d", anilistID)
-		}
-		if params.Title == "" {
-			params.AnilistID = &anilistID
-			params.Title = fmt.Sprintf("AniList #%d", anilistID)
-		}
-		s, e := h.store.Write().CreateSeries(ctx, params)
-		if e != nil {
-			h.logger.Error("track: create series", "err", e)
-			WriteError(w, http.StatusInternalServerError, "failed to create series")
-			return
-		}
-		existing = s
-		created = true
-	default:
-		h.logger.Error("track: lookup series", "anilist_id", anilistID, "err", err)
-		WriteError(w, http.StatusInternalServerError, "failed to look up series")
+	series, created, err := h.ensureSeries(ctx, req.AnilistID)
+	if err != nil {
+		h.logger.Error("track: ensure series", "anilist_id", req.AnilistID, "err", err)
+		WriteError(w, http.StatusInternalServerError, "failed to create series")
 		return
 	}
 
-	feedID, err := h.ensureFeed(ctx, existing.ID)
+	// Layer subscription on top: subscribe + land on the polled watch status.
+	if series.Subscribed != 1 {
+		if e := h.store.Write().SetSeriesSubscribed(ctx, store.SetSeriesSubscribedParams{ID: series.ID, Subscribed: 1}); e != nil {
+			h.logger.Error("track: subscribe", "id", series.ID, "err", e)
+			WriteError(w, http.StatusInternalServerError, "failed to subscribe series")
+			return
+		}
+	}
+	if e := h.store.Write().SetSeriesWatchStatus(ctx, store.SetSeriesWatchStatusParams{ID: series.ID, WatchStatus: watchStatusWatching}); e != nil {
+		h.logger.Error("track: set watching", "id", series.ID, "err", e)
+		WriteError(w, http.StatusInternalServerError, "failed to subscribe series")
+		return
+	}
+
+	feedID, err := h.ensureFeed(ctx, series.ID)
 	if err != nil {
-		h.logger.Error("track: ensure feed", "series_id", existing.ID, "err", err)
+		h.logger.Error("track: ensure feed", "series_id", series.ID, "err", err)
 		WriteError(w, http.StatusInternalServerError, "failed to create feed")
 		return
 	}
 
-	progress, err := h.seriesProgress(ctx, existing.ID)
+	progress, err := h.seriesProgress(ctx, series.ID)
 	if err != nil {
-		h.logger.Error("track: load progress", "series_id", existing.ID, "err", err)
+		h.logger.Error("track: load progress", "series_id", series.ID, "err", err)
 		WriteError(w, http.StatusInternalServerError, "failed to load series")
 		return
 	}
@@ -291,7 +289,7 @@ func (h *Handler) handleTrackSeries(w http.ResponseWriter, r *http.Request) {
 	if created {
 		status = http.StatusCreated
 	}
-	WriteJSON(w, status, TrackResponse{Series: progress, SeriesID: existing.ID, FeedID: feedID})
+	WriteJSON(w, status, TrackResponse{Series: progress, SeriesID: series.ID, FeedID: feedID})
 }
 
 // ensureFeed returns the id of an existing feed for the series, or creates a
@@ -349,21 +347,6 @@ func (h *Handler) handleSetSeriesStatus(w http.ResponseWriter, r *http.Request) 
 	h.setWatchStatus(w, r, status)
 }
 
-// handlePauseSeries / handleDropSeries / handleResumeSeries are thin aliases over
-// the watch-status setter, kept so existing clients keep working: pause -> on_hold,
-// drop -> dropped, resume -> watching. The poller polls 'watching' only.
-func (h *Handler) handlePauseSeries(w http.ResponseWriter, r *http.Request) {
-	h.setWatchStatus(w, r, watchStatusOnHold)
-}
-
-func (h *Handler) handleDropSeries(w http.ResponseWriter, r *http.Request) {
-	h.setWatchStatus(w, r, watchStatusDropped)
-}
-
-func (h *Handler) handleResumeSeries(w http.ResponseWriter, r *http.Request) {
-	h.setWatchStatus(w, r, watchStatusWatching)
-}
-
 // setWatchStatus is the shared body: validate the series exists, write the watch
 // status, return the refreshed SeriesProgress.
 func (h *Handler) setWatchStatus(w http.ResponseWriter, r *http.Request, status string) {
@@ -392,11 +375,13 @@ func (h *Handler) setWatchStatus(w http.ResponseWriter, r *http.Request, status 
 	WriteJSON(w, http.StatusOK, SeriesStatusResponse{Series: progress})
 }
 
-// handleUnsubscribeSeries performs full DB cleanup for a series: a single
-// DELETE FROM series, which cascades via FK ON DELETE CASCADE to its feeds,
-// episodes, encoded_outputs, and screenshots (foreign_keys is ON on both pools).
-// Files on disk are NOT touched. It broadcasts series.updated with deleted:true so
-// the UI can drop the series from Library/Activity. Returns 204.
+// handleUnsubscribeSeries stops automation for a series without throwing away its
+// download history: it clears subscribed and disables every feed (keeping the
+// poller double-gate intact), leaving watch_status as-is. Episodes are never
+// touched. Only when the series has zero episodes — nothing left to keep — is the
+// row deleted (cascade), holding the "exists iff subscribed OR has episodes"
+// invariant. It broadcasts series.updated with deleted:true only when the row was
+// actually removed. Returns 200 with {deleted, series_id}.
 func (h *Handler) handleUnsubscribeSeries(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(w, r)
 	if !ok {
@@ -410,24 +395,51 @@ func (h *Handler) handleUnsubscribeSeries(w http.ResponseWriter, r *http.Request
 		WriteError(w, http.StatusInternalServerError, "failed to get series")
 		return
 	}
-	if err := h.store.Write().DeleteSeries(ctx, id); err != nil {
-		h.logger.Error("unsubscribe series", "id", id, "err", err)
+
+	if err := h.store.Write().SetSeriesSubscribed(ctx, store.SetSeriesSubscribedParams{ID: id, Subscribed: 0}); err != nil {
+		h.logger.Error("unsubscribe: clear subscribed", "id", id, "err", err)
 		WriteError(w, http.StatusInternalServerError, "failed to unsubscribe series")
 		return
 	}
+	// Disable every feed so the poller double-gate (subscribed AND feed.enabled)
+	// stays consistent; re-subscribe re-enables via ensureFeed.
+	if feeds, err := h.store.Read().ListFeedsBySeries(ctx, id); err == nil {
+		for _, f := range feeds {
+			if f.Enabled != 0 {
+				if e := h.store.Write().SetFeedEnabled(ctx, store.SetFeedEnabledParams{ID: f.ID, Enabled: 0}); e != nil {
+					h.logger.Warn("unsubscribe: disable feed", "feed_id", f.ID, "err", e)
+				}
+			}
+		}
+	} else {
+		h.logger.Warn("unsubscribe: list feeds", "id", id, "err", err)
+	}
+
+	// Garbage-collect a now-orphaned row: unsubscribed AND no episodes to keep.
+	deleted := false
+	if count, err := h.store.Read().CountEpisodesBySeries(ctx, id); err == nil && count == 0 {
+		if e := h.store.Write().DeleteSeries(ctx, id); e != nil {
+			h.logger.Error("unsubscribe: delete empty series", "id", id, "err", e)
+			WriteError(w, http.StatusInternalServerError, "failed to unsubscribe series")
+			return
+		}
+		deleted = true
+	}
+
 	h.hub.Broadcast(events.TypeSeriesUpdated, map[string]any{
 		"series_id": id,
-		"deleted":   true,
+		"deleted":   deleted,
 	})
-	w.WriteHeader(http.StatusNoContent)
+	WriteJSON(w, http.StatusOK, map[string]any{"deleted": deleted, "series_id": id})
 }
 
-// handleAvailableEpisodes runs an on-demand source search for a series NOW
-// (independent of status — works for Paused/Dropped too) and returns the
-// source-available episodes that are not yet downloaded, for the per-episode
-// "download" UI.
-func (h *Handler) handleAvailableEpisodes(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseID(w, r)
+// handleAnilistAvailable runs an on-demand source search by AniList id and returns
+// the source-available episodes not yet downloaded, for the per-episode "download"
+// UI. It works with NO pre-existing DB row: if a series row exists for the id its
+// local episode numbers are excluded; otherwise the exclusion set is empty. It
+// never creates a series row.
+func (h *Handler) handleAnilistAvailable(w http.ResponseWriter, r *http.Request) {
+	anilistID, ok := parseAnilistID(w, r)
 	if !ok {
 		return
 	}
@@ -436,37 +448,102 @@ func (h *Handler) handleAvailableEpisodes(w http.ResponseWriter, r *http.Request
 		return
 	}
 	ctx := r.Context()
-	series, err := h.store.Read().GetSeries(ctx, id)
-	if errors.Is(err, sql.ErrNoRows) {
-		WriteError(w, http.StatusNotFound, "series not found")
-		return
-	}
-	if err != nil {
-		WriteError(w, http.StatusInternalServerError, "failed to get series")
+
+	media, ok := h.searchMediaForAnilist(w, ctx, int64(anilistID))
+	if !ok {
 		return
 	}
 
 	// Episode numbers already present locally (any status) are excluded so the
-	// list shows only genuinely-new source availability.
+	// list shows only genuinely-new source availability. No row -> nothing to exclude.
 	have := map[int]struct{}{}
-	if eps, e := h.store.Read().ListEpisodesBySeries(ctx, id); e == nil {
-		for _, ep := range eps {
-			if ep.EpisodeNo != nil {
-				have[int(*ep.EpisodeNo)] = struct{}{}
+	if series, err := h.store.Read().GetSeriesByAnilistID(ctx, i64ptr(int64(anilistID))); err == nil {
+		if eps, e := h.store.Read().ListEpisodesBySeries(ctx, series.ID); e == nil {
+			for _, ep := range eps {
+				if ep.EpisodeNo != nil {
+					have[int(*ep.EpisodeNo)] = struct{}{}
+				}
 			}
 		}
 	}
 
-	opts := source.SmartSearchOptions{Media: mediaFromSeries(series), BestReleases: true}
+	episodes, warnings := h.searchAvailable(ctx, media, have)
+	WriteJSON(w, http.StatusOK, AvailableResponse{Episodes: episodes, Warnings: warnings})
+}
 
-	// Keep the best release per episode number across all providers.
+// handleAnilistDownload downloads one source-found episode by AniList id. It
+// ensures the series row exists (creating it WITHOUT subscribing), finds-or-creates
+// the (series_id, number) episode, and drives it into the pipeline as 'queued'. It
+// never mutates subscription or watch_status — a manual grab is independent of
+// subscription. Idempotent: a second call for the same number re-enqueues the
+// existing row. Returns 200 with {series_id, episode_id}.
+func (h *Handler) handleAnilistDownload(w http.ResponseWriter, r *http.Request) {
+	anilistID, ok := parseAnilistID(w, r)
+	if !ok {
+		return
+	}
+	var req DownloadAvailableRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if strings.TrimSpace(req.SourceURL) == "" {
+		WriteError(w, http.StatusBadRequest, "source_url required")
+		return
+	}
+	if req.Number <= 0 {
+		WriteError(w, http.StatusBadRequest, "number must be positive")
+		return
+	}
+
+	ctx := r.Context()
+	series, _, err := h.ensureSeries(ctx, int64(anilistID))
+	if err != nil {
+		h.logger.Error("anilist download: ensure series", "anilist_id", anilistID, "err", err)
+		WriteError(w, http.StatusInternalServerError, "failed to create series")
+		return
+	}
+
+	ep, err := h.enqueueAvailableEpisode(ctx, series, req)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	WriteJSON(w, http.StatusOK, map[string]int64{"series_id": series.ID, "episode_id": ep.ID})
+}
+
+// searchMediaForAnilist resolves the source.Media used to drive SmartSearch for an
+// AniList id, preferring a cached series row and falling back to a live AniList
+// fetch (so a never-subscribed id still searches). On total failure it writes the
+// error response and returns ok=false.
+func (h *Handler) searchMediaForAnilist(w http.ResponseWriter, ctx context.Context, anilistID int64) (source.Media, bool) {
+	if series, err := h.store.Read().GetSeriesByAnilistID(ctx, &anilistID); err == nil {
+		return mediaFromSeries(series), true
+	}
+	if h.anilist != nil {
+		if m, err := h.anilist.GetMedia(ctx, int(anilistID)); err == nil {
+			return mediaFromMedia(m), true
+		} else {
+			h.logger.Info("available: anilist fetch failed", "anilist_id", anilistID, "err", err)
+		}
+	}
+	WriteError(w, http.StatusServiceUnavailable, "AniList unavailable; cannot resolve series to search")
+	return source.Media{}, false
+}
+
+// searchAvailable runs the registry SmartSearch for one media and returns the best
+// release per episode number (excluding numbers in have), plus a warning per failed
+// provider. Shared by the AniList-keyed available + download paths.
+func (h *Handler) searchAvailable(ctx context.Context, media source.Media, have map[int]struct{}) ([]AvailableEpisode, []string) {
+	opts := source.SmartSearchOptions{Media: media, BestReleases: true}
 	best := map[int]*source.AnimeTorrent{}
 	var warnings []string
 	for _, pid := range h.registry.List() {
 		p, _ := h.registry.Get(pid)
 		torrents, err := p.SmartSearch(ctx, opts)
 		if err != nil {
-			h.logger.Warn("available: provider error", "provider", pid, "series_id", id, "err", err)
+			h.logger.Warn("available: provider error", "provider", pid, "err", err)
 			warnings = append(warnings, fmt.Sprintf("%s: %s", pid, err))
 			continue
 		}
@@ -499,53 +576,19 @@ func (h *Handler) handleAvailableEpisodes(w http.ResponseWriter, r *http.Request
 		episodes = append(episodes, ep)
 	}
 	sort.Slice(episodes, func(i, j int) bool { return episodes[i].Number < episodes[j].Number })
-
-	WriteJSON(w, http.StatusOK, AvailableResponse{Episodes: episodes, Warnings: warnings})
+	return episodes, warnings
 }
 
-// handleDownloadAvailable downloads one source-found episode (from the
-// /available list) that may not yet have an episodes row. It finds-or-creates
-// the (series_id, number) episode, drives it into the pipeline as 'queued', and
-// re-engages a paused/dropped series to Active. Idempotent: a second call for the
-// same episode re-enqueues the existing row rather than duplicating it.
-func (h *Handler) handleDownloadAvailable(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseID(w, r)
-	if !ok {
-		return
-	}
-	var req DownloadAvailableRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteError(w, http.StatusBadRequest, "invalid JSON")
-		return
-	}
-	if strings.TrimSpace(req.SourceURL) == "" {
-		WriteError(w, http.StatusBadRequest, "source_url required")
-		return
-	}
-	if req.Number <= 0 {
-		WriteError(w, http.StatusBadRequest, "number must be positive")
-		return
-	}
-
-	ctx := r.Context()
-	series, err := h.store.Read().GetSeries(ctx, id)
-	if errors.Is(err, sql.ErrNoRows) {
-		WriteError(w, http.StatusNotFound, "series not found")
-		return
-	}
-	if err != nil {
-		WriteError(w, http.StatusInternalServerError, "failed to get series")
-		return
-	}
-
-	// Find-or-create the episode for this number. ListEpisodesBySeries is the
-	// only by-number lookup available, so scan it for a matching episode_no.
+// enqueueAvailableEpisode finds-or-creates the (series, number) episode for a
+// chosen source release and drives it into the pipeline as 'queued', broadcasting
+// episode.status. It does NOT touch subscription/watch state. Idempotent: an
+// existing row for the number is re-enqueued rather than duplicated.
+func (h *Handler) enqueueAvailableEpisode(ctx context.Context, series store.Series, req DownloadAvailableRequest) (store.Episode, error) {
 	num := int64(req.Number)
-	existing, err := h.store.Read().ListEpisodesBySeries(ctx, id)
+	existing, err := h.store.Read().ListEpisodesBySeries(ctx, series.ID)
 	if err != nil {
-		h.logger.Error("download available: list episodes", "series_id", id, "err", err)
-		WriteError(w, http.StatusInternalServerError, "failed to load episodes")
-		return
+		h.logger.Error("download available: list episodes", "series_id", series.ID, "err", err)
+		return store.Episode{}, errors.New("failed to load episodes")
 	}
 	var ep store.Episode
 	found := false
@@ -557,11 +600,10 @@ func (h *Handler) handleDownloadAvailable(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	created := false
 	if !found {
 		arg := store.CreateEpisodeParams{
 			Uuid:       mustUUID(),
-			SeriesID:   id,
+			SeriesID:   series.ID,
 			SourceKind: "torrent",
 			EpisodeNo:  &num,
 			Status:     "queued",
@@ -580,43 +622,24 @@ func (h *Handler) handleDownloadAvailable(w http.ResponseWriter, r *http.Request
 		}
 		ep, err = h.store.Write().CreateEpisode(ctx, arg)
 		if err != nil {
-			h.logger.Error("download available: create episode", "series_id", id, "number", req.Number, "err", err)
-			WriteError(w, http.StatusInternalServerError, "failed to create episode")
-			return
+			h.logger.Error("download available: create episode", "series_id", series.ID, "number", req.Number, "err", err)
+			return store.Episode{}, errors.New("failed to create episode")
 		}
-		created = true
 	}
 
-	// Drive it into the pipeline exactly as the manual-enqueue path does: set
-	// queued, broadcast episode.status, and re-engage the series to Active.
 	if err := h.store.Write().SetEpisodeStatus(ctx, store.SetEpisodeStatusParams{
 		ID:     ep.ID,
 		Status: "queued",
 	}); err != nil {
 		h.logger.Error("download available: set queued", "id", ep.ID, "err", err)
-		WriteError(w, http.StatusInternalServerError, "failed to enqueue episode")
-		return
+		return store.Episode{}, errors.New("failed to enqueue episode")
 	}
 	h.hub.Broadcast(events.TypeEpisodeStatus, map[string]any{
 		"episode_id": ep.ID,
-		"series_id":  id,
+		"series_id":  series.ID,
 		"status":     "queued",
 	})
-	h.reengageSeries(ctx, id)
-
-	// Re-read so the DTO reflects the queued status + any persisted columns.
-	fresh, err := h.store.Read().GetEpisode(ctx, ep.ID)
-	if err != nil {
-		h.logger.Error("download available: reload episode", "id", ep.ID, "err", err)
-		WriteError(w, http.StatusInternalServerError, "failed to load episode")
-		return
-	}
-	outputs, _ := h.store.Read().ListEncodedOutputsByEpisode(ctx, fresh.ID)
-	status := http.StatusOK
-	if created {
-		status = http.StatusCreated
-	}
-	WriteJSON(w, status, episodeToDetail(fresh, series.Title, outputs))
+	return ep, nil
 }
 
 // parseResolution reads the leading run of digits from a resolution string
@@ -652,8 +675,8 @@ func availableSourceURL(t *source.AnimeTorrent) string {
 }
 
 // seriesProgress loads one series' SeriesProgress by scanning the progress list
-// (which carries the archive counts + user_status) for its id. Used by the
-// track/pause/drop/resume responses so they return the same shape the grids read.
+// (which carries the archive counts) for its id. Used by the track/status
+// responses so they return the same shape the grids read.
 func (h *Handler) seriesProgress(ctx context.Context, id int64) (SeriesProgress, error) {
 	rows, err := h.store.Read().ListSeriesWithProgress(ctx)
 	if err != nil {
@@ -701,6 +724,35 @@ func mediaFromSeries(s store.Series) source.Media {
 	}
 	return m
 }
+
+// mediaFromMedia builds the source.Media used to drive SmartSearch directly from
+// a freshly-fetched AniList Media (the never-in-DB path), mirroring the column
+// mapping mediaFromSeries does from a cached row.
+func mediaFromMedia(m anilist.Media) source.Media {
+	out := source.Media{
+		ID:           m.ID,
+		IDMal:        m.IDMal,
+		RomajiTitle:  m.RomajiTitle,
+		Status:       m.Status,
+		Format:       m.Format,
+		EpisodeCount: -1,
+	}
+	if m.EnglishTitle != "" {
+		v := m.EnglishTitle
+		out.EnglishTitle = &v
+	}
+	if m.EpisodeCount > 0 {
+		out.EpisodeCount = m.EpisodeCount
+	}
+	out.Synonyms = append([]string{}, m.Synonyms...)
+	if m.RomajiTitle == "" && m.EnglishTitle != "" {
+		out.RomajiTitle = m.EnglishTitle
+	}
+	return out
+}
+
+// i64ptr returns a pointer to an int64 literal, for the *int64 query args.
+func i64ptr(v int64) *int64 { return &v }
 
 // parseSeriesSynonyms reads the series.synonyms JSON array column.
 func parseSeriesSynonyms(raw *string) []string {

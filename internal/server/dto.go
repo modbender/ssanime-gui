@@ -96,7 +96,6 @@ type SeriesProgress struct {
 	AiringStatus      *string `json:"airing_status"`
 	Status            string  `json:"status"`
 	DerivedStatus     string  `json:"derived_status"`
-	UserStatus        *string `json:"user_status"`
 	PosterPath        *string `json:"poster_path"`
 	CoverImageURL     *string `json:"cover_image_url"`
 	BannerImageURL    *string `json:"banner_image_url"`
@@ -128,7 +127,6 @@ type SeriesDetail struct {
 	AiringStatus     *string         `json:"airing_status"`
 	Status           string          `json:"status"`
 	DerivedStatus    string          `json:"derived_status"`
-	UserStatus       *string         `json:"user_status"`
 	PosterPath       *string         `json:"poster_path"`
 	CoverImageURL    *string         `json:"cover_image_url"`
 	BannerImageURL   *string         `json:"banner_image_url"`
@@ -210,41 +208,6 @@ type BulkEncodeRequest struct {
 	EpisodeIDs  []int64 `json:"episode_ids"`
 	ProfileID   *int64  `json:"profile_id"`
 	Resolutions []int   `json:"resolutions"`
-}
-
-// ---- Feed DTOs ----
-
-type CreateFeedRequest struct {
-	SeriesID        int64   `json:"series_id"`
-	Type            string  `json:"type"`
-	Site            *string `json:"site"`
-	URL             string  `json:"url"`
-	Quality         *int64  `json:"quality"`
-	Subtype         *string `json:"subtype"`
-	Deinterlace     bool    `json:"deinterlace"`
-	Uncensored      bool    `json:"uncensored"`
-	Bluray          bool    `json:"bluray"`
-	TitleRegex      *string `json:"title_regex"`
-	ExtraTags       *string `json:"extra_tags"`
-	IntervalSeconds int64   `json:"interval_seconds"`
-	OffsetSeconds   int64   `json:"offset_seconds"`
-	Enabled         bool    `json:"enabled"`
-}
-
-type PatchFeedRequest struct {
-	Type            *string `json:"type"`
-	Site            *string `json:"site"`
-	URL             *string `json:"url"`
-	Quality         *int64  `json:"quality"`
-	Subtype         *string `json:"subtype"`
-	Deinterlace     *bool   `json:"deinterlace"`
-	Uncensored      *bool   `json:"uncensored"`
-	Bluray          *bool   `json:"bluray"`
-	TitleRegex      *string `json:"title_regex"`
-	ExtraTags       *string `json:"extra_tags"`
-	IntervalSeconds *int64  `json:"interval_seconds"`
-	OffsetSeconds   *int64  `json:"offset_seconds"`
-	Enabled         *bool   `json:"enabled"`
 }
 
 // ---- Profile DTOs ----
@@ -619,8 +582,7 @@ type TrackResponse struct {
 	FeedID   int64          `json:"feed_id"`
 }
 
-// SeriesStatusResponse wraps a single series for the pause/drop/resume and
-// set-status endpoints.
+// SeriesStatusResponse wraps a single series for the set-status endpoint.
 type SeriesStatusResponse struct {
 	Series SeriesProgress `json:"series"`
 }
@@ -663,7 +625,7 @@ type AvailableEpisode struct {
 	Resolution string `json:"resolution"`
 }
 
-// AvailableResponse is the GET /api/series/{id}/available payload. Warnings
+// AvailableResponse is the GET /api/anilist/{id}/available payload. Warnings
 // carries one human-readable message per provider that failed, so a user with a
 // dead source sees the cause instead of a silently empty episode list.
 type AvailableResponse struct {
@@ -671,8 +633,8 @@ type AvailableResponse struct {
 	Warnings []string           `json:"warnings,omitempty"`
 }
 
-// DownloadAvailableRequest is the POST /api/series/{id}/available/download body:
-// a source-found episode the user chose to download while the series was paused.
+// DownloadAvailableRequest is the POST /api/anilist/{id}/available/download body:
+// a source-found episode the user chose to download (subscribed or not).
 type DownloadAvailableRequest struct {
 	SourceURL  string `json:"source_url"`
 	Number     int    `json:"number"`

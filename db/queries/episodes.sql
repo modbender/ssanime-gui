@@ -18,6 +18,9 @@ SELECT * FROM episodes WHERE series_id = ? ORDER BY episode_no ASC NULLS LAST, a
 -- name: ListEpisodesByStatus :many
 SELECT * FROM episodes WHERE status = ? ORDER BY added_at ASC;
 
+-- name: CountEpisodesBySeries :one
+SELECT COUNT(*) FROM episodes WHERE series_id = ?;
+
 -- name: ListQueuedEpisodes :many
 SELECT * FROM episodes WHERE status = 'queued' ORDER BY added_at ASC;
 

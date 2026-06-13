@@ -236,61 +236,6 @@ func TestBuiltinProfileImmutable(t *testing.T) {
 	}
 }
 
-// TestFeedsCRUD creates, patches, and deletes a feed.
-func TestFeedsCRUD(t *testing.T) {
-	srv := newTestServer(t)
-
-	// Need a series first.
-	title := "Feed Test Anime"
-	recS := postJSON(t, srv, "/api/series", CreateSeriesRequest{Title: &title})
-	if recS.Code != http.StatusCreated {
-		t.Fatalf("create series: %d %s", recS.Code, recS.Body.String())
-	}
-	respS := decodeBody[map[string]any](t, recS)
-	if respS.Data == nil {
-		t.Fatalf("no series data")
-	}
-	seriesID := int64((*respS.Data)["id"].(float64))
-
-	// Create feed.
-	rec := postJSON(t, srv, "/api/feeds", CreateFeedRequest{
-		SeriesID:        seriesID,
-		Type:            "rss",
-		URL:             "https://example.com/feed.rss",
-		IntervalSeconds: 3600,
-		Enabled:         true,
-	})
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("create feed: %d %s", rec.Code, rec.Body.String())
-	}
-	resp := decodeBody[map[string]any](t, rec)
-	if resp.Data == nil {
-		t.Fatalf("no feed data")
-	}
-	feedID := int64((*resp.Data)["id"].(float64))
-
-	// Patch it.
-	newInterval := int64(7200)
-	rec2 := patchJSON(t, srv, "/api/feeds/"+itoa(int(feedID)), PatchFeedRequest{
-		IntervalSeconds: &newInterval,
-	})
-	if rec2.Code != http.StatusOK {
-		t.Fatalf("patch feed: %d %s", rec2.Code, rec2.Body.String())
-	}
-
-	// Delete it.
-	rec3 := deleteReq(t, srv, "/api/feeds/"+itoa(int(feedID)))
-	if rec3.Code != http.StatusOK {
-		t.Fatalf("delete feed: %d %s", rec3.Code, rec3.Body.String())
-	}
-
-	// Verify list is empty.
-	rec4 := getJSON(t, srv, "/api/feeds")
-	if rec4.Code != http.StatusOK {
-		t.Fatalf("list feeds: %d", rec4.Code)
-	}
-}
-
 // TestBulkEncodeTransitionsToQueued verifies the bulk-encode endpoint transitions episodes.
 func TestBulkEncodeTransitionsToQueued(t *testing.T) {
 	dir := t.TempDir()
