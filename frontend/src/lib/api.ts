@@ -254,6 +254,9 @@ export interface Settings {
   doh_enabled: boolean
   setup_completed: boolean
   show_nsfw: boolean
+  /** Ordered by preference; an explicitly empty array means "no trust filter —
+   *  any group is downloadable". */
+  trusted_release_groups: string[]
 }
 
 // ---- Extensions ----
@@ -374,6 +377,11 @@ export interface AvailableEpisode {
   source_url: string
   size: number | null
   resolution: string
+  /** Parsed release group (e.g. "SubsPlease", "Erai-raws"); "" when unknown. */
+  release_group: string
+  /** true = from the trusted allowlist; false = only a non-trusted/likely
+   *  re-encoded release was available, offered flagged. */
+  trusted: boolean
 }
 
 export interface AvailableResponse {
@@ -459,7 +467,6 @@ export const api = {
   }) => patch<SeriesDetail>(`/series/${id}`, body),
   deleteSeries: (id: number) => del<null>(`/series/${id}`),
   listEpisodes: (id: number) => get<EpisodeDetail[]>(`/series/${id}/episodes`),
-  scanEpisodes: (id: number) => post<EpisodeDetail[]>(`/series/${id}/scan`),
   refreshSeries: (id: number) => post<unknown>(`/series/${id}/refresh`, {}),
 
   // Episodes

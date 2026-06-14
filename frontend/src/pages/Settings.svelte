@@ -40,7 +40,24 @@
     doh_enabled: true,
     setup_completed: false,
     show_nsfw: false,
+    trusted_release_groups: [],
   })
+
+  function addTrustedGroup() {
+    form.trusted_release_groups = [...form.trusted_release_groups, '']
+  }
+  function removeTrustedGroup(i: number) {
+    form.trusted_release_groups = form.trusted_release_groups.filter((_, idx) => idx !== i)
+  }
+  function setTrustedGroup(i: number, val: string) {
+    const next = [...form.trusted_release_groups]
+    next[i] = val
+    form.trusted_release_groups = next
+  }
+  // Empty after trimming blanks → backend treats as "no trust filter".
+  const trustedGroupsEmpty = $derived(
+    form.trusted_release_groups.every((g) => g.trim() === ''),
+  )
 
   async function load() {
     loading = true
@@ -62,7 +79,13 @@
     saved = false
     saveError = ''
     try {
-      const updated = await api.putSettings(form)
+      const payload: SettingsType = {
+        ...form,
+        trusted_release_groups: form.trusted_release_groups
+          .map((g) => g.trim())
+          .filter((g) => g !== ''),
+      }
+      const updated = await api.putSettings(payload)
       form = { ...updated }
       settings = { ...updated }
       saved = true
@@ -226,6 +249,57 @@
                     <option value={p.id}>{p.name}{p.is_builtin ? ' (built-in)' : ''}</option>
                   {/each}
                 </select>
+              </div>
+            </section>
+
+            <!-- Trusted release groups -->
+            <section class="border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+              <div class="px-5 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface-2)]">
+                <h2 class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">Trusted release groups</h2>
+              </div>
+              <div class="px-5 py-5 space-y-4">
+                <p class="text-xs text-[var(--color-muted)]">
+                  Source selection prefers these groups, in order — the first listed is preferred. Because the app
+                  re-encodes everything itself, it wants clean original-subbed releases (e.g. SubsPlease, Erai-raws),
+                  not re-encodes from secondary groups.
+                </p>
+
+                <div class="space-y-2">
+                  {#each form.trusted_release_groups as group, i (i)}
+                    <div class="flex items-center gap-2">
+                      <span class="w-5 shrink-0 text-right text-xs font-medium tabular-nums text-[var(--color-muted)]">{i + 1}</span>
+                      <input
+                        type="text"
+                        value={group}
+                        oninput={(e) => setTrustedGroup(i, (e.target as HTMLInputElement).value)}
+                        placeholder="e.g. SubsPlease"
+                        class="h-9 flex-1 border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+                        aria-label={`Trusted release group ${i + 1}`}
+                      />
+                      <button
+                        type="button"
+                        onclick={() => removeTrustedGroup(i)}
+                        class="flex h-9 w-9 shrink-0 items-center justify-center border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-muted)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text)]"
+                        title="Remove group"
+                        aria-label={`Remove trusted release group ${i + 1}`}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </button>
+                    </div>
+                  {/each}
+                </div>
+
+                <Button variant="outline" size="sm" onclick={addTrustedGroup}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  Add group
+                </Button>
+
+                {#if trustedGroupsEmpty}
+                  <p class="flex items-start gap-2 text-xs text-[var(--color-warning)]">
+                    <svg class="mt-0.5 shrink-0" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 9v4M12 17h.01" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span>No trusted groups set — source selection won't filter by group and may download lower-quality re-encodes.</span>
+                  </p>
+                {/if}
               </div>
             </section>
 
