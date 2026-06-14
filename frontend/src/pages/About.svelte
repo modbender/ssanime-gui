@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api, type VersionInfo } from '$lib/api'
   import { APP_NAME } from '$lib/app'
+  import { externalClick } from '$lib/external'
   import logoMark from '$lib/assets/logo-mark.svg?raw'
 
   let version = $state<VersionInfo | null>(null)
@@ -88,6 +89,7 @@
           href="https://github.com/modbender/ssanime-gui/blob/main/LICENSE"
           target="_blank"
           rel="noopener"
+          onclick={(e) => externalClick(e, 'https://github.com/modbender/ssanime-gui/blob/main/LICENSE')}
           class="text-[var(--color-text)] underline decoration-[var(--color-border-strong)] underline-offset-2 transition-colors hover:decoration-[var(--accent)]"
         >GPL-3.0</a> license.
       </p>
@@ -99,6 +101,7 @@
             href={link.href}
             target="_blank"
             rel="noopener"
+            onclick={(e) => externalClick(e, link.href)}
             class="group flex items-center justify-center gap-2 border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 text-[13px] font-medium text-[var(--color-text-dim)] transition-colors duration-200 hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="shrink-0">
@@ -120,6 +123,7 @@
           href="https://github.com/sponsors/modbender"
           target="_blank"
           rel="noopener"
+          onclick={(e) => externalClick(e, 'https://github.com/sponsors/modbender')}
           class="mt-4 inline-flex h-10 items-center justify-center gap-2 bg-[#db61a2] px-5 text-[13px] font-semibold text-white transition-[filter,transform] duration-200 hover:brightness-110 active:scale-[0.97]"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
