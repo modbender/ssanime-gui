@@ -3,6 +3,7 @@ package extension
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,16 +25,22 @@ const callTimeout = 15 * time.Second
 // "var __ssExt = (<expr>)" so goja can execute it as a plain script.
 // This handles the single pattern all known JS extensions use
 // ("export default new class ...").
+//
+// The captured expression is trimmed of trailing semicolons/whitespace before
+// being wrapped: the exten.pages.dev extensions end their default export with
+// "};" and a stray ";" inside the wrapping parens is a syntax error.
 func stripExportDefault(src string) string {
 	const marker = "export default"
 	idx := strings.Index(src, marker)
 	if idx == -1 {
 		return src
 	}
+	expr := strings.TrimSpace(src[idx+len(marker):])
+	expr = strings.TrimRight(expr, "; \t\r\n")
 	var b bytes.Buffer
 	b.WriteString(src[:idx])
 	b.WriteString("var __ssExt = (")
-	b.WriteString(strings.TrimSpace(src[idx+len(marker):]))
+	b.WriteString(expr)
 	b.WriteString(")")
 	return b.String()
 }
@@ -95,6 +102,7 @@ func (v *VM) CallMethod(ctx context.Context, methodName string, args ...interfac
 		v.bindConsole(rt)
 		v.bindFetch(loop, rt)
 		v.bindSetTimeout(rt)
+		v.bindGlobals(rt)
 
 		// Run the compiled program; this defines __ssExt.
 		if _, err := rt.RunProgram(v.program); err != nil {
@@ -118,6 +126,19 @@ func (v *VM) CallMethod(ctx context.Context, methodName string, args ...interfac
 		gojaArgs := make([]goja.Value, len(args))
 		for i, a := range args {
 			gojaArgs[i] = nativeJSValue(rt, a)
+		}
+
+		// Hayase passes its host fetch in the options object (extensions
+		// destructure `fetch` from the first arg and call it). Inject the global
+		// fetch onto the first argument when it's an object and doesn't already
+		// carry one, so `single({fetch}, opts)` works without each extension
+		// reaching for a global.
+		if len(gojaArgs) > 0 {
+			if argObj, ok := gojaArgs[0].(*goja.Object); ok {
+				if f := argObj.Get("fetch"); f == nil || goja.IsUndefined(f) || goja.IsNull(f) {
+					_ = argObj.Set("fetch", rt.Get("fetch"))
+				}
+			}
 		}
 
 		callResult, err := fn(obj, gojaArgs...)
@@ -283,7 +304,7 @@ func (v *VM) bindFetch(loop *eventloop.EventLoop, rt *goja.Runtime) {
 					p2, r2, rj2 := rt2.NewPromise()
 					var parsed interface{}
 					if jsonErr := json.Unmarshal(bodyBytes, &parsed); jsonErr != nil {
-						_ = rj2(jsonErr.Error())
+						_ = rj2(nonJSONError(statusCode, bodyStr))
 					} else {
 						_ = r2(rt2.ToValue(parsed))
 					}
@@ -302,6 +323,163 @@ func (v *VM) bindFetch(loop *eventloop.EventLoop, rt *goja.Runtime) {
 
 		return rt.ToValue(promise)
 	})
+}
+
+// bindGlobals injects the browser globals Hayase extensions touch at load and
+// during search: atob/btoa (base64) and a minimal navigator object. Several
+// exten.pages.dev extensions decode their API base with atob(...) at module
+// scope and read navigator.onLine before searching; without these the program
+// throws ReferenceError before any method runs.
+func (v *VM) bindGlobals(rt *goja.Runtime) {
+	rt.Set("atob", func(call goja.FunctionCall) goja.Value {
+		decoded, err := decodeBase64Lenient(call.Argument(0).String())
+		if err != nil {
+			// Mirror the browser: invalid input throws (catchable in JS).
+			panic(rt.NewTypeError("atob: invalid base64 input"))
+		}
+		return rt.ToValue(string(decoded))
+	})
+	rt.Set("btoa", func(call goja.FunctionCall) goja.Value {
+		return rt.ToValue(base64.StdEncoding.EncodeToString([]byte(call.Argument(0).String())))
+	})
+
+	nav := rt.NewObject()
+	_ = nav.Set("onLine", true)
+	_ = nav.Set("userAgent", "ssanime")
+	rt.Set("navigator", nav)
+
+	// URLSearchParams: goja has no DOM/WHATWG globals. Several extensions build
+	// query strings with `new URLSearchParams({...})`, `.append`, and
+	// `.toString()` (string-coerced into the request URL). A small JS polyfill
+	// covering the surface these extensions use is injected here; a failure to
+	// install it is fatal to compatibility, so it panics (caught as a run error).
+	if _, err := rt.RunString(urlSearchParamsPolyfill); err != nil {
+		panic(rt.ToValue("failed to install URLSearchParams polyfill: " + err.Error()))
+	}
+}
+
+// urlSearchParamsPolyfill is a minimal WHATWG URLSearchParams implementation
+// covering construction from a record/string/iterable, append/set/get/getAll/
+// has/delete, and toString() with proper percent-encoding (application/x-www-
+// form-urlencoded: space → '+'). It is intentionally small — enough for the
+// Hayase extensions that build query strings.
+const urlSearchParamsPolyfill = `
+(function (global) {
+  if (typeof global.URLSearchParams === 'function') return;
+  function enc(s) {
+    return encodeURIComponent(String(s)).replace(/%20/g, '+');
+  }
+  function USP(init) {
+    this._p = [];
+    if (init == null) return;
+    if (typeof init === 'string') {
+      var s = init.charAt(0) === '?' ? init.slice(1) : init;
+      if (s.length) {
+        var self = this;
+        s.split('&').forEach(function (pair) {
+          if (!pair) return;
+          var i = pair.indexOf('=');
+          var k = i === -1 ? pair : pair.slice(0, i);
+          var v = i === -1 ? '' : pair.slice(i + 1);
+          self._p.push([decodeURIComponent(k.replace(/\+/g, ' ')), decodeURIComponent(v.replace(/\+/g, ' '))]);
+        });
+      }
+    } else if (Array.isArray(init)) {
+      for (var j = 0; j < init.length; j++) this._p.push([String(init[j][0]), String(init[j][1])]);
+    } else if (typeof init === 'object') {
+      for (var key in init) {
+        if (Object.prototype.hasOwnProperty.call(init, key)) this._p.push([key, String(init[key])]);
+      }
+    }
+  }
+  USP.prototype.append = function (k, v) { this._p.push([String(k), String(v)]); };
+  USP.prototype.set = function (k, v) {
+    k = String(k); var found = false; var out = [];
+    for (var i = 0; i < this._p.length; i++) {
+      if (this._p[i][0] === k) { if (!found) { out.push([k, String(v)]); found = true; } }
+      else out.push(this._p[i]);
+    }
+    if (!found) out.push([k, String(v)]);
+    this._p = out;
+  };
+  USP.prototype.get = function (k) {
+    k = String(k);
+    for (var i = 0; i < this._p.length; i++) if (this._p[i][0] === k) return this._p[i][1];
+    return null;
+  };
+  USP.prototype.getAll = function (k) {
+    k = String(k); var out = [];
+    for (var i = 0; i < this._p.length; i++) if (this._p[i][0] === k) out.push(this._p[i][1]);
+    return out;
+  };
+  USP.prototype.has = function (k) { return this.get(String(k)) !== null; };
+  USP.prototype['delete'] = function (k) {
+    k = String(k); var out = [];
+    for (var i = 0; i < this._p.length; i++) if (this._p[i][0] !== k) out.push(this._p[i]);
+    this._p = out;
+  };
+  USP.prototype.forEach = function (cb, thisArg) {
+    for (var i = 0; i < this._p.length; i++) cb.call(thisArg, this._p[i][1], this._p[i][0], this);
+  };
+  USP.prototype.toString = function () {
+    var out = [];
+    for (var i = 0; i < this._p.length; i++) out.push(enc(this._p[i][0]) + '=' + enc(this._p[i][1]));
+    return out.join('&');
+  };
+  global.URLSearchParams = USP;
+})(this);
+`
+
+// decodeBase64Lenient decodes base64 the way a browser atob tolerates input:
+// strip all whitespace, fix missing padding, and accept both standard and
+// URL-safe alphabets (with or without padding). Returns an error only when no
+// variant decodes.
+func decodeBase64Lenient(s string) ([]byte, error) {
+	// Remove all ASCII whitespace (spaces, tabs, newlines) the way atob does.
+	s = strings.Map(func(r rune) rune {
+		switch r {
+		case ' ', '\t', '\n', '\r', '\v', '\f':
+			return -1
+		}
+		return r
+	}, s)
+	if s == "" {
+		return []byte{}, nil
+	}
+	// Try padded variants as-is first.
+	for _, enc := range []*base64.Encoding{base64.StdEncoding, base64.URLEncoding} {
+		if b, err := enc.DecodeString(s); err == nil {
+			return b, nil
+		}
+	}
+	// Try raw (unpadded) variants.
+	for _, enc := range []*base64.Encoding{base64.RawStdEncoding, base64.RawURLEncoding} {
+		if b, err := enc.DecodeString(s); err == nil {
+			return b, nil
+		}
+	}
+	// Last resort: re-pad to a multiple of 4 and retry the padded alphabets.
+	if pad := len(s) % 4; pad != 0 {
+		s += strings.Repeat("=", 4-pad)
+		for _, enc := range []*base64.Encoding{base64.StdEncoding, base64.URLEncoding} {
+			if b, err := enc.DecodeString(s); err == nil {
+				return b, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("invalid base64")
+}
+
+// nonJSONError builds the actionable message surfaced when fetch().json() is
+// called on a non-JSON body (the common "dead proxy returns HTML" case),
+// replacing the cryptic raw "invalid character 'T'" decode error.
+func nonJSONError(status int, body string) string {
+	snippet := strings.TrimSpace(body)
+	const limit = 80
+	if len(snippet) > limit {
+		snippet = snippet[:limit]
+	}
+	return fmt.Sprintf("non-JSON response (HTTP %d): %s", status, snippet)
 }
 
 // bindSetTimeout provides a synchronous no-op setTimeout. Extensions that use

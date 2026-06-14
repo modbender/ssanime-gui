@@ -49,6 +49,10 @@ type Media struct {
 	// AniDB anime/episode IDs, when known (enable Confirmed matches).
 	AnidbAID int `json:"anidbAID,omitempty"`
 	AnidbEID int `json:"anidbEID,omitempty"`
+	// TvdbID/TmdbID are the anime-level TheTVDB / TheMovieDB ids (0 when unknown).
+	// They feed extensions (e.g. nekobt) that key off TVDB/TMDB rather than AniDB.
+	TvdbID int `json:"tvdbID,omitempty"`
+	TmdbID int `json:"tmdbID,omitempty"`
 	// Status: FINISHED|RELEASING|NOT_YET_RELEASED|CANCELLED|HIATUS.
 	Status string `json:"status,omitempty"`
 	// Format: TV|TV_SHORT|MOVIE|SPECIAL|OVA|ONA|MUSIC.
@@ -101,6 +105,13 @@ type SmartSearchOptions struct {
 	Resolution string `json:"resolution"`
 	// BestReleases requests only releases the provider can confirm are best.
 	BestReleases bool `json:"bestReleases"`
+	// AnidbEid/TvdbEid are episode-level ids resolved from ani.zip for the
+	// requested EpisodeNumber (0 when unknown). They let extensions confirm a
+	// single-episode match without re-resolving mappings themselves.
+	AnidbEid int `json:"anidbEid,omitempty"`
+	TvdbEid  int `json:"tvdbEid,omitempty"`
+	// Exclusions are release-quality terms the provider should filter out.
+	Exclusions []string `json:"exclusions,omitempty"`
 }
 
 // AnimeTorrent is one normalized release result. Field set mirrors hibike

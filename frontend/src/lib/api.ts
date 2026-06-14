@@ -280,8 +280,21 @@ export interface Extension {
   nsfw: boolean
   icon: string | null
   source_url: string | null
+  healthy: boolean | null
+  health_error: string | null
+  health_checked_at: number | null
   added_at: number
   modified_at: number
+}
+
+export interface ExtensionPreviewEntry {
+  ext_id: string
+  name: string
+  version: string
+  type: string
+  nsfw: boolean
+  usable: boolean
+  error: string
 }
 
 export interface StatsResponse {
@@ -435,6 +448,8 @@ export const api = {
     default_profile_id?: number
   }) => post<SeriesDetail>('/series', body),
   getSeries: (id: number) => get<SeriesDetail>(`/series/${id}`),
+  getSeriesByAnilist: (anilistId: number) =>
+    get<SeriesDetail>(`/series/by-anilist/${anilistId}`),
   patchSeries: (id: number, body: {
     subscribed?: boolean
     favorite?: boolean
@@ -512,4 +527,8 @@ export const api = {
   enableExtension: (id: number) => post<Extension>(`/extensions/${id}/enable`),
   disableExtension: (id: number) => post<Extension>(`/extensions/${id}/disable`),
   uninstallExtension: (id: number) => del<null>(`/extensions/${id}`),
+  previewExtensionRepo: (url: string) =>
+    post<{ entries: ExtensionPreviewEntry[] }>('/extension-repos/preview', { url }),
+  testExtension: (id: number) =>
+    post<{ healthy: boolean; error: string; checked_at: number }>(`/extensions/${id}/test`),
 }

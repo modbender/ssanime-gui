@@ -19,19 +19,25 @@
 // use.
 package extension
 
+import "encoding/json"
+
 // IndexEntry is one item from a repo's index.json.
 type IndexEntry struct {
-	ID       string   `json:"id"`
-	Name     string   `json:"name"`
-	Version  string   `json:"version"`
-	Type     string   `json:"type"` // "torrent"
-	Accuracy string   `json:"accuracy"`
-	NSFW     bool     `json:"nsfw"`
-	Icon     string   `json:"icon"`
-	Update   string   `json:"update"`
-	Code     string   `json:"code"` // raw JS URL
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Version  string `json:"version"`
+	Type     string `json:"type"` // "torrent"
+	Accuracy string `json:"accuracy"`
+	NSFW     bool   `json:"nsfw"`
+	Icon     string `json:"icon"`
+	Update   string `json:"update"`
+	Code     string `json:"code"` // raw JS URL
 	// Languages is from Hayase format; we preserve but don't enforce.
 	Languages []string `json:"languages"`
+	// Options is the per-extension settings schema (Hayase shape: an object of
+	// {key: {label,type,value|default,...}}). Kept raw because the schema is
+	// extension-specific; resolveSettings extracts the default values.
+	Options json.RawMessage `json:"options"`
 }
 
 // ExtType is the installed extension type tag stored in the DB.

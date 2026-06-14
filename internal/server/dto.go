@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 
+	"github.com/modbender/ssanime-gui/internal/extension"
 	"github.com/modbender/ssanime-gui/internal/store"
 )
 
@@ -383,21 +384,56 @@ type CreateExtensionRepoRequest struct {
 	URL  string `json:"url"`
 }
 
+// PreviewRepoRequest is the POST /api/extension-repos/preview body.
+type PreviewRepoRequest struct {
+	URL string `json:"url"`
+}
+
+// PreviewEntryDTO is one extension in a repo-preview result: index metadata plus
+// its liveness outcome. usable is false (with a reason in error) for a dead or
+// unloadable extension; that is NOT a request-level failure.
+type PreviewEntryDTO struct {
+	ExtID   string `json:"ext_id"`
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	Type    string `json:"type"`
+	NSFW    bool   `json:"nsfw"`
+	Usable  bool   `json:"usable"`
+	Error   string `json:"error"`
+}
+
+// PreviewRepoResponse is the POST /api/extension-repos/preview success body.
+type PreviewRepoResponse struct {
+	Entries []PreviewEntryDTO `json:"entries"`
+}
+
+// ExtensionTestResponse is the POST /api/extensions/{id}/test body: the persisted
+// liveness outcome. error is "" when healthy; checked_at is the unix time the
+// check was recorded.
+type ExtensionTestResponse struct {
+	Healthy   bool   `json:"healthy"`
+	Error     string `json:"error"`
+	CheckedAt int64  `json:"checked_at"`
+}
+
 // ExtensionDTO is the wire shape for an installed extension.
 type ExtensionDTO struct {
-	ID         int64   `json:"id"`
-	UUID       string  `json:"uuid"`
-	RepoID     *int64  `json:"repo_id"`
-	ExtID      string  `json:"ext_id"`
-	Name       string  `json:"name"`
-	Version    *string `json:"version"`
-	Lang       string  `json:"lang"`
-	Enabled    bool    `json:"enabled"`
-	Nsfw       bool    `json:"nsfw"`
-	Icon       *string `json:"icon"`
-	SourceURL  *string `json:"source_url"`
-	AddedAt    int64   `json:"added_at"`
-	ModifiedAt int64   `json:"modified_at"`
+	ID              int64   `json:"id"`
+	UUID            string  `json:"uuid"`
+	RepoID          *int64  `json:"repo_id"`
+	ExtID           string  `json:"ext_id"`
+	Name            string  `json:"name"`
+	Version         *string `json:"version"`
+	Lang            string  `json:"lang"`
+	Enabled         bool    `json:"enabled"`
+	Nsfw            bool    `json:"nsfw"`
+	Icon            *string `json:"icon"`
+	SourceURL       *string `json:"source_url"`
+	Healthy         *bool   `json:"healthy"`
+	HealthError     *string `json:"health_error"`
+	HealthCheckedAt *int64  `json:"health_checked_at"`
+	AddedAt         int64   `json:"added_at"`
+	ModifiedAt      int64   `json:"modified_at"`
 }
 
 // ExtensionRepoDTO is the wire shape for an extension repo.
@@ -411,22 +447,44 @@ type ExtensionRepoDTO struct {
 	AddedAt      int64  `json:"added_at"`
 }
 
-// toExtensionDTO maps a store row to the frozen wire shape.
+// toExtensionDTO maps a store row to the frozen wire shape. The nullable healthy
+// 0/1 column becomes a *bool (null = never checked / unknown).
 func toExtensionDTO(e store.Extension) ExtensionDTO {
+	var healthy *bool
+	if e.Healthy != nil {
+		v := *e.Healthy != 0
+		healthy = &v
+	}
 	return ExtensionDTO{
-		ID:         e.ID,
-		UUID:       e.Uuid,
-		RepoID:     e.RepoID,
-		ExtID:      e.ExtID,
-		Name:       e.Name,
-		Version:    e.Version,
-		Lang:       e.Lang,
-		Enabled:    e.Enabled != 0,
-		Nsfw:       e.Nsfw != 0,
-		Icon:       e.Icon,
-		SourceURL:  e.SourceUrl,
-		AddedAt:    e.AddedAt,
-		ModifiedAt: e.ModifiedAt,
+		ID:              e.ID,
+		UUID:            e.Uuid,
+		RepoID:          e.RepoID,
+		ExtID:           e.ExtID,
+		Name:            e.Name,
+		Version:         e.Version,
+		Lang:            e.Lang,
+		Enabled:         e.Enabled != 0,
+		Nsfw:            e.Nsfw != 0,
+		Icon:            e.Icon,
+		SourceURL:       e.SourceUrl,
+		Healthy:         healthy,
+		HealthError:     e.HealthError,
+		HealthCheckedAt: e.HealthCheckedAt,
+		AddedAt:         e.AddedAt,
+		ModifiedAt:      e.ModifiedAt,
+	}
+}
+
+// toPreviewEntryDTO maps a manager preview result to the wire shape.
+func toPreviewEntryDTO(e extension.PreviewEntry) PreviewEntryDTO {
+	return PreviewEntryDTO{
+		ExtID:   e.ExtID,
+		Name:    e.Name,
+		Version: e.Version,
+		Type:    e.Type,
+		NSFW:    e.NSFW,
+		Usable:  e.Usable,
+		Error:   e.Error,
 	}
 }
 

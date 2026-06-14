@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.0](https://github.com/modbender/ssanime-gui/compare/v0.3.0...v0.4.0) (2026-06-14)
+
+
+### Features
+
+* extension health UI — preview-on-add, badges, re-check ([#49](https://github.com/modbender/ssanime-gui/issues/49)) ([d6b96da](https://github.com/modbender/ssanime-gui/commit/d6b96da31539a6071a435f2ea8d2c7279307ffba))
+* extension liveness checks and centralized health state ([#48](https://github.com/modbender/ssanime-gui/issues/48)) ([ecd0715](https://github.com/modbender/ssanime-gui/commit/ecd0715493a63f0a6359d1844f8e0c918e5fe18c))
+* run real Hayase torrent extensions (exten.pages.dev sources) ([#44](https://github.com/modbender/ssanime-gui/issues/44)) ([039fa72](https://github.com/modbender/ssanime-gui/commit/039fa72417773fa2553f3ba00244784af2db336e))
+* shared toast/confirm dialogs and proxied source icons ([#47](https://github.com/modbender/ssanime-gui/issues/47)) ([5ff177a](https://github.com/modbender/ssanime-gui/commit/5ff177aa567ccd52d3f478c1c0756a3f9472504b))
+* tabbed settings, sidebar revamp, working external links ([#45](https://github.com/modbender/ssanime-gui/issues/45)) ([cacd68c](https://github.com/modbender/ssanime-gui/commit/cacd68c6e96452fa384f0a39f5698ff8f62ca17a))
+
+
+### Bug Fixes
+
+* drop low-res TVDB banner art from hero; lead rotation with AniList banner ([#40](https://github.com/modbender/ssanime-gui/issues/40)) ([2d903ad](https://github.com/modbender/ssanime-gui/commit/2d903adfc001b2f7362c73b751b244c3c60bd742))
+* extensions repo cascade refresh, broken icons, native dialogs ([#46](https://github.com/modbender/ssanime-gui/issues/46)) ([7f17b21](https://github.com/modbender/ssanime-gui/commit/7f17b215faedf1b5d7aa1e9db13a6808583b8853))
+* per-episode source search, unified series page, tracked-state sync ([#50](https://github.com/modbender/ssanime-gui/issues/50)) ([bb2efe7](https://github.com/modbender/ssanime-gui/commit/bb2efe788ab997698e5a62933354856e770bbc1f))
+
 ## [0.3.0](https://github.com/modbender/ssanime-gui/compare/v0.2.0...v0.3.0) (2026-06-14)
 
 

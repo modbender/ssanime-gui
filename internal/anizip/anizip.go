@@ -80,10 +80,60 @@ func New(opts ...Option) *Client {
 // rawResponse is the ani.zip mappings envelope. "episodes" is an object keyed by
 // episode number as a string; absolute-numbered specials use non-integer keys.
 // "images" is a flat array of artwork entries discriminated by coverType
-// (Banner|Poster|Fanart|Clearlogo|...), each a TVDB artwork URL.
+// (Banner|Poster|Fanart|Clearlogo|...), each a TVDB artwork URL. "mappings"
+// carries the cross-tracker id block (anidb/mal/tvdb/tmdb/...).
 type rawResponse struct {
 	Episodes map[string]rawEpisode `json:"episodes"`
 	Images   []rawImage            `json:"images"`
+	Mappings rawMappings           `json:"mappings"`
+}
+
+// rawMappings is ani.zip's top-level id block. Most ids decode as numbers, but
+// "themoviedb_id" (and occasionally others) arrive as JSON strings; flexInt
+// tolerates both so a single string id never fails the whole decode.
+type rawMappings struct {
+	AnidbID     flexInt `json:"anidb_id"`
+	MalID       flexInt `json:"mal_id"`
+	TvdbID      flexInt `json:"thetvdb_id"`
+	TmdbID      flexInt `json:"themoviedb_id"`
+	AnilistID   flexInt `json:"anilist_id"`
+	KitsuID     flexInt `json:"kitsu_id"`
+	AnisearchID flexInt `json:"anisearch_id"`
+}
+
+// flexInt decodes a JSON value that may be a number or a numeric string into an
+// int, defaulting to 0 on null/empty/non-numeric input rather than erroring the
+// surrounding decode. ani.zip is inconsistent: themoviedb_id is often a string.
+type flexInt int
+
+func (f *flexInt) UnmarshalJSON(b []byte) error {
+	s := strings.TrimSpace(string(b))
+	if s == "" || s == "null" {
+		*f = 0
+		return nil
+	}
+	// Strip surrounding quotes if present (string-encoded id).
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		s = s[1 : len(s)-1]
+		s = strings.TrimSpace(s)
+	}
+	if s == "" {
+		*f = 0
+		return nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		// Tolerate floats ("123.0") and any other noise by extracting the
+		// leading integer; on total failure default to 0 without erroring.
+		if g, gErr := strconv.ParseFloat(s, 64); gErr == nil {
+			*f = flexInt(int(g))
+			return nil
+		}
+		*f = 0
+		return nil
+	}
+	*f = flexInt(n)
+	return nil
 }
 
 // rawImage is one ani.zip artwork entry. coverType discriminates the artwork
@@ -107,6 +157,11 @@ type rawEpisode struct {
 	Overview      string            `json:"overview"`
 	Summary       string            `json:"summary"`
 	Image         string            `json:"image"`
+	// AnidbEid is the per-episode AniDB id; TvdbID is the episode-level TheTVDB
+	// id (distinct from the show-level thetvdb_id in mappings). Both feed the
+	// extension id-resolver and tolerate string-encoded values.
+	AnidbEid flexInt `json:"anidbEid"`
+	TvdbID   flexInt `json:"tvdbId"`
 }
 
 // GetEpisodes fetches the per-episode metadata for one AniList id, returning the
@@ -153,6 +208,69 @@ func (c *Client) GetHeroArt(ctx context.Context, anilistID int) (clearLogo strin
 		}
 	}
 	return clearLogo, wide, nil
+}
+
+// IDs is the cross-tracker id block ani.zip resolves for one AniList id, plus a
+// per-episode id map. Any field is 0 when ani.zip has no value. Episodes is
+// keyed by (parsed) episode number.
+type IDs struct {
+	AnilistID   int
+	AnidbID     int
+	MalID       int
+	TvdbID      int
+	TmdbID      int
+	KitsuID     int
+	AnisearchID int
+	Episodes    map[int]EpisodeIDs
+}
+
+// EpisodeIDs are the per-episode ids extensions key off of (AniDB episode id and
+// the episode-level TheTVDB id).
+type EpisodeIDs struct {
+	AnidbEid int
+	TvdbEid  int
+}
+
+// GetIDs resolves the cross-tracker id block for one AniList id via a single
+// ani.zip fetch. A missing mapping (HTTP 404 / empty) yields a zero-value IDs
+// with a nil error so callers degrade to whatever ids they already carry; only
+// network/HTTP/decode failures propagate.
+func (c *Client) GetIDs(ctx context.Context, anilistID int) (IDs, error) {
+	raw, ok, err := c.fetchMappings(ctx, anilistID)
+	if err != nil || !ok {
+		return IDs{}, err
+	}
+	out := IDs{
+		AnilistID:   int(raw.Mappings.AnilistID),
+		AnidbID:     int(raw.Mappings.AnidbID),
+		MalID:       int(raw.Mappings.MalID),
+		TvdbID:      int(raw.Mappings.TvdbID),
+		TmdbID:      int(raw.Mappings.TmdbID),
+		KitsuID:     int(raw.Mappings.KitsuID),
+		AnisearchID: int(raw.Mappings.AnisearchID),
+		Episodes:    make(map[int]EpisodeIDs, len(raw.Episodes)),
+	}
+	// The mappings block may omit anilist_id; backfill the requested id so a
+	// caller that only checks ids.AnilistID still sees it.
+	if out.AnilistID == 0 {
+		out.AnilistID = anilistID
+	}
+	for key, e := range raw.Episodes {
+		num := e.EpisodeNumber
+		if num == 0 {
+			if n, err := strconv.Atoi(key); err == nil {
+				num = n
+			}
+		}
+		if num == 0 {
+			continue
+		}
+		out.Episodes[num] = EpisodeIDs{
+			AnidbEid: int(e.AnidbEid),
+			TvdbEid:  int(e.TvdbID),
+		}
+	}
+	return out, nil
 }
 
 // fetchMappings GETs and decodes the ani.zip mappings envelope for one id. The

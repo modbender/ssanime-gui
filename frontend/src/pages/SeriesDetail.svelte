@@ -36,8 +36,10 @@
   import { sseState } from '$lib/sse.svelte'
   import { episodeOverall, episodeStage } from '$lib/pipeline.svelte'
   import { fillGreenMix } from '$lib/pipeline-math'
-  import { getPreview, markTracked } from '$lib/discovery.svelte'
+  import { getPreview, markTracked, markUntracked } from '$lib/discovery.svelte'
   import { requireSource } from '$lib/sources.svelte'
+  import { openExternal } from '$lib/external'
+  import { toast } from '$lib/toast.svelte'
 
   let { id, anilistId }: { id?: string; anilistId?: string } = $props()
 
@@ -121,11 +123,27 @@
 
   function loadPreview() {
     if (numAnilist == null) return
+    const anilist = numAnilist
     loading = true; error = ''
-    // Instant-paint hint from the discovery cache (optional, not required).
-    preview = getPreview(numAnilist)
+    // Instant-paint hint from the discovery cache (optional, not required) — keeps
+    // perceived speed identical to before while the tracked lookup resolves.
+    preview = getPreview(anilist)
     loading = false
-    loadDetail(numAnilist)
+    loadDetail(anilist)
+    // If this AniList id is already a tracked series, canonicalize the URL to its
+    // DB id so the tracked code path takes over instead of the discovery view.
+    void redirectIfTracked(anilist)
+  }
+
+  async function redirectIfTracked(anilist: number) {
+    try {
+      const found = await api.getSeriesByAnilist(anilist)
+      // Guard against the route param changing mid-flight (relation/rec nav).
+      if (lastKey !== `al:${anilist}`) return
+      navigate(`/series/${found.id}`, { replace: true })
+    } catch {
+      // 404 (request() throws) → not tracked; keep the discovery/preview flow.
+    }
   }
 
   // Re-run whenever the route param changes (e.g. relation/recommendation nav).
@@ -159,7 +177,7 @@
         markTracked(anilist)
         navigate('/library')
       } else {
-        alert(e.message)
+        toast.error(e.message)
       }
     } finally {
       tracking = false
@@ -174,7 +192,7 @@
       await api.setSeriesStatus(numId, status)
       await loadTracked()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally {
       statusBusy = false
     }
@@ -188,10 +206,11 @@
       // Returns { deleted, series_id }: the row is removed only when it has no
       // episodes; otherwise it lives on in the library under "Downloaded".
       await api.unsubscribeSeries(numId)
+      if (series?.anilist_id != null) markUntracked(series.anilist_id)
       unsubscribeOpen = false
       navigate('/library')
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally {
       unsubscribing = false
     }
@@ -213,7 +232,7 @@
       available = res.episodes ?? []
       availableWarnings = res.warnings ?? []
     } catch (e: any) {
-      alert(e.message || 'Source check failed.')
+      toast.error(e.message || 'Source check failed.')
     } finally {
       availableLoading = false
       availableChecked = true
@@ -238,7 +257,7 @@
       if (numId == null) navigate(`/series/${res.series_id}`)
       else await loadTracked()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally {
       downloadingEp = null
     }
@@ -280,7 +299,7 @@
       if (numId == null && lastSeriesId != null) navigate(`/series/${lastSeriesId}`)
       else await loadTracked()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
       selectedAvailable = new Set()
     } finally {
       bulkDownloading = false
@@ -314,7 +333,7 @@
       encodeOpen = false
       selected = new Set()
       await loadTracked()
-    } catch (e: any) { alert(e.message) }
+    } catch (e: any) { toast.error(e.message) }
     finally { encoding = false }
   }
 
@@ -326,7 +345,7 @@
       await loadTracked()
       if (series?.anilist_id != null) await loadDetail(series.anilist_id)
     } catch (e: any) {
-      alert(e.message || 'AniList is rate-limited right now — existing metadata kept. Try again shortly.')
+      toast.error(e.message || 'AniList is rate-limited right now — existing metadata kept. Try again shortly.')
     } finally { refreshing = false }
   }
 
@@ -336,7 +355,7 @@
     try {
       const eps = await api.scanEpisodes(numId)
       if (series) series = { ...series, episodes: eps }
-    } catch (e: any) { alert(e.message) }
+    } catch (e: any) { toast.error(e.message) }
     finally { scanning = false }
   }
 
@@ -367,7 +386,7 @@
     const url = detail.trailer.site?.toLowerCase().includes('dailymotion')
       ? `https://www.dailymotion.com/video/${vid}`
       : `https://www.youtube.com/watch?v=${vid}`
-    window.open(url, '_blank', 'noopener,noreferrer')
+    void openExternal(url)
   }
 
   // ---- Presentation (works for both modes) ----
