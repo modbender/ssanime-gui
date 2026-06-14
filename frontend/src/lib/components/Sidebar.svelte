@@ -2,6 +2,7 @@
   import { Link } from 'svelte-routing'
   import { sseState } from '$lib/sse.svelte'
   import { APP_NAME } from '$lib/app'
+  import { externalClick } from '$lib/external'
   import logoMark from '$lib/assets/logo-mark.svg?raw'
 
   const navItems = [
@@ -10,9 +11,9 @@
     { href: '/activity', label: 'Activity', icon: 'M13 2 3 14h7l-1 8 10-12h-7l1-8z' },
     { href: '/profiles', label: 'Encode profiles', icon: 'M12 3 4 7v6c0 5 3.5 7.5 8 8.5 4.5-1 8-3.5 8-8.5V7l-8-4Z' },
     { href: '/extensions', label: 'Extensions', icon: 'M14 7h2.5A2.5 2.5 0 0 1 19 9.5V12h1a2 2 0 1 1 0 4h-1v2.5a2.5 2.5 0 0 1-2.5 2.5H14v-1a2 2 0 1 0-4 0v1H7.5A2.5 2.5 0 0 1 5 18.5V16H4a2 2 0 1 1 0-4h1V9.5A2.5 2.5 0 0 1 7.5 7H10V6a2 2 0 1 1 4 0v1Z' },
-    { href: '/settings', label: 'Settings', icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z' },
-    { href: '/logs', label: 'Logs', icon: 'M8 6h11M8 12h11M8 18h11M3.5 6h.01M3.5 12h.01M3.5 18h.01' },
   ]
+
+  const settingsIcon = 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z'
 
   let currentPath = $state(window.location.pathname)
 
@@ -84,8 +85,30 @@
     {/each}
   </nav>
 
-  <!-- Bottom group: About + Sponsor -->
+  <!-- Bottom group: Settings + About + Sponsor -->
   <div class="flex flex-col items-center gap-1.5 pt-1.5">
+    <Link to="/settings" onclick={() => { currentPath = '/settings' }}>
+      <span
+        class="group relative flex items-center justify-center w-11 h-11 transition-[background,color,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] {isActive('/settings')
+          ? 'bg-[var(--accent-soft)] text-[var(--color-text)]'
+          : 'text-[var(--color-muted)] hover:bg-white/5 hover:text-[var(--color-text)]'}"
+      >
+        <span
+          class="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-full bg-[var(--accent-text)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] {isActive('/settings') ? 'opacity-100' : 'opacity-0 -translate-x-1'}"
+        ></span>
+
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:scale-110">
+          <path d={settingsIcon} stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+
+        <span
+          class="pointer-events-none absolute left-[120%] top-1/2 -translate-y-1/2 translate-x-1 whitespace-nowrap bg-[var(--color-elevated)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-text)] ring-1 ring-white/10 shadow-xl opacity-0 transition-all duration-200 ease-out group-hover:opacity-100 group-hover:translate-x-0 z-30"
+        >
+          Settings
+        </span>
+      </span>
+    </Link>
+
     <Link to="/about" onclick={() => { currentPath = '/about' }}>
       <span
         class="group relative flex items-center justify-center w-11 h-11 transition-[background,color,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] {isActive('/about')
@@ -113,6 +136,7 @@
       href="https://github.com/sponsors/modbender"
       target="_blank"
       rel="noopener"
+      onclick={(e) => externalClick(e, 'https://github.com/sponsors/modbender')}
       aria-label="Sponsor"
       class="group relative flex items-center justify-center w-11 h-11 text-[#db61a2]/80 transition-[background,color,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-[#db61a2]/10 hover:text-[#db61a2] [&_svg]:hover:fill-[#db61a2]/15"
     >

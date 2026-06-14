@@ -38,6 +38,7 @@
   import { fillGreenMix } from '$lib/pipeline-math'
   import { getPreview, markTracked } from '$lib/discovery.svelte'
   import { requireSource } from '$lib/sources.svelte'
+  import { openExternal } from '$lib/external'
 
   let { id, anilistId }: { id?: string; anilistId?: string } = $props()
 
@@ -367,7 +368,7 @@
     const url = detail.trailer.site?.toLowerCase().includes('dailymotion')
       ? `https://www.dailymotion.com/video/${vid}`
       : `https://www.youtube.com/watch?v=${vid}`
-    window.open(url, '_blank', 'noopener,noreferrer')
+    void openExternal(url)
   }
 
   // ---- Presentation (works for both modes) ----
