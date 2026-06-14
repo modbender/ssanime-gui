@@ -189,6 +189,7 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 		api.Route("/extension-repos", func(r chi.Router) {
 			r.Get("/", h.handleListExtensionRepos)
 			r.Post("/", h.handleCreateExtensionRepo)
+			r.Post("/preview", h.handlePreviewExtensionRepo)
 			r.Route("/{id}", func(r chi.Router) {
 				r.Post("/install", h.handleInstallFromRepo)
 				r.Delete("/", h.handleDeleteExtensionRepo)
@@ -198,6 +199,7 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 		api.Get("/extensions/{id}/icon", h.handleExtensionIcon)
 		api.Post("/extensions/{id}/enable", h.handleEnableExtension)
 		api.Post("/extensions/{id}/disable", h.handleDisableExtension)
+		api.Post("/extensions/{id}/test", h.handleTestExtension)
 		api.Delete("/extensions/{id}", h.handleUninstallExtension)
 	})
 

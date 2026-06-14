@@ -539,12 +539,15 @@ func (h *Handler) searchAvailable(ctx context.Context, media source.Media, have 
 	opts := source.SmartSearchOptions{Media: media, BestReleases: true}
 	best := map[int]*source.AnimeTorrent{}
 	var warnings []string
-	for _, pid := range h.registry.List() {
+	providers := h.registry.List()
+	failed := 0
+	for _, pid := range providers {
 		p, _ := h.registry.Get(pid)
 		torrents, err := p.SmartSearch(ctx, opts)
 		if err != nil {
 			h.logger.Warn("available: provider error", "provider", pid, "err", err)
 			warnings = append(warnings, fmt.Sprintf("%s: %s", pid, err))
+			failed++
 			continue
 		}
 		for _, t := range torrents {
@@ -576,6 +579,13 @@ func (h *Handler) searchAvailable(ctx context.Context, media source.Media, have 
 		episodes = append(episodes, ep)
 	}
 	sort.Slice(episodes, func(i, j int) bool { return episodes[i].Number < episodes[j].Number })
+
+	// When every installed source errored, collapse the per-provider noise into a
+	// single actionable message pointing at the Extensions page instead of leaking
+	// raw provider errors.
+	if len(providers) > 0 && failed == len(providers) {
+		warnings = []string{"All installed sources are unreachable — check Extensions."}
+	}
 	return episodes, warnings
 }
 
