@@ -103,9 +103,9 @@ func TestGetEpisodesParsesAndSorts(t *testing.T) {
 }
 
 // heroBody mirrors the real ani.zip /mappings "images" array: a flat list of
-// artwork entries discriminated by coverType. It interleaves the wide types
-// (Fanart, Banner) and includes a duplicate Banner and a non-allowlisted Fanart
-// so a test can assert the dedupe, host-filter, and Fanart-before-Banner order.
+// artwork entries discriminated by coverType. It includes Banner entries (which
+// must be excluded), a duplicate Fanart, and a non-allowlisted Fanart so a test
+// can assert the Banner exclusion, dedupe, and host filter.
 const heroBody = `{
   "images": [
     {"coverType": "Banner", "url": "https://artworks.thetvdb.com/banners/v4/series/81797/banners/b1.jpg"},
@@ -114,7 +114,7 @@ const heroBody = `{
     {"coverType": "Poster", "url": "https://artworks.thetvdb.com/banners/v4/series/81797/posters/y.jpg"},
     {"coverType": "Fanart", "url": "https://evil.example.com/f-bad.jpg"},
     {"coverType": "Fanart", "url": "https://artworks.thetvdb.com/banners/v4/series/81797/backgrounds/f2.jpg"},
-    {"coverType": "Banner", "url": "https://artworks.thetvdb.com/banners/v4/series/81797/banners/b1.jpg"}
+    {"coverType": "Fanart", "url": "https://artworks.thetvdb.com/banners/v4/series/81797/backgrounds/f1.jpg"}
   ],
   "episodes": {}
 }`
@@ -132,12 +132,11 @@ func TestGetHeroArtExtractsLogoAndWide(t *testing.T) {
 	if logo != wantLogo {
 		t.Errorf("logo = %q, want %q", logo, wantLogo)
 	}
-	// Fanart first (in source order, non-allowlisted host dropped), then Banner
-	// (the duplicate b1 deduped); Poster and Clearlogo excluded.
+	// Only Fanart, in source order, non-allowlisted host dropped. Banner (the
+	// low-res graphical strip), Poster, and Clearlogo are excluded.
 	want := []string{
 		"https://artworks.thetvdb.com/banners/v4/series/81797/backgrounds/f1.jpg",
 		"https://artworks.thetvdb.com/banners/v4/series/81797/backgrounds/f2.jpg",
-		"https://artworks.thetvdb.com/banners/v4/series/81797/banners/b1.jpg",
 	}
 	if len(wide) != len(want) {
 		t.Fatalf("wide = %v, want %v", wide, want)
@@ -151,7 +150,7 @@ func TestGetHeroArtExtractsLogoAndWide(t *testing.T) {
 
 func TestGetHeroArtNoLogoIsEmpty(t *testing.T) {
 	// Payload with only wide art (no Clearlogo): logo "" with no error, wide kept.
-	body := `{"images":[{"coverType":"Banner","url":"https://artworks.thetvdb.com/banners/v4/series/1/banners/x.jpg"}],"episodes":{}}`
+	body := `{"images":[{"coverType":"Fanart","url":"https://artworks.thetvdb.com/banners/v4/series/1/backgrounds/x.jpg"}],"episodes":{}}`
 	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(body))
@@ -164,7 +163,7 @@ func TestGetHeroArtNoLogoIsEmpty(t *testing.T) {
 		t.Errorf("logo = %q, want empty when no Clearlogo present", logo)
 	}
 	if len(wide) != 1 {
-		t.Errorf("wide = %v, want the single allowlisted Banner", wide)
+		t.Errorf("wide = %v, want the single allowlisted Fanart", wide)
 	}
 }
 

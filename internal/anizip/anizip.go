@@ -126,9 +126,11 @@ func (c *Client) GetEpisodes(ctx context.Context, anilistID int) ([]Episode, err
 // hero artwork URLs for the home hero carousel. Every URL is passed through
 // safeImageURL so only allowlisted (CSP-pinned) hosts survive.
 //
-// wide collects 16:9 background artwork best/sharpest first: all "Fanart"
-// entries (full 16:9 backgrounds) in source order, then all "Banner" entries,
-// deduped; Poster and Clearlogo are excluded. A missing logo, non-allowlisted
+// wide collects only "Fanart" entries — the full 1920x1080 background artwork
+// (TVDB /backgrounds/) suited to a full-bleed hero — in source order, deduped.
+// The "Banner" cover type is deliberately excluded: it is a 758x140 graphical
+// strip (TVDB /banners/graphical/) that pixelates badly when stretched to the
+// hero. Poster and Clearlogo are excluded too. A missing logo, non-allowlisted
 // host, or a 404 mapping yields ("", nil, nil) — only network/HTTP/decode
 // failures propagate so the caller can degrade silently.
 func (c *Client) GetHeroArt(ctx context.Context, anilistID int) (clearLogo string, wide []string, err error) {
@@ -136,9 +138,7 @@ func (c *Client) GetHeroArt(ctx context.Context, anilistID int) (clearLogo strin
 	if err != nil || !ok {
 		return "", nil, err
 	}
-	// Bucket by cover type so the wide list keeps Fanart-before-Banner ordering
-	// regardless of how the upstream array interleaves them.
-	var fanart, banner []string
+	seen := map[string]bool{}
 	for _, img := range raw.Images {
 		switch {
 		case strings.EqualFold(img.CoverType, "Clearlogo"):
@@ -146,20 +146,10 @@ func (c *Client) GetHeroArt(ctx context.Context, anilistID int) (clearLogo strin
 				clearLogo = safeImageURL(img.URL)
 			}
 		case strings.EqualFold(img.CoverType, "Fanart"):
-			if u := safeImageURL(img.URL); u != "" {
-				fanart = append(fanart, u)
+			if u := safeImageURL(img.URL); u != "" && !seen[u] {
+				seen[u] = true
+				wide = append(wide, u)
 			}
-		case strings.EqualFold(img.CoverType, "Banner"):
-			if u := safeImageURL(img.URL); u != "" {
-				banner = append(banner, u)
-			}
-		}
-	}
-	seen := make(map[string]bool, len(fanart)+len(banner))
-	for _, u := range append(fanart, banner...) {
-		if !seen[u] {
-			seen[u] = true
-			wide = append(wide, u)
 		}
 	}
 	return clearLogo, wide, nil
