@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/modbender/ssanime-gui/compare/v0.2.0...v0.3.0) (2026-06-14)
+
+
+### Features
+
+* hero artwork rotation, discovery warm-up overlay, UI polish ([#36](https://github.com/modbender/ssanime-gui/issues/36)) ([fec1095](https://github.com/modbender/ssanime-gui/commit/fec1095190d7af560a45f40724ce59c94a04814b))
+
 ## [0.2.0](https://github.com/modbender/ssanime-gui/compare/v0.1.1...v0.2.0) (2026-06-13)
 
 
