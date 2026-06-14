@@ -24,3 +24,7 @@ export const trackedAnilistIds = $state(new Set<number>())
 export function markTracked(anilistId: number) {
   trackedAnilistIds.add(anilistId)
 }
+
+export function markUntracked(anilistId: number) {
+  trackedAnilistIds.delete(anilistId)
+}

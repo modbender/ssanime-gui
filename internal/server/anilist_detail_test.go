@@ -45,6 +45,10 @@ func (f *fakeAnizipFetcher) GetEpisodes(_ context.Context, _ int) ([]anizip.Epis
 	return f.eps, f.err
 }
 
+func (f *fakeAnizipFetcher) GetIDs(_ context.Context, anilistID int) (anizip.IDs, error) {
+	return anizip.IDs{AnilistID: anilistID}, f.err
+}
+
 // newDetailServer builds a server wired with the given fetchers and returns it
 // alongside the store so tests can inspect/seed the cache.
 func newDetailServer(t *testing.T, al AnilistDetailFetcher, az AnizipFetcher) (http.Handler, *store.Store) {

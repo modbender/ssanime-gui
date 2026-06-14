@@ -28,9 +28,12 @@ type AnilistDetailFetcher interface {
 
 // AnizipFetcher fetches per-episode metadata from ani.zip for one AniList id.
 // The concrete *anizip.Client satisfies it; ani.zip is best-effort, so an error
-// here degrades the payload rather than failing the request.
+// here degrades the payload rather than failing the request. GetIDs additionally
+// yields the cross-tracker id block whose Episodes map keys are the authoritative
+// episode-number set the per-episode source search drives off of.
 type AnizipFetcher interface {
 	GetEpisodes(ctx context.Context, anilistID int) ([]anizip.Episode, error)
+	GetIDs(ctx context.Context, anilistID int) (anizip.IDs, error)
 }
 
 // handleAnilistDetail serves the merged AniList + ani.zip series-detail payload

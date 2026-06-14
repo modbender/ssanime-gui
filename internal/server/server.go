@@ -143,6 +143,7 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 		api.Route("/series", func(r chi.Router) {
 			r.Get("/", h.handleListSeries)
 			r.Post("/", h.handleCreateSeries)
+			r.Get("/by-anilist/{id}", h.handleGetSeriesByAnilist)
 			r.Route("/{id}", func(r chi.Router) {
 				r.Get("/", h.handleGetSeries)
 				r.Patch("/", h.handlePatchSeries)
