@@ -195,6 +195,7 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 			})
 		})
 		api.Get("/extensions", h.handleListExtensions)
+		api.Get("/extensions/{id}/icon", h.handleExtensionIcon)
 		api.Post("/extensions/{id}/enable", h.handleEnableExtension)
 		api.Post("/extensions/{id}/disable", h.handleDisableExtension)
 		api.Delete("/extensions/{id}", h.handleUninstallExtension)

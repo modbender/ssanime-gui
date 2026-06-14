@@ -39,6 +39,7 @@
   import { getPreview, markTracked } from '$lib/discovery.svelte'
   import { requireSource } from '$lib/sources.svelte'
   import { openExternal } from '$lib/external'
+  import { toast } from '$lib/toast.svelte'
 
   let { id, anilistId }: { id?: string; anilistId?: string } = $props()
 
@@ -160,7 +161,7 @@
         markTracked(anilist)
         navigate('/library')
       } else {
-        alert(e.message)
+        toast.error(e.message)
       }
     } finally {
       tracking = false
@@ -175,7 +176,7 @@
       await api.setSeriesStatus(numId, status)
       await loadTracked()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally {
       statusBusy = false
     }
@@ -192,7 +193,7 @@
       unsubscribeOpen = false
       navigate('/library')
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally {
       unsubscribing = false
     }
@@ -214,7 +215,7 @@
       available = res.episodes ?? []
       availableWarnings = res.warnings ?? []
     } catch (e: any) {
-      alert(e.message || 'Source check failed.')
+      toast.error(e.message || 'Source check failed.')
     } finally {
       availableLoading = false
       availableChecked = true
@@ -239,7 +240,7 @@
       if (numId == null) navigate(`/series/${res.series_id}`)
       else await loadTracked()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally {
       downloadingEp = null
     }
@@ -281,7 +282,7 @@
       if (numId == null && lastSeriesId != null) navigate(`/series/${lastSeriesId}`)
       else await loadTracked()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
       selectedAvailable = new Set()
     } finally {
       bulkDownloading = false
@@ -315,7 +316,7 @@
       encodeOpen = false
       selected = new Set()
       await loadTracked()
-    } catch (e: any) { alert(e.message) }
+    } catch (e: any) { toast.error(e.message) }
     finally { encoding = false }
   }
 
@@ -327,7 +328,7 @@
       await loadTracked()
       if (series?.anilist_id != null) await loadDetail(series.anilist_id)
     } catch (e: any) {
-      alert(e.message || 'AniList is rate-limited right now — existing metadata kept. Try again shortly.')
+      toast.error(e.message || 'AniList is rate-limited right now — existing metadata kept. Try again shortly.')
     } finally { refreshing = false }
   }
 
@@ -337,7 +338,7 @@
     try {
       const eps = await api.scanEpisodes(numId)
       if (series) series = { ...series, episodes: eps }
-    } catch (e: any) { alert(e.message) }
+    } catch (e: any) { toast.error(e.message) }
     finally { scanning = false }
   }
 

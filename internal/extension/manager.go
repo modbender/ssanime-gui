@@ -3,6 +3,7 @@ package extension
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -15,6 +16,10 @@ import (
 	"github.com/modbender/ssanime-gui/internal/source"
 	"github.com/modbender/ssanime-gui/internal/store"
 )
+
+// ErrNoIcon signals that an extension has no usable icon: its Icon field is
+// empty, or the upstream fetch did not yield an image. Handlers map it to 404.
+var ErrNoIcon = errors.New("extension: no icon")
 
 // Manager owns the lifecycle of JS extensions: fetching repo indexes,
 // installing extensions into the DB, loading enabled extensions into
@@ -285,6 +290,49 @@ func (m *Manager) LoadAndRegisterAll(ctx context.Context) error {
 
 	m.logger.Info("extensions: loaded", "count", loaded, "total", len(rows))
 	return nil
+}
+
+// FetchIcon loads the extension by id and fetches its icon URL through the
+// DoH/SSRF-guarded httpClient. The icon URL comes from an untrusted user-added
+// repo, so the fetch MUST stay on m.httpClient. It validates that the upstream
+// returns 200 with an image/* Content-Type and caps the body at 2 MB. Returns
+// sql.ErrNoRows when the extension is missing and ErrNoIcon when it has no icon
+// or the upstream response is not a usable image.
+func (m *Manager) FetchIcon(ctx context.Context, dbID int64) (contentType string, body []byte, err error) {
+	row, err := m.st.Read().GetExtension(ctx, dbID)
+	if err != nil {
+		return "", nil, err
+	}
+	if row.Icon == nil || *row.Icon == "" {
+		return "", nil, ErrNoIcon
+	}
+
+	fetchCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(fetchCtx, http.MethodGet, *row.Icon, nil)
+	if err != nil {
+		return "", nil, err
+	}
+	resp, err := m.httpClient.Do(req)
+	if err != nil {
+		return "", nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", nil, ErrNoIcon
+	}
+	ct := resp.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "image/") {
+		return "", nil, ErrNoIcon
+	}
+
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20)) // 2 MB cap
+	if err != nil {
+		return "", nil, err
+	}
+	return ct, b, nil
 }
 
 // downloadPayload fetches a JS payload from url.
