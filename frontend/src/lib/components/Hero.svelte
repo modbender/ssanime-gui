@@ -34,16 +34,17 @@
   const accentTxtRgb = $derived(accentTextRgb(featured?.cover_color))
 
   const title = $derived(featured ? featured.english_title || featured.romaji_title : '')
-  // Hero art pool: prefer the wide ani.zip variants, fall back to the AniList
-  // banner. Never the portrait cover_image — stretched across the hero it reads
-  // soft/low-res; with no wide art we render the accent gradient instead.
-  const widePool = $derived(
-    featured?.wide_images?.length
-      ? featured.wide_images
-      : featured?.banner_image
-        ? [featured.banner_image]
-        : [],
-  )
+  // Hero art pool: the AniList banner first (reliably hero-sized), then the wide
+  // ani.zip fanart variants for per-loop rotation. Never the portrait cover_image
+  // — stretched across the hero it reads soft/low-res; with no wide art we render
+  // the accent gradient instead.
+  const widePool = $derived.by(() => {
+    const seen = new Set<string>()
+    for (const u of [featured?.banner_image, ...(featured?.wide_images ?? [])]) {
+      if (u) seen.add(u)
+    }
+    return [...seen]
+  })
   const banner = $derived(widePool.length ? widePool[(seed + pass) % widePool.length] : null)
   const logo = $derived(featured?.clear_logo_url || '')
   const tracked = $derived(featured ? trackedAnilistIds.has(featured.anilist_id) : false)
