@@ -5,6 +5,8 @@
   import Input from '$lib/components/Input.svelte'
   import Modal from '$lib/components/Modal.svelte'
   import Spinner from '$lib/components/Spinner.svelte'
+  import { toast } from '$lib/toast.svelte'
+  import { confirm } from '$lib/confirm.svelte'
 
   let profiles = $state<Profile[]>([])
   let loading = $state(true)
@@ -173,20 +175,25 @@
       editOpen = false
       await load()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally {
       saving = false
     }
   }
 
   async function deleteProfile(id: number) {
-    if (!confirm('Delete this profile?')) return
+    if (!(await confirm({
+      title: 'Delete profile?',
+      message: 'This profile will be permanently removed.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    }))) return
     deleting = id
     try {
       await api.deleteProfile(id)
       profiles = profiles.filter(p => p.id !== id)
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally {
       deleting = null
     }
@@ -200,7 +207,7 @@
     try {
       resolved = await api.getResolvedProfile(p.id)
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
       resolvedOpen = false
     } finally {
       loadingResolved = false

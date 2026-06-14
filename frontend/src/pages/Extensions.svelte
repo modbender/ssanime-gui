@@ -4,6 +4,8 @@
   import Modal from '$lib/components/Modal.svelte'
   import Spinner from '$lib/components/Spinner.svelte'
   import { reloadSources } from '$lib/sources.svelte'
+  import { toast } from '$lib/toast.svelte'
+  import { confirm } from '$lib/confirm.svelte'
   import { formatDate } from '$lib/utils'
 
   let repos = $state<ExtensionRepo[]>([])
@@ -29,37 +31,6 @@
   // glyph (a dead/blocked icon URL otherwise renders the browser's broken-image
   // icon). Keyed by id so one bad icon doesn't affect the others.
   let iconFailed = $state<Record<number, boolean>>({})
-
-  // Transient page-level error banner (replaces native alert(), which renders as
-  // a "127.0.0.1 says…" box and is unreliable inside the desktop webview).
-  let actionError = $state('')
-
-  // In-app confirm dialog (replaces native confirm(), same webview reasons).
-  let confirmOpen = $state(false)
-  let confirmTitle = $state('')
-  let confirmMessage = $state('')
-  let confirmLabel = $state('Remove')
-  let confirmBusy = $state(false)
-  let confirmAction: (() => Promise<void>) | null = null
-
-  function askConfirm(title: string, message: string, action: () => Promise<void>, label = 'Remove') {
-    confirmTitle = title
-    confirmMessage = message
-    confirmLabel = label
-    confirmAction = action
-    confirmOpen = true
-  }
-
-  async function runConfirm() {
-    if (!confirmAction) return
-    confirmBusy = true
-    try {
-      await confirmAction()
-      confirmOpen = false
-    } finally {
-      confirmBusy = false
-    }
-  }
 
   const showNsfw = $derived(settings?.show_nsfw ?? false)
   const visibleExtensions = $derived(
@@ -104,7 +75,7 @@
       addOpen = false
       repos = await api.listExtensionRepos()
     } catch (e: any) {
-      actionError = e.message
+      toast.error(e.message)
     } finally {
       adding = false
     }
@@ -118,31 +89,30 @@
       ;[repos] = await Promise.all([api.listExtensionRepos()])
       await refreshExtensions()
     } catch (e: any) {
-      actionError = e.message
+      toast.error(e.message)
     } finally {
       syncing = null
     }
   }
 
-  function removeRepo(repo: ExtensionRepo) {
+  async function removeRepo(repo: ExtensionRepo) {
     const owned = extensions.filter((e) => e.repo_id === repo.id).length
     const message = owned > 0
       ? `This also uninstalls ${owned} installed source${owned === 1 ? '' : 's'} from this repository.`
       : 'This repository has no installed sources.'
-    askConfirm(`Remove repository "${repo.name}"?`, message, async () => {
-      removingRepo = repo.id
-      try {
-        await api.deleteExtensionRepo(repo.id)
-        repos = repos.filter((r) => r.id !== repo.id)
-        // The backend cascade-deletes the repo's sources; reflect that here so a
-        // phantom row doesn't linger in the installed list.
-        await refreshExtensions()
-      } catch (e: any) {
-        actionError = e.message
-      } finally {
-        removingRepo = null
-      }
-    })
+    if (!(await confirm({ title: `Remove repository "${repo.name}"?`, message, confirmLabel: 'Remove', destructive: true }))) return
+    removingRepo = repo.id
+    try {
+      await api.deleteExtensionRepo(repo.id)
+      repos = repos.filter((r) => r.id !== repo.id)
+      // The backend cascade-deletes the repo's sources; reflect that here so a
+      // phantom row doesn't linger in the installed list.
+      await refreshExtensions()
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      removingRepo = null
+    }
   }
 
   async function toggleExtension(ext: Extension) {
@@ -155,33 +125,32 @@
       extensions = extensions.map((e) => (e.id === ext.id ? updated : e))
       await reloadSources()
     } catch (e: any) {
-      actionError = e.message
+      toast.error(e.message)
     } finally {
       togglingExt = null
     }
   }
 
-  function removeExtension(ext: Extension) {
-    askConfirm(`Remove source "${ext.name}"?`, 'This source will be uninstalled and unregistered.', async () => {
-      removingExt = ext.id
-      try {
-        await api.uninstallExtension(ext.id)
-        extensions = extensions.filter((e) => e.id !== ext.id)
+  async function removeExtension(ext: Extension) {
+    if (!(await confirm({ title: `Remove source "${ext.name}"?`, message: 'This source will be uninstalled and unregistered.', confirmLabel: 'Remove', destructive: true }))) return
+    removingExt = ext.id
+    try {
+      await api.uninstallExtension(ext.id)
+      extensions = extensions.filter((e) => e.id !== ext.id)
+      await reloadSources()
+    } catch (e: any) {
+      // The row may already be gone server-side (e.g. removed with its repo).
+      // Reconcile against the server before surfacing an error.
+      const fresh = await api.listExtensions().catch(() => null)
+      if (fresh && !fresh.some((x) => x.id === ext.id)) {
+        extensions = fresh
         await reloadSources()
-      } catch (e: any) {
-        // The row may already be gone server-side (e.g. removed with its repo).
-        // Reconcile against the server before surfacing an error.
-        const fresh = await api.listExtensions().catch(() => null)
-        if (fresh && !fresh.some((x) => x.id === ext.id)) {
-          extensions = fresh
-          await reloadSources()
-        } else {
-          actionError = e.message
-        }
-      } finally {
-        removingExt = null
+      } else {
+        toast.error(e.message)
       }
-    })
+    } finally {
+      removingExt = null
+    }
   }
 
   async function toggleNsfw() {
@@ -191,7 +160,7 @@
     try {
       settings = await api.putSettings(next)
     } catch (e: any) {
-      actionError = e.message
+      toast.error(e.message)
     } finally {
       savingNsfw = false
     }
@@ -211,21 +180,6 @@
   </div>
 
   <div class="flex-1 px-6 sm:px-10 py-8 animate-fade-up">
-    {#if actionError}
-      <div class="mb-6 flex items-start gap-3 border border-[var(--color-error)]/30 bg-[var(--color-error)]/10 px-4 py-3 text-sm text-[var(--color-error)]">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="mt-0.5 shrink-0" aria-hidden="true">
-          <circle cx="12" cy="12" r="10"/><path d="M12 8v5M12 16h.01" stroke-linecap="round"/>
-        </svg>
-        <span class="flex-1 break-words">{actionError}</span>
-        <button
-          onclick={() => { actionError = '' }}
-          class="shrink-0 text-[var(--color-error)]/70 hover:text-[var(--color-error)] transition-colors"
-          aria-label="Dismiss error"
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12" stroke-linecap="round"/></svg>
-        </button>
-      </div>
-    {/if}
     {#if loading}
       <div class="flex items-center justify-center h-64 text-[var(--color-muted)]">
         <Spinner size={28} />
@@ -377,7 +331,7 @@
                   <div class="shrink-0 w-9 h-9 bg-[var(--color-surface-2)] ring-1 ring-[var(--color-border)] flex items-center justify-center overflow-hidden text-[var(--color-faint)]">
                     {#if ext.icon && !iconFailed[ext.id]}
                       <img
-                        src={ext.icon}
+                        src={`/api/extensions/${ext.id}/icon`}
                         alt=""
                         class="w-full h-full object-cover"
                         loading="lazy"
@@ -434,19 +388,6 @@
     {/if}
   </div>
 </div>
-
-<!-- Confirm dialog (in-app replacement for native confirm) -->
-<Modal bind:open={confirmOpen} title={confirmTitle}>
-  {#snippet footer()}
-    <Button variant="ghost" onclick={() => { confirmOpen = false }} disabled={confirmBusy}>Cancel</Button>
-    <Button variant="destructive" onclick={runConfirm} disabled={confirmBusy}>
-      {#if confirmBusy}<Spinner size={14} />{/if}
-      {confirmLabel}
-    </Button>
-  {/snippet}
-
-  <p class="text-sm text-[var(--color-text-dim)]">{confirmMessage}</p>
-</Modal>
 
 <!-- Add repository modal -->
 <Modal bind:open={addOpen} title="Add repository">

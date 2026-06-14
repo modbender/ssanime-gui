@@ -9,6 +9,7 @@
   import Button from '$lib/components/Button.svelte'
   import Spinner from '$lib/components/Spinner.svelte'
   import { sseState } from '$lib/sse.svelte'
+  import { toast } from '$lib/toast.svelte'
   import { episodeOverall, episodeStage, liveStatus } from '$lib/pipeline.svelte'
   import { isActive } from '$lib/pipeline-math'
   import {
@@ -122,7 +123,7 @@
       const res = await api.setSeriesStatus(s.id, status)
       series = series.map((x) => (x.id === s.id ? { ...x, ...res.series } : x))
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
       await load()
     } finally {
       const done = new Set(statusBusy); done.delete(s.id); statusBusy = done
@@ -137,7 +138,7 @@
       await api.retryEpisode(ep.id)
       await load()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally {
       const done = new Set(epBusy); done.delete(ep.id); epBusy = done
     }
@@ -152,7 +153,7 @@
       if (out) await api.revealOutput(out.id)
       else await api.revealEpisodeSource(ep.id)
     } catch (e: any) {
-      alert(revealError(e))
+      toast.error(revealError(e))
     } finally {
       const done = new Set(epBusy); done.delete(ep.id); epBusy = done
     }

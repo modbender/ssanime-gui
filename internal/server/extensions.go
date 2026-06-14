@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+
+	"github.com/modbender/ssanime-gui/internal/extension"
 )
 
 func (h *Handler) handleListExtensionRepos(w http.ResponseWriter, r *http.Request) {
@@ -146,6 +148,35 @@ func (h *Handler) setExtensionEnabled(w http.ResponseWriter, r *http.Request, en
 		return
 	}
 	WriteJSON(w, http.StatusOK, toExtensionDTO(ext))
+}
+
+// handleExtensionIcon proxies an extension's remote icon through the daemon so
+// the browser loads it from 'self' instead of widening the CSP's img-src. The
+// fetch runs on the manager's DoH/SSRF-guarded client because the icon URL is
+// attacker-controlled (it comes from a user-added repo).
+func (h *Handler) handleExtensionIcon(w http.ResponseWriter, r *http.Request) {
+	if h.extMgr == nil {
+		WriteError(w, http.StatusServiceUnavailable, "extension manager not available")
+		return
+	}
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	contentType, body, err := h.extMgr.FetchIcon(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, extension.ErrNoIcon) {
+			WriteError(w, http.StatusNotFound, "icon not found")
+			return
+		}
+		h.logger.Error("fetch extension icon", "id", id, "err", err)
+		WriteError(w, http.StatusNotFound, "icon not found")
+		return
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(body)
 }
 
 func (h *Handler) handleUninstallExtension(w http.ResponseWriter, r *http.Request) {
