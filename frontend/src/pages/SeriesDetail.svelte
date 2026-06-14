@@ -40,6 +40,7 @@
   import { requireSource } from '$lib/sources.svelte'
   import { openExternal } from '$lib/external'
   import { toast } from '$lib/toast.svelte'
+  import { confirm } from '$lib/confirm.svelte'
 
   let { id, anilistId }: { id?: string; anilistId?: string } = $props()
 
@@ -88,8 +89,11 @@
   let encodeResolutions = $state<number[]>([1080, 720])
   let encoding = $state(false)
 
-  let scanning = $state(false)
   let refreshing = $state(false)
+
+  // Set when the user subscribes via track(); after the post-subscribe auto
+  // source check resolves, this triggers the one-time "grab everything?" prompt.
+  let backfillPrompt = $state(false)
 
   // The anilist id to fetch /detail for, in either mode.
   const detailAnilistId = $derived(series?.anilist_id ?? numAnilist ?? null)
@@ -119,6 +123,8 @@
     } catch (e: any) { error = e.message }
     finally { loading = false }
     if (series?.anilist_id != null) loadDetail(series.anilist_id)
+    // Auto-run the source check so episode cards light up without a button press.
+    void loadAvailable()
   }
 
   function loadPreview() {
@@ -130,6 +136,9 @@
     preview = getPreview(anilist)
     loading = false
     loadDetail(anilist)
+    // Auto-run the source check (numAnilist is known here) so the list is
+    // immediately selectable/downloadable without a button press.
+    void loadAvailable()
     // If this AniList id is already a tracked series, canonicalize the URL to its
     // DB id so the tracked code path takes over instead of the discovery view.
     void redirectIfTracked(anilist)
@@ -170,6 +179,9 @@
     try {
       const res = await api.trackSeries({ anilist_id: anilist })
       markTracked(anilist)
+      // Arm the one-time backfill prompt; fires after the destination page's
+      // auto source check resolves with episodes available.
+      backfillPrompt = true
       navigate(`/series/${res.series_id}`)
     } catch (e: any) {
       const msg = String(e?.message ?? '').toLowerCase()
@@ -224,8 +236,11 @@
     return Number.isNaN(n) ? undefined : n
   }
 
-  async function loadAvailable() {
+  async function loadAvailable(force = false) {
     if (detailAnilistId == null || availableLoading) return
+    // Auto-runs are idempotent per series: skip if already checked. The manual
+    // re-check affordance passes force=true to bypass.
+    if (!force && availableChecked) return
     availableLoading = true
     try {
       const res = await api.getAnilistAvailable(detailAnilistId)
@@ -237,6 +252,25 @@
       availableLoading = false
       availableChecked = true
     }
+    // One-time post-subscribe backfill prompt: only after a fresh subscribe.
+    if (backfillPrompt) {
+      backfillPrompt = false
+      if (available.length > 0) void promptBackfill()
+    }
+  }
+
+  /** After subscribing, the poller only auto-fetches NEW episodes — offer to
+   *  grab the existing back catalogue once. */
+  async function promptBackfill() {
+    const n = available.length
+    const ok = await confirm({
+      title: 'Download available episodes?',
+      message: `${n} episode${n === 1 ? ' is' : 's are'} available to download now — grab them all? New episodes will keep downloading automatically as they air.`,
+      confirmLabel: 'Download all',
+      cancelLabel: 'Not now',
+    })
+    if (!ok) return
+    await downloadAvailableList(available.slice())
   }
 
   /** Download a single available episode. Creates the series row (unsubscribed)
@@ -277,13 +311,18 @@
       : new Set(available.map((e) => e.source_url))
   }
 
-  /** Download every selected available episode sequentially. Like the single
-   *  path, this never changes subscription — it just grabs the chosen episodes. */
+  /** Download every selected available episode sequentially. */
   async function downloadSelectedAvailable() {
-    if (detailAnilistId == null || bulkDownloading || selectedAvailable.size === 0) return
+    if (selectedAvailable.size === 0) return
+    await downloadAvailableList(available.filter((e) => selectedAvailable.has(e.source_url)))
+  }
+
+  /** Download an explicit list of available episodes sequentially. Like the
+   *  single path, this never changes subscription — it just grabs the episodes. */
+  async function downloadAvailableList(eps: AvailableEpisode[]) {
+    if (detailAnilistId == null || bulkDownloading || eps.length === 0) return
     if (!requireSource()) return
     bulkDownloading = true
-    const eps = available.filter((e) => selectedAvailable.has(e.source_url))
     let lastSeriesId: number | null = null
     try {
       for (const ep of eps) {
@@ -347,16 +386,6 @@
     } catch (e: any) {
       toast.error(e.message || 'AniList is rate-limited right now — existing metadata kept. Try again shortly.')
     } finally { refreshing = false }
-  }
-
-  async function scan() {
-    if (numId == null) return
-    scanning = true
-    try {
-      const eps = await api.scanEpisodes(numId)
-      if (series) series = { ...series, episodes: eps }
-    } catch (e: any) { toast.error(e.message) }
-    finally { scanning = false }
   }
 
   const resolutionOptions = [2160, 1080, 720, 480, 360]
@@ -752,13 +781,6 @@
                   Unsubscribe
                 </Button>
 
-                <Button variant="secondary" onclick={scan} disabled={scanning}>
-                  {#if scanning}<Spinner size={14}/>{:else}
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  {/if}
-                  Scan torrents
-                </Button>
-
                 <Button variant="ghost" onclick={refreshMeta} disabled={refreshing} title="Refresh AniList metadata">
                   {#if refreshing}<Spinner size={14}/>{:else}
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -886,11 +908,17 @@
                 Download selected ({selectedAvailable.size})
               </Button>
             {/if}
-            <Button variant="secondary" size="sm" onclick={loadAvailable} disabled={availableLoading}>
+            <Button
+              variant="ghost"
+              size="icon"
+              class="h-7 w-7"
+              onclick={() => loadAvailable(true)}
+              disabled={availableLoading}
+              title="Re-check sources"
+            >
               {#if availableLoading}<Spinner size={13}/>{:else}
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" stroke-linecap="round" stroke-linejoin="round"/></svg>
               {/if}
-              {availableChecked ? 'Re-check source' : 'Check source'}
             </Button>
           </div>
         {/if}
@@ -942,7 +970,7 @@
                 {availableWarnings.length ? 'Source check failed' : 'No episodes yet'}
               </h3>
               <p class="max-w-sm text-sm text-[var(--color-muted)]">
-                {#if availableWarnings.length}The source(s) errored, so no episodes could be listed — this is a source problem, not an empty catalogue. See the warning above.{:else if series}The auto-downloader will grab new episodes as they air. Or run a source check above.{:else}Run a source check above to list downloadable episodes — no subscription needed.{/if}
+                {#if availableLoading}Checking sources for downloadable episodes…{:else if availableWarnings.length}The source(s) errored, so no episodes could be listed — this is a source problem, not an empty catalogue. See the warning above.{:else if series}The auto-downloader will grab new episodes as they air. Use the re-check button above to scan sources again.{:else}No downloadable episodes found yet — use the re-check button above to scan sources again. No subscription needed.{/if}
               </p>
             </div>
           </div>
@@ -1091,6 +1119,25 @@
                         >{out.resolution}p</span>
                       {/each}
                     </div>
+                  {/if}
+
+                  <!-- source release-group / trust chips -->
+                  {#if ep.source}
+                    {#if ep.source.release_group}
+                      <span
+                        class="bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-text-dim)] ring-1 ring-[var(--color-border)]"
+                        title="Release group"
+                      >{ep.source.release_group}</span>
+                    {/if}
+                    {#if ep.source.trusted === false}
+                      <span
+                        class="inline-flex items-center gap-1 bg-[var(--color-warning)]/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-warning)] ring-1 ring-[var(--color-warning)]/30"
+                        title="Only a non-trusted release was found — may be a re-encode (lower quality)."
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 9v4M12 17h.01" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        untrusted
+                      </span>
+                    {/if}
                   {/if}
 
                   <div class="ml-auto flex items-center gap-1.5 pointer-events-auto">
