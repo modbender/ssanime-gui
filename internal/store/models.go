@@ -96,23 +96,26 @@ type Episode struct {
 }
 
 type Extension struct {
-	ID         int64   `json:"id"`
-	Uuid       string  `json:"uuid"`
-	RepoID     *int64  `json:"repo_id"`
-	ExtID      string  `json:"ext_id"`
-	Name       string  `json:"name"`
-	Type       string  `json:"type"`
-	Lang       string  `json:"lang"`
-	Version    *string `json:"version"`
-	SourceUrl  *string `json:"source_url"`
-	Payload    *string `json:"payload"`
-	Enabled    int64   `json:"enabled"`
-	IsBuiltin  int64   `json:"is_builtin"`
-	Settings   *string `json:"settings"`
-	Nsfw       int64   `json:"nsfw"`
-	Icon       *string `json:"icon"`
-	AddedAt    int64   `json:"added_at"`
-	ModifiedAt int64   `json:"modified_at"`
+	ID              int64   `json:"id"`
+	Uuid            string  `json:"uuid"`
+	RepoID          *int64  `json:"repo_id"`
+	ExtID           string  `json:"ext_id"`
+	Name            string  `json:"name"`
+	Type            string  `json:"type"`
+	Lang            string  `json:"lang"`
+	Version         *string `json:"version"`
+	SourceUrl       *string `json:"source_url"`
+	Payload         *string `json:"payload"`
+	Enabled         int64   `json:"enabled"`
+	IsBuiltin       int64   `json:"is_builtin"`
+	Settings        *string `json:"settings"`
+	Nsfw            int64   `json:"nsfw"`
+	Icon            *string `json:"icon"`
+	AddedAt         int64   `json:"added_at"`
+	ModifiedAt      int64   `json:"modified_at"`
+	Healthy         *int64  `json:"healthy"`
+	HealthError     *string `json:"health_error"`
+	HealthCheckedAt *int64  `json:"health_checked_at"`
 }
 
 type ExtensionRepo struct {

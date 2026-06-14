@@ -75,5 +75,10 @@ UPDATE extensions SET enabled = ?, modified_at = unixepoch() WHERE id = ?;
 -- name: UpdateExtensionSettings :exec
 UPDATE extensions SET settings = ?, modified_at = unixepoch() WHERE id = ?;
 
+-- name: UpdateExtensionHealth :exec
+UPDATE extensions
+SET healthy = ?, health_error = ?, health_checked_at = COALESCE(?, unixepoch())
+WHERE ext_id = ?;
+
 -- name: DeleteExtension :exec
 DELETE FROM extensions WHERE id = ? AND is_builtin = 0;

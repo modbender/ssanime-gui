@@ -16,7 +16,7 @@ INSERT INTO extensions (
 ) VALUES (
     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
-RETURNING id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at
+RETURNING id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at, healthy, health_error, health_checked_at
 `
 
 type CreateExtensionParams struct {
@@ -72,6 +72,9 @@ func (q *Queries) CreateExtension(ctx context.Context, arg CreateExtensionParams
 		&i.Icon,
 		&i.AddedAt,
 		&i.ModifiedAt,
+		&i.Healthy,
+		&i.HealthError,
+		&i.HealthCheckedAt,
 	)
 	return i, err
 }
@@ -128,7 +131,7 @@ func (q *Queries) DeleteExtensionRepo(ctx context.Context, id int64) error {
 }
 
 const getExtension = `-- name: GetExtension :one
-SELECT id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at FROM extensions WHERE id = ?
+SELECT id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at, healthy, health_error, health_checked_at FROM extensions WHERE id = ?
 `
 
 func (q *Queries) GetExtension(ctx context.Context, id int64) (Extension, error) {
@@ -152,12 +155,15 @@ func (q *Queries) GetExtension(ctx context.Context, id int64) (Extension, error)
 		&i.Icon,
 		&i.AddedAt,
 		&i.ModifiedAt,
+		&i.Healthy,
+		&i.HealthError,
+		&i.HealthCheckedAt,
 	)
 	return i, err
 }
 
 const getExtensionByExtID = `-- name: GetExtensionByExtID :one
-SELECT id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at FROM extensions WHERE ext_id = ?
+SELECT id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at, healthy, health_error, health_checked_at FROM extensions WHERE ext_id = ?
 `
 
 func (q *Queries) GetExtensionByExtID(ctx context.Context, extID string) (Extension, error) {
@@ -181,6 +187,9 @@ func (q *Queries) GetExtensionByExtID(ctx context.Context, extID string) (Extens
 		&i.Icon,
 		&i.AddedAt,
 		&i.ModifiedAt,
+		&i.Healthy,
+		&i.HealthError,
+		&i.HealthCheckedAt,
 	)
 	return i, err
 }
@@ -259,7 +268,7 @@ func (q *Queries) ListEnabledExtensionRepos(ctx context.Context) ([]ExtensionRep
 }
 
 const listEnabledExtensionsByType = `-- name: ListEnabledExtensionsByType :many
-SELECT id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at FROM extensions WHERE enabled = 1 AND type = ? ORDER BY name ASC
+SELECT id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at, healthy, health_error, health_checked_at FROM extensions WHERE enabled = 1 AND type = ? ORDER BY name ASC
 `
 
 func (q *Queries) ListEnabledExtensionsByType(ctx context.Context, type_ string) ([]Extension, error) {
@@ -289,6 +298,9 @@ func (q *Queries) ListEnabledExtensionsByType(ctx context.Context, type_ string)
 			&i.Icon,
 			&i.AddedAt,
 			&i.ModifiedAt,
+			&i.Healthy,
+			&i.HealthError,
+			&i.HealthCheckedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -339,7 +351,7 @@ func (q *Queries) ListExtensionRepos(ctx context.Context) ([]ExtensionRepo, erro
 }
 
 const listExtensions = `-- name: ListExtensions :many
-SELECT id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at FROM extensions ORDER BY name ASC
+SELECT id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at, healthy, health_error, health_checked_at FROM extensions ORDER BY name ASC
 `
 
 func (q *Queries) ListExtensions(ctx context.Context) ([]Extension, error) {
@@ -369,6 +381,9 @@ func (q *Queries) ListExtensions(ctx context.Context) ([]Extension, error) {
 			&i.Icon,
 			&i.AddedAt,
 			&i.ModifiedAt,
+			&i.Healthy,
+			&i.HealthError,
+			&i.HealthCheckedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -384,7 +399,7 @@ func (q *Queries) ListExtensions(ctx context.Context) ([]Extension, error) {
 }
 
 const listExtensionsByRepo = `-- name: ListExtensionsByRepo :many
-SELECT id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at FROM extensions WHERE repo_id = ? ORDER BY name ASC
+SELECT id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at, healthy, health_error, health_checked_at FROM extensions WHERE repo_id = ? ORDER BY name ASC
 `
 
 func (q *Queries) ListExtensionsByRepo(ctx context.Context, repoID *int64) ([]Extension, error) {
@@ -414,6 +429,9 @@ func (q *Queries) ListExtensionsByRepo(ctx context.Context, repoID *int64) ([]Ex
 			&i.Icon,
 			&i.AddedAt,
 			&i.ModifiedAt,
+			&i.Healthy,
+			&i.HealthError,
+			&i.HealthCheckedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -465,6 +483,29 @@ func (q *Queries) SetExtensionRepoEnabled(ctx context.Context, arg SetExtensionR
 	return err
 }
 
+const updateExtensionHealth = `-- name: UpdateExtensionHealth :exec
+UPDATE extensions
+SET healthy = ?, health_error = ?, health_checked_at = COALESCE(?, unixepoch())
+WHERE ext_id = ?
+`
+
+type UpdateExtensionHealthParams struct {
+	Healthy         *int64  `json:"healthy"`
+	HealthError     *string `json:"health_error"`
+	HealthCheckedAt *int64  `json:"health_checked_at"`
+	ExtID           string  `json:"ext_id"`
+}
+
+func (q *Queries) UpdateExtensionHealth(ctx context.Context, arg UpdateExtensionHealthParams) error {
+	_, err := q.db.ExecContext(ctx, updateExtensionHealth,
+		arg.Healthy,
+		arg.HealthError,
+		arg.HealthCheckedAt,
+		arg.ExtID,
+	)
+	return err
+}
+
 const updateExtensionSettings = `-- name: UpdateExtensionSettings :exec
 UPDATE extensions SET settings = ?, modified_at = unixepoch() WHERE id = ?
 `
@@ -498,7 +539,7 @@ ON CONFLICT (ext_id) DO UPDATE SET
     nsfw = excluded.nsfw,
     icon = excluded.icon,
     modified_at = unixepoch()
-RETURNING id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at
+RETURNING id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at, healthy, health_error, health_checked_at
 `
 
 type UpsertExtensionByExtIDParams struct {
@@ -554,6 +595,9 @@ func (q *Queries) UpsertExtensionByExtID(ctx context.Context, arg UpsertExtensio
 		&i.Icon,
 		&i.AddedAt,
 		&i.ModifiedAt,
+		&i.Healthy,
+		&i.HealthError,
+		&i.HealthCheckedAt,
 	)
 	return i, err
 }

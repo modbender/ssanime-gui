@@ -36,6 +36,31 @@ type JSProvider struct {
 	// settings is the resolved per-extension settings passed as the second JS
 	// method argument. May be nil (JS receives null/undefined).
 	settings map[string]interface{}
+	// recordHealth, when set, is invoked at the end of every Search/SmartSearch/
+	// Test with the run outcome so a single centralized health record per
+	// extension is updated from every execution path. Nil for preview/throwaway
+	// providers that aren't installed (their health isn't persisted). Nil-safe.
+	recordHealth func(extID string, healthy bool, errMsg string)
+}
+
+// SetHealthRecorder installs the centralized health-recording hook. The manager
+// calls this only for providers backing INSTALLED extensions; preview providers
+// keep a nil recorder (no persistence).
+func (p *JSProvider) SetHealthRecorder(fn func(extID string, healthy bool, errMsg string)) {
+	p.recordHealth = fn
+}
+
+// record reports a run outcome to the centralized health recorder when one is
+// wired. A nil recorder (preview/throwaway providers) is a no-op.
+func (p *JSProvider) record(err error) {
+	if p.recordHealth == nil {
+		return
+	}
+	if err != nil {
+		p.recordHealth(p.id, false, err.Error())
+		return
+	}
+	p.recordHealth(p.id, true, "")
 }
 
 // NewJSProvider builds a JSProvider from a JS payload string with no resolver or
@@ -85,13 +110,40 @@ func (p *JSProvider) GetSettings() source.Settings {
 // and tries the movie/single primary then the legacy search/smartSearch spellings.
 func (p *JSProvider) Search(ctx context.Context, opts source.SearchOptions) ([]*source.AnimeTorrent, error) {
 	options := p.buildOptions(ctx, source.SmartSearchOptions{Media: opts.Media, Query: opts.Query})
-	return p.callAndMarshal(ctx, options, p.methodChain(opts.Media, false)...)
+	res, err := p.callAndMarshal(ctx, options, p.methodChain(opts.Media, false)...)
+	p.record(err)
+	return res, err
 }
 
 // SmartSearch runs a metadata-aware search with the full Hayase options object.
 func (p *JSProvider) SmartSearch(ctx context.Context, opts source.SmartSearchOptions) ([]*source.AnimeTorrent, error) {
 	options := p.buildOptions(ctx, opts)
-	return p.callAndMarshal(ctx, options, p.methodChain(opts.Media, opts.Batch)...)
+	res, err := p.callAndMarshal(ctx, options, p.methodChain(opts.Media, opts.Batch)...)
+	p.record(err)
+	return res, err
+}
+
+// Test checks the extension's upstream liveness. Hayase extensions implement a
+// test() method that fetches the upstream API and throws when it's down; calling
+// it and getting a clean resolution means healthy. When test() is absent the
+// adapter probes with a SmartSearch for a known title (AniList 21 / One Piece,
+// episode 1) and treats any non-throwing run — even zero results — as healthy.
+// The outcome is recorded centrally like a real search. Returns nil when healthy,
+// the underlying error when dead.
+func (p *JSProvider) Test(ctx context.Context) error {
+	_, err := p.vm.CallMethod(ctx, "test")
+	if err != nil && strings.Contains(err.Error(), "not found or not a function") {
+		// No test() — fall back to a probe SmartSearch. Don't double-record: the
+		// probe path doesn't run through record() (callAndMarshal is called
+		// directly), so record once here with the probe's outcome.
+		options := p.buildOptions(ctx, source.SmartSearchOptions{
+			Media:         source.Media{ID: 21, RomajiTitle: "One Piece"},
+			EpisodeNumber: 1,
+		})
+		_, err = p.callAndMarshal(ctx, options, p.methodChain(source.Media{ID: 21}, false)...)
+	}
+	p.record(err)
+	return err
 }
 
 // methodChain returns the candidate method names in priority order: the Hayase
