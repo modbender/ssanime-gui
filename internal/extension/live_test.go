@@ -1,9 +1,12 @@
 //go:build live
 
-// Live integration test for Hayase-compatible extensions (exten.pages.dev).
-// Run with:
+// Live integration test for Hayase-compatible extensions. Run with:
 //
 //	go test -tags live ./internal/extension/... -run TestLive -v
+//
+// The repo index URL is NOT hardcoded (extension/repo links are not committed —
+// see CLAUDE.md). Supply it via the SSANIME_TEST_REPO_INDEX env var or a
+// gitignored repo-root .env; the test skips when it is unset.
 //
 // Network access is required. It fetches the repo index, resolves ids via the
 // real ani.zip, loads every torrent extension through the goja runtime, and runs
@@ -31,8 +34,6 @@ import (
 	"github.com/modbender/ssanime-gui/internal/anizip"
 	"github.com/modbender/ssanime-gui/internal/source"
 )
-
-const defaultRepoIndex = "https://exten.pages.dev/index.json"
 
 // loadDotEnv parses a repo-root .env (KEY=VALUE, # comments, blanks ignored).
 // The test runs with cwd = internal/extension, so the repo root is ../..  .
@@ -110,7 +111,10 @@ func classifyError(errStr string) (isMechanicsBug bool) {
 
 func TestLiveHayaseExtensions(t *testing.T) {
 	dotenv := loadDotEnv()
-	indexURL := envOr(dotenv, "SSANIME_TEST_REPO_INDEX", defaultRepoIndex)
+	indexURL := envOr(dotenv, "SSANIME_TEST_REPO_INDEX", "")
+	if indexURL == "" {
+		t.Skip("set SSANIME_TEST_REPO_INDEX (env or repo-root .env) to a repo index URL to run the live extension test")
+	}
 	t.Logf("repo index: %s", indexURL)
 
 	client := &http.Client{Timeout: 30 * time.Second}

@@ -348,7 +348,7 @@ func startDaemon(cfg *config.Config, logger *slog.Logger, logBridge *logging.Hub
 	extManager := extension.NewManager(st, registry, resolver.GuardedHTTPClient(25*time.Second), cfg.DataDir, logger)
 	// Back JS providers with an ani.zip id-resolver so the Hayase options object
 	// (anidbAid/anidbEid/tvdbId/tvdbEId/tmdbId/...) is fully populated for
-	// exten.pages.dev extensions. ani.zip resolves over normal DNS; a plain
+	// Hayase-compatible extensions. ani.zip resolves over normal DNS; a plain
 	// client is fine.
 	extManager.SetResolver(anizip.New())
 	if err := extManager.LoadAndRegisterAll(context.Background()); err != nil {

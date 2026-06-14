@@ -311,7 +311,7 @@ func (p *JSProvider) callAndMarshal(ctx context.Context, options interface{}, me
 }
 
 // hayaseTorrent is the intermediate shape Hayase JS extensions return. Field
-// names match what the exten.pages.dev and ReWelp extensions produce.
+// names match what Hayase-compatible torrent extensions produce.
 type hayaseTorrent struct {
 	Title     string      `json:"title"`
 	Link      string      `json:"link"`

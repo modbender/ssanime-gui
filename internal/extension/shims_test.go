@@ -185,7 +185,7 @@ func TestFetchInjectedIntoOptions(t *testing.T) {
 	}
 }
 
-// TestExportDefaultTrailingSemicolon verifies the exten.pages.dev "};" ending
+// TestExportDefaultTrailingSemicolon verifies the "};" class-export ending
 // (a trailing semicolon after the class) is handled by stripExportDefault.
 func TestExportDefaultTrailingSemicolon(t *testing.T) {
 	js := `export default new class Foo {
