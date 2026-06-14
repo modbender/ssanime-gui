@@ -8,11 +8,27 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modbender/ssanime-gui/internal/anizip"
 	"github.com/modbender/ssanime-gui/internal/config"
 	"github.com/modbender/ssanime-gui/internal/events"
 	"github.com/modbender/ssanime-gui/internal/source"
 	"github.com/modbender/ssanime-gui/internal/store"
 )
+
+// fakeResolver is an EpisodeResolver returning a fixed episode list so the poller
+// resolves a known aired-episode set without a network call.
+type fakeResolver struct {
+	eps []anizip.Episode
+	err error
+}
+
+func (f fakeResolver) GetEpisodes(context.Context, int) ([]anizip.Episode, error) {
+	return f.eps, f.err
+}
+
+// pastDate / futureDate format an ISO air date relative to now for air-date gating.
+func pastDate() string   { return time.Now().AddDate(0, 0, -7).Format("2006-01-02") }
+func futureDate() string { return time.Now().AddDate(0, 0, 7).Format("2006-01-02") }
 
 // stubProvider returns a fixed result set, recording how many times it was
 // called so a test can assert a completed series is never fetched.
@@ -83,6 +99,7 @@ func makeFeed(t *testing.T, st *store.Store, status string) (store.Series, store
 		RomajiTitle:  strptr("Sousou no Frieren"),
 		EnglishTitle: strptr("Frieren: Beyond Journey's End"),
 		Subscribed:   1,
+		AnilistID:    i64ptr(154587),
 		AiringStatus: strptr(status),
 		Status:       strptr(status),
 		EpisodeCount: i64ptr(28),
@@ -107,14 +124,14 @@ func makeFeed(t *testing.T, st *store.Store, status string) (store.Series, store
 	return series, feed
 }
 
-func newPoller(t *testing.T, st *store.Store, prov source.Provider) (*Poller, *events.Hub) {
+func newPoller(t *testing.T, st *store.Store, prov source.Provider, opts ...Option) (*Poller, *events.Hub) {
 	t.Helper()
 	reg := source.NewRegistry()
 	reg.Register(prov)
 	hub := events.NewHub(slog.Default())
 	hub.Start()
 	t.Cleanup(hub.Stop)
-	p := New(st, reg, hub, slog.Default())
+	p := New(st, reg, hub, slog.Default(), opts...)
 	return p, hub
 }
 
@@ -123,7 +140,13 @@ func TestPollEnqueuesAndDedupes(t *testing.T) {
 	ctx := context.Background()
 	series, _ := makeFeed(t, st, "RELEASING")
 	prov := &stubProvider{id: "stub", results: frierenResults()}
-	p, _ := newPoller(t, st, prov)
+	// ani.zip reports eps 27 and 28 as aired; the per-episode search then queries
+	// those two and the stub returns their releases.
+	res := fakeResolver{eps: []anizip.Episode{
+		{Number: 27, AirDate: pastDate()},
+		{Number: 28, AirDate: pastDate()},
+	}}
+	p, _ := newPoller(t, st, prov, WithResolver(res))
 
 	p.PollDue(ctx)
 
@@ -249,6 +272,96 @@ func TestPollSkipsUnregisteredProviderWithoutError(t *testing.T) {
 	if got.ErrorMessage != nil {
 		t.Errorf("feed error_message = %q, want nil (graceful skip)", *got.ErrorMessage)
 	}
+}
+
+// TestPollRespectsBackfillWatermark verifies the poller auto-downloads only
+// episodes above the backfill floor: with floor=5 and eps 1..7 all aired, only
+// 6 and 7 enqueue; nothing at or below 5.
+func TestPollRespectsBackfillWatermark(t *testing.T) {
+	st := openStore(t)
+	ctx := context.Background()
+	series, _ := makeFeed(t, st, "RELEASING")
+	if err := st.Write().UpdateSeriesBackfillFrom(ctx, store.UpdateSeriesBackfillFromParams{
+		BackfillFromEpisode: i64ptr(5), ID: series.ID,
+	}); err != nil {
+		t.Fatalf("set backfill floor: %v", err)
+	}
+
+	// A per-episode release for whatever number is queried.
+	prov := &stubProvider{id: "stub"}
+	prov.results = perEpisodeReleases(1, 7)
+	eps := make([]anizip.Episode, 0, 7)
+	for n := 1; n <= 7; n++ {
+		eps = append(eps, anizip.Episode{Number: n, AirDate: pastDate()})
+	}
+	p, _ := newPoller(t, st, prov, WithResolver(fakeResolver{eps: eps}))
+
+	p.PollDue(ctx)
+
+	got, err := st.Read().ListEpisodesBySeries(ctx, series.ID)
+	if err != nil {
+		t.Fatalf("ListEpisodesBySeries: %v", err)
+	}
+	nums := map[int64]bool{}
+	for _, e := range got {
+		if e.EpisodeNo != nil {
+			nums[*e.EpisodeNo] = true
+		}
+	}
+	if len(nums) != 2 || !nums[6] || !nums[7] {
+		t.Fatalf("enqueued episodes = %v, want exactly {6,7}", nums)
+	}
+	for n := int64(1); n <= 5; n++ {
+		if nums[n] {
+			t.Errorf("episode %d at/below watermark was enqueued", n)
+		}
+	}
+}
+
+// TestPollSkipsFutureAirDates verifies an episode whose air date is in the future
+// is never queried/enqueued even when it sits above the watermark.
+func TestPollSkipsFutureAirDates(t *testing.T) {
+	st := openStore(t)
+	ctx := context.Background()
+	series, _ := makeFeed(t, st, "RELEASING")
+
+	prov := &stubProvider{id: "stub", results: perEpisodeReleases(1, 3)}
+	res := fakeResolver{eps: []anizip.Episode{
+		{Number: 1, AirDate: pastDate()},
+		{Number: 2, AirDate: pastDate()},
+		{Number: 3, AirDate: futureDate()}, // not yet aired
+	}}
+	p, _ := newPoller(t, st, prov, WithResolver(res))
+
+	p.PollDue(ctx)
+
+	got, _ := st.Read().ListEpisodesBySeries(ctx, series.ID)
+	nums := map[int64]bool{}
+	for _, e := range got {
+		if e.EpisodeNo != nil {
+			nums[*e.EpisodeNo] = true
+		}
+	}
+	if nums[3] {
+		t.Errorf("future episode 3 was enqueued, want skipped")
+	}
+	if !nums[1] || !nums[2] {
+		t.Errorf("aired episodes = %v, want 1 and 2 enqueued", nums)
+	}
+}
+
+// perEpisodeReleases builds one SubsPlease release per episode in [lo,hi], so the
+// stub's per-episode SmartSearch filter returns the matching release for each n.
+func perEpisodeReleases(lo, hi int) []*source.AnimeTorrent {
+	var out []*source.AnimeTorrent
+	for n := lo; n <= hi; n++ {
+		out = append(out, &source.AnimeTorrent{
+			Provider: "stub", Name: "[SubsPlease] Sousou no Frieren - " + itoa(n) + " (1080p)",
+			ReleaseGroup: "SubsPlease", Resolution: "1080p", EpisodeNumber: n,
+			Seeders: 1000, InfoHash: "hash" + itoa(n), Magnet: "magnet:?xt=urn:btih:hash" + itoa(n),
+		})
+	}
+	return out
 }
 
 func errorsIs(err, target error) bool { return errors.Is(err, target) }

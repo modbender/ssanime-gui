@@ -13,10 +13,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/modbender/ssanime-gui/internal/anizip"
 	"github.com/modbender/ssanime-gui/internal/events"
 	"github.com/modbender/ssanime-gui/internal/source"
 	"github.com/modbender/ssanime-gui/internal/store"
@@ -41,6 +43,14 @@ type Store interface {
 	Write() *store.Queries
 }
 
+// EpisodeResolver resolves a series' per-episode metadata (air dates) from
+// ani.zip, so the poller queries only episodes that have actually aired and sit
+// above the backfill watermark. *anizip.Client satisfies it. Nullable: when nil
+// the poller falls back to the series' EpisodeCount.
+type EpisodeResolver interface {
+	GetEpisodes(ctx context.Context, anilistID int) ([]anizip.Episode, error)
+}
+
 // Poller polls due feeds and enqueues new episodes.
 type Poller struct {
 	store    Store
@@ -48,6 +58,7 @@ type Poller struct {
 	hub      *events.Hub
 	logger   *slog.Logger
 	interval time.Duration
+	resolver EpisodeResolver // ani.zip air-date resolver; nil falls back to EpisodeCount
 
 	now func() time.Time // injectable clock for tests
 
@@ -74,6 +85,16 @@ func WithClock(now func() time.Time) Option {
 	return func(p *Poller) {
 		if now != nil {
 			p.now = now
+		}
+	}
+}
+
+// WithResolver injects the ani.zip episode resolver that gates auto-download to
+// aired episodes. Without it the poller falls back to the series' EpisodeCount.
+func WithResolver(r EpisodeResolver) Option {
+	return func(p *Poller) {
+		if r != nil {
+			p.resolver = r
 		}
 	}
 }
@@ -167,8 +188,10 @@ func (p *Poller) PollDue(ctx context.Context) {
 // pollFeed fetches one feed, dedupes against its seen_cache, enqueues new
 // episodes, updates last_checked_at + seen_cache, and emits feed.checked.
 func (p *Poller) pollFeed(ctx context.Context, feed store.Feed) error {
-	provider, err := p.providerFor(feed)
-	if err != nil {
+	// Gate: the feed must map to a registered provider. The per-episode search
+	// below drives the actual provider calls through the registry, so the
+	// returned provider itself is unused here.
+	if _, err := p.providerFor(feed); err != nil {
 		if errors.Is(err, errProviderNotRegistered) {
 			p.logger.Debug("poller: skipping feed with unregistered provider",
 				"feed", feed.ID, "site", deref(feed.Site))
@@ -192,21 +215,54 @@ func (p *Poller) pollFeed(ctx context.Context, feed store.Feed) error {
 		})
 	}
 
-	results, err := p.fetch(ctx, provider, feed, series)
-	if err != nil {
-		return p.markError(ctx, feed, err)
+	have := p.haveEpisodes(ctx, series)
+	nums := p.episodesToQuery(ctx, series, have)
+
+	now := p.now().Unix()
+	if len(nums) == 0 {
+		// Nothing new to chase (not yet aired, or all aired episodes already in
+		// library). Still stamp last_checked and broadcast so the UI sees a pass.
+		if err := p.store.Write().MarkFeedChecked(ctx, store.MarkFeedCheckedParams{
+			Now: &now, SeenCache: feed.SeenCache, ID: feed.ID,
+		}); err != nil {
+			return fmt.Errorf("mark feed checked: %w", err)
+		}
+		p.hub.Broadcast(events.TypeFeedChecked, map[string]any{
+			"feed_id": feed.ID, "series_id": series.ID, "found": 0, "created": 0, "at": now,
+		})
+		return nil
 	}
 
+	media := mediaFromSeries(series)
+	base := source.SmartSearchOptions{
+		Query:      feedQuery(feed, series),
+		Resolution: resolutionFilter(feed),
+	}
+	candidates, warnings := source.SearchEpisodes(ctx, p.registry, media, nums, base)
+	for _, msg := range warnings {
+		p.logger.Warn("poller: source search", "feed", feed.ID, "series", series.ID, "detail", msg)
+	}
+
+	res := resolutionFilter(feed)
 	seen := loadSeenCache(feed.SeenCache)
-	var created int
-	for _, t := range results {
-		key := dedupeKey(t)
+	var found, created int
+	for _, ep := range nums {
+		group := candidates[ep]
+		if len(group) == 0 {
+			continue
+		}
+		found++
+		best, err := source.SelectBest(media, group, source.SelectOptions{Resolution: res, Episode: ep})
+		if err != nil {
+			continue
+		}
+		key := dedupeKey(best)
 		if _, ok := seen[key]; ok {
 			continue
 		}
 		seen[key] = struct{}{}
-		if err := p.enqueue(ctx, series, t); err != nil {
-			p.logger.Warn("poller: enqueue failed", "series", series.ID, "name", t.Name, "err", err)
+		if err := p.enqueue(ctx, series, best); err != nil {
+			p.logger.Warn("poller: enqueue failed", "series", series.ID, "name", best.Name, "err", err)
 			// Keep it out of seen so a transient failure retries next pass.
 			delete(seen, key)
 			continue
@@ -214,7 +270,6 @@ func (p *Poller) pollFeed(ctx context.Context, feed store.Feed) error {
 		created++
 	}
 
-	now := p.now().Unix()
 	cacheJSON := dumpSeenCache(seen)
 	if err := p.store.Write().MarkFeedChecked(ctx, store.MarkFeedCheckedParams{
 		Now: &now, SeenCache: &cacheJSON, ID: feed.ID,
@@ -225,57 +280,96 @@ func (p *Poller) pollFeed(ctx context.Context, feed store.Feed) error {
 	p.hub.Broadcast(events.TypeFeedChecked, map[string]any{
 		"feed_id":   feed.ID,
 		"series_id": series.ID,
-		"found":     len(results),
+		"found":     found,
 		"created":   created,
 		"at":        now,
 	})
 	p.logger.Info("poller: feed checked", "feed", feed.ID, "series", series.ID,
-		"found", len(results), "created", created)
+		"found", found, "created", created)
 	return nil
 }
 
-// fetch runs the right provider call for the feed kind. A structured feed (a feed
-// URL we can hand straight to the provider) uses SmartSearch driven by the
-// series metadata; a provider-search feed does the same — both normalize to the
-// same result shape, then autoselect narrows to the best original release.
-func (p *Poller) fetch(ctx context.Context, provider source.Provider, feed store.Feed, series store.Series) ([]*source.AnimeTorrent, error) {
-	media := mediaFromSeries(series)
-	opts := source.SmartSearchOptions{
-		Media:      media,
-		Query:      feedQuery(feed, series),
-		Resolution: resolutionFilter(feed),
-	}
-	results, err := provider.SmartSearch(ctx, opts)
+// haveEpisodes returns the set of episode numbers already present for a series
+// (any status), so the poller never re-queries an episode already in the library.
+func (p *Poller) haveEpisodes(ctx context.Context, series store.Series) map[int]struct{} {
+	have := map[int]struct{}{}
+	eps, err := p.store.Read().ListEpisodesBySeries(ctx, series.ID)
 	if err != nil {
-		return nil, fmt.Errorf("smart search (%s): %w", provider.ID(), err)
+		p.logger.Warn("poller: list episodes", "series", series.ID, "err", err)
+		return have
 	}
-
-	// Narrow to the best original release per episode using autoselect: this is
-	// the "prefer trusted group + target resolution" rule. We keep one best
-	// release per distinct episode number so a weekly feed enqueues exactly the
-	// new episode(s), not every group's copy.
-	return p.bestPerEpisode(media, feed, results), nil
+	for _, e := range eps {
+		if e.EpisodeNo != nil {
+			have[int(*e.EpisodeNo)] = struct{}{}
+		}
+	}
+	return have
 }
 
-// bestPerEpisode groups results by episode and runs SelectBest within each group,
-// returning one winning release per episode (and one per batch).
-func (p *Poller) bestPerEpisode(media source.Media, feed store.Feed, results []*source.AnimeTorrent) []*source.AnimeTorrent {
-	res := resolutionFilter(feed)
-	byEpisode := map[int][]*source.AnimeTorrent{}
-	for _, t := range results {
-		byEpisode[t.EpisodeNumber] = append(byEpisode[t.EpisodeNumber], t)
+// episodesToQuery resolves the genuinely-new episode numbers to auto-download:
+// those above the backfill watermark, not already in the library, and (when the
+// ani.zip resolver is wired) already aired. Without a resolver or AniList id it
+// falls back to the series' EpisodeCount — bounded by the watermark and have-set
+// but without an air-date gate. Returns sorted unique numbers (usually 0-2).
+func (p *Poller) episodesToQuery(ctx context.Context, series store.Series, have map[int]struct{}) []int {
+	floor := 0
+	if series.BackfillFromEpisode != nil {
+		floor = int(*series.BackfillFromEpisode)
 	}
-	var out []*source.AnimeTorrent
-	for ep, group := range byEpisode {
-		opts := source.SelectOptions{Resolution: res, PreferBatch: ep < 0}
-		if ep > 0 {
-			opts.Episode = ep
+
+	var out []int
+	if p.resolver != nil && series.AnilistID != nil {
+		if eps, err := p.resolver.GetEpisodes(ctx, int(*series.AnilistID)); err == nil {
+			now := p.now()
+			for _, e := range eps {
+				ad := strings.TrimSpace(e.AirDate)
+				if ad == "" {
+					continue // unknown air date: treat as not yet aired
+				}
+				airTime, perr := time.Parse("2006-01-02", ad)
+				if perr != nil || airTime.After(now) {
+					continue
+				}
+				if e.Number <= floor {
+					continue
+				}
+				if _, ok := have[e.Number]; ok {
+					continue
+				}
+				out = append(out, e.Number)
+			}
+		} else {
+			p.logger.Info("poller: anizip resolve failed", "series", series.ID, "err", err)
 		}
-		best, err := source.SelectBest(media, group, opts)
-		if err != nil {
-			continue
+	}
+
+	// Fallback: resolver nil/erroring, no AniList id, or zero usable aired episodes.
+	if len(out) == 0 && series.EpisodeCount != nil && *series.EpisodeCount > 0 {
+		for n := 1; n <= int(*series.EpisodeCount); n++ {
+			if n <= floor {
+				continue
+			}
+			if _, ok := have[n]; ok {
+				continue
+			}
+			out = append(out, n)
 		}
-		out = append(out, best)
+	}
+
+	sort.Ints(out)
+	return dedupeInts(out)
+}
+
+// dedupeInts removes adjacent duplicates from a sorted slice in place.
+func dedupeInts(in []int) []int {
+	if len(in) < 2 {
+		return in
+	}
+	out := in[:1]
+	for _, n := range in[1:] {
+		if n != out[len(out)-1] {
+			out = append(out, n)
+		}
 	}
 	return out
 }

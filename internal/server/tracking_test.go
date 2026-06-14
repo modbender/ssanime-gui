@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/modbender/ssanime-gui/internal/anizip"
 	"github.com/modbender/ssanime-gui/internal/config"
 	"github.com/modbender/ssanime-gui/internal/events"
 	"github.com/modbender/ssanime-gui/internal/store"
@@ -14,6 +16,12 @@ import (
 // newTrackingServer returns a server plus the underlying store so tests can
 // assert on persisted state directly.
 func newTrackingServer(t *testing.T) (http.Handler, *store.Store) {
+	return newTrackingServerWithAnizip(t, nil)
+}
+
+// newTrackingServerWithAnizip is newTrackingServer with an injectable ani.zip
+// fetcher so subscribe's backfill-floor computation is observable.
+func newTrackingServerWithAnizip(t *testing.T, az AnizipFetcher) (http.Handler, *store.Store) {
 	t.Helper()
 	dir := t.TempDir()
 	cfg := &config.Config{DataDir: dir, DBPath: filepath.Join(dir, "track.db"), Port: config.DefaultPort}
@@ -25,7 +33,7 @@ func newTrackingServer(t *testing.T) (http.Handler, *store.Store) {
 	hub := events.NewHub(nil)
 	hub.Start()
 	t.Cleanup(hub.Stop)
-	return New(st, hub, nil, Config{}), st
+	return New(st, hub, nil, Config{Anizip: az}), st
 }
 
 // addTrackedSeries inserts a subscribed series with an anilist id and returns it.
@@ -691,6 +699,49 @@ func TestActivityOrdering(t *testing.T) {
 	eps := resp.Data.Series[0].Episodes
 	if len(eps) != 2 || eps[0].ID != ep2.ID || eps[1].ID != ep1.ID {
 		t.Errorf("episode order = %v, want [%d, %d]", eps, ep2.ID, ep1.ID)
+	}
+}
+
+// TestTrackSetsBackfillFloor verifies first-subscribe freezes the backfill floor
+// at the highest AIRED episode (per ani.zip air dates), and that a no-anizip
+// subscribe leaves the floor nil while still returning 201.
+func TestTrackSetsBackfillFloor(t *testing.T) {
+	past := time.Now().AddDate(0, 0, -7).Format("2006-01-02")
+	future := time.Now().AddDate(0, 0, 7).Format("2006-01-02")
+	eps := make([]anizip.Episode, 0, 10)
+	for n := 1; n <= 10; n++ {
+		ad := past
+		if n >= 7 {
+			ad = future // 7..10 not yet aired
+		}
+		eps = append(eps, anizip.Episode{Number: n, AirDate: ad})
+	}
+	srv, st := newTrackingServerWithAnizip(t, &fakeAnizipFetcher{eps: eps})
+
+	rec := postJSON(t, srv, "/api/track", TrackRequest{AnilistID: 73000})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("track: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	s, err := st.Read().GetSeriesByAnilistID(context.Background(), i64ptrLocal(73000))
+	if err != nil {
+		t.Fatalf("get series: %v", err)
+	}
+	if s.BackfillFromEpisode == nil || *s.BackfillFromEpisode != 6 {
+		t.Errorf("backfill_from_episode = %v, want 6 (highest aired)", s.BackfillFromEpisode)
+	}
+
+	// No-anizip subscribe: floor stays nil (take everything) and still 201.
+	srv2, st2 := newTrackingServer(t)
+	rec2 := postJSON(t, srv2, "/api/track", TrackRequest{AnilistID: 73001})
+	if rec2.Code != http.StatusCreated {
+		t.Fatalf("track no-anizip: status=%d body=%s", rec2.Code, rec2.Body.String())
+	}
+	s2, err := st2.Read().GetSeriesByAnilistID(context.Background(), i64ptrLocal(73001))
+	if err != nil {
+		t.Fatalf("get series: %v", err)
+	}
+	if s2.BackfillFromEpisode != nil {
+		t.Errorf("backfill_from_episode = %v, want nil (no anizip, no episode count)", *s2.BackfillFromEpisode)
 	}
 }
 

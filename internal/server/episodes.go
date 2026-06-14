@@ -132,65 +132,6 @@ func (h *Handler) handleGetEpisode(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, episodeToDetail(row.Episode, row.SeriesTitle, outputs))
 }
 
-// handleScanEpisodes runs SmartSearch on all registered providers for a series
-// and returns the candidate torrents without enqueuing them.
-func (h *Handler) handleScanEpisodes(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseID(w, r)
-	if !ok {
-		return
-	}
-	if h.registry == nil {
-		WriteError(w, http.StatusServiceUnavailable, "provider registry not available")
-		return
-	}
-
-	ctx := r.Context()
-	series, err := h.store.Read().GetSeries(ctx, id)
-	if errors.Is(err, sql.ErrNoRows) {
-		WriteError(w, http.StatusNotFound, "series not found")
-		return
-	}
-	if err != nil {
-		WriteError(w, http.StatusInternalServerError, "failed to get series")
-		return
-	}
-
-	media := source.Media{
-		RomajiTitle: series.Title,
-	}
-	if series.AnilistID != nil {
-		media.ID = int(*series.AnilistID)
-	}
-	if series.EnglishTitle != nil {
-		media.EnglishTitle = series.EnglishTitle
-	}
-	if series.RomajiTitle != nil {
-		media.RomajiTitle = *series.RomajiTitle
-	}
-	if series.EpisodeCount != nil {
-		media.EpisodeCount = int(*series.EpisodeCount)
-	}
-
-	opts := source.SmartSearchOptions{
-		Media:        media,
-		BestReleases: true,
-	}
-
-	var results []TorrentSearchResult
-	for _, pid := range h.registry.List() {
-		p, _ := h.registry.Get(pid)
-		torrents, err := p.SmartSearch(ctx, opts)
-		if err != nil {
-			h.logger.Warn("scan: provider error", "provider", pid, "series_id", id, "err", err)
-			continue
-		}
-		for _, t := range torrents {
-			results = append(results, torrentToResult(t))
-		}
-	}
-	WriteJSON(w, http.StatusOK, results)
-}
-
 // handleBulkEncode enqueues a set of episodes for download+encode by setting
 // their status to 'queued'. The download and encode queues pick them up on their
 // next scan tick.

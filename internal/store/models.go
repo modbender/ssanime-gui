@@ -193,6 +193,7 @@ type Series struct {
 	CoverColor          *string `json:"cover_color"`
 	MetadataRefreshedAt *int64  `json:"metadata_refreshed_at"`
 	WatchStatus         string  `json:"watch_status"`
+	BackfillFromEpisode *int64  `json:"backfill_from_episode"`
 }
 
 type Setting struct {
