@@ -220,3 +220,200 @@ func TestGetEpisodesServerErrorPropagates(t *testing.T) {
 		t.Fatal("expected an error on HTTP 500")
 	}
 }
+
+// idsFixture is a full mappings payload: every anime id present, themoviedb_id
+// as a STRING (the common ani.zip quirk), and two episodes with anidbEid/tvdbId.
+const idsFixture = `{
+  "mappings": {
+    "anidb_id": 69,
+    "mal_id": 21,
+    "thetvdb_id": 81797,
+    "themoviedb_id": "37854",
+    "anilist_id": 21,
+    "kitsu_id": 12,
+    "anisearch_id": 2734
+  },
+  "episodes": {
+    "1": {"episodeNumber": 1, "anidbEid": 440, "tvdbId": 5505123},
+    "2": {"episodeNumber": 2, "anidbEid": 441, "tvdbId": 5505124}
+  }
+}`
+
+func TestGetIDsFullMappings(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(idsFixture))
+	})
+	ids, err := c.GetIDs(context.Background(), 21)
+	if err != nil {
+		t.Fatalf("GetIDs: %v", err)
+	}
+	if ids.AnilistID != 21 || ids.AnidbID != 69 || ids.MalID != 21 ||
+		ids.TvdbID != 81797 || ids.TmdbID != 37854 || ids.KitsuID != 12 || ids.AnisearchID != 2734 {
+		t.Fatalf("anime ids wrong: %+v", ids)
+	}
+	if len(ids.Episodes) != 2 {
+		t.Fatalf("episodes = %d, want 2: %+v", len(ids.Episodes), ids.Episodes)
+	}
+	if ep := ids.Episodes[1]; ep.AnidbEid != 440 || ep.TvdbEid != 5505123 {
+		t.Errorf("episode 1 ids = %+v, want {440, 5505123}", ep)
+	}
+	if ep := ids.Episodes[2]; ep.AnidbEid != 441 || ep.TvdbEid != 5505124 {
+		t.Errorf("episode 2 ids = %+v, want {441, 5505124}", ep)
+	}
+}
+
+func TestGetIDsTmdbAsNumber(t *testing.T) {
+	body := `{"mappings":{"anilist_id":21,"themoviedb_id":37854},"episodes":{}}`
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	})
+	ids, err := c.GetIDs(context.Background(), 21)
+	if err != nil {
+		t.Fatalf("GetIDs: %v", err)
+	}
+	if ids.TmdbID != 37854 {
+		t.Errorf("TmdbID (numeric) = %d, want 37854", ids.TmdbID)
+	}
+}
+
+func TestGetIDsMissingAnimeIDsAreZero(t *testing.T) {
+	// Only anilist_id present; the rest must default to 0 without erroring.
+	body := `{"mappings":{"anilist_id":21},"episodes":{}}`
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	})
+	ids, err := c.GetIDs(context.Background(), 21)
+	if err != nil {
+		t.Fatalf("GetIDs: %v", err)
+	}
+	if ids.AnilistID != 21 {
+		t.Errorf("AnilistID = %d, want 21", ids.AnilistID)
+	}
+	if ids.AnidbID != 0 || ids.TvdbID != 0 || ids.TmdbID != 0 || ids.MalID != 0 {
+		t.Errorf("missing ids should be 0: %+v", ids)
+	}
+}
+
+func TestGetIDsNoMappingsObject(t *testing.T) {
+	// Mappings object entirely absent: anime ids 0, AnilistID backfilled from arg.
+	body := `{"episodes":{"1":{"episodeNumber":1,"anidbEid":440}}}`
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	})
+	ids, err := c.GetIDs(context.Background(), 21)
+	if err != nil {
+		t.Fatalf("GetIDs: %v", err)
+	}
+	if ids.AnilistID != 21 {
+		t.Errorf("AnilistID backfill = %d, want 21", ids.AnilistID)
+	}
+	if ids.AnidbID != 0 {
+		t.Errorf("AnidbID = %d, want 0 when mappings absent", ids.AnidbID)
+	}
+	if ep := ids.Episodes[1]; ep.AnidbEid != 440 {
+		t.Errorf("episode 1 anidbEid = %d, want 440", ep.AnidbEid)
+	}
+}
+
+func TestGetIDsNoEpisodeMap(t *testing.T) {
+	body := `{"mappings":{"anilist_id":21,"anidb_id":69}}`
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	})
+	ids, err := c.GetIDs(context.Background(), 21)
+	if err != nil {
+		t.Fatalf("GetIDs: %v", err)
+	}
+	if len(ids.Episodes) != 0 {
+		t.Errorf("episodes = %d, want 0", len(ids.Episodes))
+	}
+	if ids.AnidbID != 69 {
+		t.Errorf("AnidbID = %d, want 69", ids.AnidbID)
+	}
+}
+
+func TestGetIDsEpisodeMissingFields(t *testing.T) {
+	// Episode 1 has no tvdbId; episode 2 has no anidbEid — each missing field is 0.
+	body := `{"mappings":{"anilist_id":21},"episodes":{
+	  "1":{"episodeNumber":1,"anidbEid":440},
+	  "2":{"episodeNumber":2,"tvdbId":999}
+	}}`
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	})
+	ids, err := c.GetIDs(context.Background(), 21)
+	if err != nil {
+		t.Fatalf("GetIDs: %v", err)
+	}
+	if ep := ids.Episodes[1]; ep.AnidbEid != 440 || ep.TvdbEid != 0 {
+		t.Errorf("ep1 = %+v, want {440, 0}", ep)
+	}
+	if ep := ids.Episodes[2]; ep.AnidbEid != 0 || ep.TvdbEid != 999 {
+		t.Errorf("ep2 = %+v, want {0, 999}", ep)
+	}
+}
+
+func TestGetIDsEpisodeKeyFallback(t *testing.T) {
+	// Episode entry without episodeNumber: number parsed from the map key.
+	body := `{"mappings":{"anilist_id":21},"episodes":{"3":{"anidbEid":442,"tvdbId":7}}}`
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	})
+	ids, err := c.GetIDs(context.Background(), 21)
+	if err != nil {
+		t.Fatalf("GetIDs: %v", err)
+	}
+	if ep, ok := ids.Episodes[3]; !ok || ep.AnidbEid != 442 {
+		t.Errorf("episode keyed by string '3' should map to 3: %+v ok=%v", ep, ok)
+	}
+}
+
+func TestGetIDsNotFoundIsZero(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	ids, err := c.GetIDs(context.Background(), 999999)
+	if err != nil {
+		t.Fatalf("404 should not error: %v", err)
+	}
+	if ids.AnilistID != 0 || ids.AnidbID != 0 || len(ids.Episodes) != 0 {
+		t.Errorf("404 should yield zero IDs, got %+v", ids)
+	}
+}
+
+func TestGetIDsServerErrorPropagates(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	if _, err := c.GetIDs(context.Background(), 21); err == nil {
+		t.Fatal("expected an error on HTTP 500")
+	}
+}
+
+func TestGetIDsMalformedJSONPropagates(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{not json`))
+	})
+	if _, err := c.GetIDs(context.Background(), 21); err == nil {
+		t.Fatal("expected a decode error on malformed JSON")
+	}
+}
+
+// A garbage themoviedb_id string must not fail the whole decode — it defaults to 0.
+func TestGetIDsTmdbGarbageStringDefaultsZero(t *testing.T) {
+	body := `{"mappings":{"anilist_id":21,"themoviedb_id":"not-a-number"},"episodes":{}}`
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	})
+	ids, err := c.GetIDs(context.Background(), 21)
+	if err != nil {
+		t.Fatalf("garbage tmdb id should not fail decode: %v", err)
+	}
+	if ids.TmdbID != 0 {
+		t.Errorf("TmdbID = %d, want 0 for non-numeric string", ids.TmdbID)
+	}
+	if ids.AnilistID != 21 {
+		t.Errorf("AnilistID = %d, want 21 (decode survived)", ids.AnilistID)
+	}
+}

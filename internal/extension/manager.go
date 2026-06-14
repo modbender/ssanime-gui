@@ -28,7 +28,15 @@ type Manager struct {
 	// dataDir is the app-data directory; JS payloads are cached there.
 	dataDir string
 	logger  *slog.Logger
+	// resolver fills cross-tracker ids for the Hayase options object. Nil until
+	// SetResolver is called; nil-safe (providers fall back to Media ids).
+	resolver IDResolver
 }
+
+// SetResolver wires the ani.zip id-resolver used to populate the Hayase options
+// object for every JS provider this manager registers. Call before
+// LoadAndRegisterAll so boot-loaded providers get it.
+func (m *Manager) SetResolver(r IDResolver) { m.resolver = r }
 
 // b2i maps a Go bool to the SQLite integer sqlc uses for boolean columns.
 func b2i(b bool) int64 {
@@ -110,6 +118,17 @@ func (m *Manager) InstallExtension(ctx context.Context, entry IndexEntry, repoID
 		icon = &entry.Icon
 	}
 
+	// Persist the resolved settings defaults (from the index.json options schema)
+	// so later boot loads — which only see the DB row, not the schema — recover
+	// the same flat key:value map via resolveSettings(nil, row.Settings).
+	var settingsJSON *string
+	if defaults := resolveSettings(entry.Options, nil); len(defaults) > 0 {
+		if b, mErr := json.Marshal(defaults); mErr == nil {
+			s := string(b)
+			settingsJSON = &s
+		}
+	}
+
 	ext, err := m.st.Write().UpsertExtensionByExtID(ctx, store.UpsertExtensionByExtIDParams{
 		Uuid:      uuid.NewString(),
 		RepoID:    &repoID,
@@ -122,6 +141,7 @@ func (m *Manager) InstallExtension(ctx context.Context, entry IndexEntry, repoID
 		Payload:   &payload,
 		Enabled:   1,
 		IsBuiltin: 0,
+		Settings:  settingsJSON,
 		Nsfw:      b2i(entry.NSFW),
 		Icon:      icon,
 	})
@@ -136,12 +156,16 @@ func (m *Manager) InstallExtension(ctx context.Context, entry IndexEntry, repoID
 }
 
 // registerProvider compiles a stored extension's JS payload into a JSProvider
-// and registers it into the source registry. No-op for rows without a payload.
+// and registers it into the source registry. The per-extension settings come
+// from the row's stored Settings column (a flat key:value JSON object written at
+// install time from the index.json options defaults). No-op for rows without a
+// payload.
 func (m *Manager) registerProvider(row store.Extension) error {
 	if row.Payload == nil || *row.Payload == "" {
 		return fmt.Errorf("extension %s: no payload", row.ExtID)
 	}
-	p, err := NewJSProvider(row.ExtID, row.Name, *row.Payload, m.httpClient, m.logger)
+	settings := resolveSettings(nil, row.Settings)
+	p, err := NewJSProviderWithDeps(row.ExtID, row.Name, *row.Payload, m.httpClient, m.resolver, settings, m.logger)
 	if err != nil {
 		return err
 	}
@@ -248,7 +272,8 @@ func (m *Manager) LoadAndRegisterAll(ctx context.Context) error {
 			continue
 		}
 
-		p, err := NewJSProvider(row.ExtID, row.Name, *row.Payload, m.httpClient, m.logger)
+		settings := resolveSettings(nil, row.Settings)
+		p, err := NewJSProviderWithDeps(row.ExtID, row.Name, *row.Payload, m.httpClient, m.resolver, settings, m.logger)
 		if err != nil {
 			m.logger.Warn("extension: compile failed", "id", row.ExtID, "err", err)
 			continue
