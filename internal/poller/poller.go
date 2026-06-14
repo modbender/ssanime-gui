@@ -216,7 +216,7 @@ func (p *Poller) pollFeed(ctx context.Context, feed store.Feed) error {
 	}
 
 	have := p.haveEpisodes(ctx, series)
-	nums := p.episodesToQuery(ctx, series, have)
+	nums, airDates := p.episodesToQuery(ctx, series, have)
 
 	now := p.now().Unix()
 	if len(nums) == 0 {
@@ -244,6 +244,10 @@ func (p *Poller) pollFeed(ctx context.Context, feed store.Feed) error {
 	}
 
 	res := resolutionFilter(feed)
+	lockGroup := ""
+	if series.LockedReleaseGroup != nil {
+		lockGroup = strings.TrimSpace(*series.LockedReleaseGroup)
+	}
 	seen := loadSeenCache(feed.SeenCache)
 	var found, created int
 	for _, ep := range nums {
@@ -252,8 +256,34 @@ func (p *Poller) pollFeed(ctx context.Context, feed store.Feed) error {
 			continue
 		}
 		found++
-		best, err := source.SelectBest(media, group, source.SelectOptions{Resolution: res, Episode: ep})
-		if err != nil {
+		var best *source.AnimeTorrent
+		if lockGroup != "" {
+			// Stage 1: locked group, trusted-only.
+			if b, err := source.SelectBest(media, group, source.SelectOptions{
+				Group: lockGroup, RequireTrustedGroup: true, Resolution: res, Episode: ep,
+			}); err == nil {
+				best = b
+			}
+			// Stage 2: locked group missing AND past air+24h → fall back to any trusted group.
+			if best == nil {
+				if ad, ok := airDates[ep]; ok && !p.now().Before(ad.Add(24*time.Hour)) {
+					if b, err := source.SelectBest(media, group, source.SelectOptions{
+						RequireTrustedGroup: true, Resolution: res, Episode: ep,
+					}); err == nil {
+						best = b
+					}
+				}
+				// else: still within 24h of air, or no known air date → skip, wait for next poll.
+			}
+		} else {
+			// First episode (no lock yet): trusted-only; enqueue sets the lock.
+			if b, err := source.SelectBest(media, group, source.SelectOptions{
+				RequireTrustedGroup: true, Resolution: res, Episode: ep,
+			}); err == nil {
+				best = b
+			}
+		}
+		if best == nil {
 			continue
 		}
 		key := dedupeKey(best)
@@ -311,12 +341,13 @@ func (p *Poller) haveEpisodes(ctx context.Context, series store.Series) map[int]
 // ani.zip resolver is wired) already aired. Without a resolver or AniList id it
 // falls back to the series' EpisodeCount — bounded by the watermark and have-set
 // but without an air-date gate. Returns sorted unique numbers (usually 0-2).
-func (p *Poller) episodesToQuery(ctx context.Context, series store.Series, have map[int]struct{}) []int {
+func (p *Poller) episodesToQuery(ctx context.Context, series store.Series, have map[int]struct{}) ([]int, map[int]time.Time) {
 	floor := 0
 	if series.BackfillFromEpisode != nil {
 		floor = int(*series.BackfillFromEpisode)
 	}
 
+	airDates := map[int]time.Time{}
 	var out []int
 	if p.resolver != nil && series.AnilistID != nil {
 		if eps, err := p.resolver.GetEpisodes(ctx, int(*series.AnilistID)); err == nil {
@@ -337,6 +368,7 @@ func (p *Poller) episodesToQuery(ctx context.Context, series store.Series, have 
 					continue
 				}
 				out = append(out, e.Number)
+				airDates[e.Number] = airTime
 			}
 		} else {
 			p.logger.Info("poller: anizip resolve failed", "series", series.ID, "err", err)
@@ -357,7 +389,7 @@ func (p *Poller) episodesToQuery(ctx context.Context, series store.Series, have 
 	}
 
 	sort.Ints(out)
-	return dedupeInts(out)
+	return dedupeInts(out), airDates
 }
 
 // dedupeInts removes adjacent duplicates from a sorted slice in place.
@@ -416,6 +448,16 @@ func (p *Poller) enqueue(ctx context.Context, series store.Series, t *source.Ani
 	ep, err := p.store.Write().CreateEpisode(ctx, arg)
 	if err != nil {
 		return err
+	}
+	// Lock the series to this release's group on the first downloaded episode, so
+	// subsequent episodes prefer the same group. Never overwrite an existing lock.
+	if group := strings.TrimSpace(t.ReleaseGroup); group != "" &&
+		(series.LockedReleaseGroup == nil || strings.TrimSpace(*series.LockedReleaseGroup) == "") {
+		if e := p.store.Write().UpdateSeriesLockedGroup(ctx, store.UpdateSeriesLockedGroupParams{
+			LockedReleaseGroup: &group, ID: series.ID,
+		}); e != nil {
+			p.logger.Warn("poller: lock release group", "series", series.ID, "group", group, "err", e)
+		}
 	}
 	p.hub.Broadcast(events.TypeEpisodeStatus, map[string]any{
 		"episode_id": ep.ID,

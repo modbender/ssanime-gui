@@ -152,6 +152,10 @@ type Querier interface {
 	// SetSeriesBackfillFrom records the highest-aired episode at first-subscribe as
 	// the poller's auto-download floor. NULL/0 means no floor (take everything).
 	UpdateSeriesBackfillFrom(ctx context.Context, arg UpdateSeriesBackfillFromParams) error
+	// UpdateSeriesLockedGroup records the trusted release group a series is locked to,
+	// set from the first downloaded episode's group and thereafter preferred by the
+	// poller. Only set when currently empty; never overwritten by automation.
+	UpdateSeriesLockedGroup(ctx context.Context, arg UpdateSeriesLockedGroupParams) error
 	// UpdateSeriesMetadata refreshes the volatile AniList-derived columns for one
 	// series, preserving user/display fields (title, subscribed, favorite,
 	// season_number, default_profile_id, feed_title are never touched). Authoritative

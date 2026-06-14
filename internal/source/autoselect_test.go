@@ -112,3 +112,44 @@ func TestSelectBestRequireTrustedGroup(t *testing.T) {
 		t.Error("expected error when only untrusted groups are present and trusted is required")
 	}
 }
+
+// TestSelectBestDropsNowUntrustedGroups confirms groups trimmed from the trusted
+// list (ASW, Judas) are dropped under RequireTrustedGroup, even with high seeders.
+func TestSelectBestDropsNowUntrustedGroups(t *testing.T) {
+	torrents := []*AnimeTorrent{
+		{Name: "[ASW] Sousou no Frieren - 01 (1080p)", ReleaseGroup: "ASW",
+			Resolution: "1080p", EpisodeNumber: 1, Seeders: 5000},
+		{Name: "[Judas] Sousou no Frieren - 01 (1080p)", ReleaseGroup: "Judas",
+			Resolution: "1080p", EpisodeNumber: 1, Seeders: 8000},
+	}
+	media := frierenMedia()
+	if _, err := SelectBest(media, torrents, SelectOptions{
+		Resolution: "1080", Episode: 1, RequireTrustedGroup: true,
+	}); err == nil {
+		t.Error("expected error: ASW/Judas are no longer trusted")
+	}
+}
+
+// TestSelectBestGroupFilter checks the Group hard filter overrides trusted-rank:
+// it returns the named group even when a higher-ranked trusted group is present,
+// and errors when the named group has no release.
+func TestSelectBestGroupFilter(t *testing.T) {
+	torrents := loadFrierenTorrents(t)
+	media := frierenMedia()
+
+	best, err := SelectBest(media, torrents, SelectOptions{
+		Resolution: "1080", Episode: 28, Group: "Erai-raws",
+	})
+	if err != nil {
+		t.Fatalf("SelectBest Group=Erai-raws: %v", err)
+	}
+	if best.ReleaseGroup != "Erai-raws" {
+		t.Errorf("best group = %q, want Erai-raws (Group filter overrides trusted-rank)", best.ReleaseGroup)
+	}
+
+	if _, err := SelectBest(media, torrents, SelectOptions{
+		Resolution: "1080", Episode: 28, Group: "Nobody",
+	}); err == nil {
+		t.Error("expected error when the locked group has no release")
+	}
+}

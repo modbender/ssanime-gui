@@ -110,6 +110,12 @@ UPDATE series SET favorite = ?, modified_at = unixepoch() WHERE id = ?;
 -- name: UpdateSeriesBackfillFrom :exec
 UPDATE series SET backfill_from_episode = ?, modified_at = unixepoch() WHERE id = ?;
 
+-- UpdateSeriesLockedGroup records the trusted release group a series is locked to,
+-- set from the first downloaded episode's group and thereafter preferred by the
+-- poller. Only set when currently empty; never overwritten by automation.
+-- name: UpdateSeriesLockedGroup :exec
+UPDATE series SET locked_release_group = ?, modified_at = unixepoch() WHERE id = ?;
+
 -- name: SetSeriesAiringStatus :exec
 UPDATE series SET airing_status = ?, modified_at = unixepoch() WHERE id = ?;
 

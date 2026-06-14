@@ -102,6 +102,9 @@ func epRelease(name string, ep, seeders int) *source.AnimeTorrent {
 		EpisodeNumber: ep,
 		Seeders:       seeders,
 		Resolution:    "1080p",
+		// Confirmed bypasses SelectBest's title-match filter; these canned names
+		// don't carry the media title, and best-by-seeders is what the tests assert.
+		Confirmed: true,
 	}
 }
 
@@ -257,6 +260,55 @@ func TestSearchAvailableEpisodeCountFallback(t *testing.T) {
 	}
 	if len(eps) != 2 || eps[0].Number != 1 || eps[1].Number != 2 {
 		t.Errorf("episodes = %+v, want numbers [1,2] from EpisodeCount fallback", eps)
+	}
+}
+
+// TestSearchAvailableTrustedFlagAndGroup verifies the per-episode pick prefers a
+// trusted release (flagging it trusted=true with its group) and still offers the
+// best non-trusted release (trusted=false) when no trusted release exists.
+func TestSearchAvailableTrustedFlagAndGroup(t *testing.T) {
+	reg := source.NewRegistry()
+	// Ep 1: a trusted SubsPlease release + an untrusted one (higher seeders).
+	// Ep 2: only an untrusted release. Names carry the media title so the title
+	// filter keeps them; Confirmed:false so the trusted flag drives the pick.
+	p := &fakeProvider{id: "a", searchFn: func(o source.SmartSearchOptions) ([]*source.AnimeTorrent, error) {
+		switch o.EpisodeNumber {
+		case 1:
+			return []*source.AnimeTorrent{
+				{Name: "[Random] Test Show - 01 (1080p)", ReleaseGroup: "Random",
+					Magnet: "magnet:?xt=urn:btih:r1", EpisodeNumber: 1, Seeders: 900, Resolution: "1080p"},
+				{Name: "[SubsPlease] Test Show - 01 (1080p)", ReleaseGroup: "SubsPlease",
+					Magnet: "magnet:?xt=urn:btih:sp1", EpisodeNumber: 1, Seeders: 100, Resolution: "1080p"},
+			}, nil
+		default:
+			return []*source.AnimeTorrent{
+				{Name: "[Random] Test Show - 02 (1080p)", ReleaseGroup: "Random",
+					Magnet: "magnet:?xt=urn:btih:r2", EpisodeNumber: 2, Seeders: 700, Resolution: "1080p"},
+			}, nil
+		}
+	}}
+	reg.Register(p)
+
+	res := fakeResolver{episodes: map[int]anizip.EpisodeIDs{1: {}, 2: {}}}
+	h, _ := newAvailableHandler(t, reg, res)
+
+	media := source.Media{ID: 777, RomajiTitle: "Test Show"}
+	eps, warnings := h.searchAvailable(context.Background(), media, nil)
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %v, want none", warnings)
+	}
+	if len(eps) != 2 {
+		t.Fatalf("episodes = %+v, want 2", eps)
+	}
+	byNum := map[int]AvailableEpisode{}
+	for _, e := range eps {
+		byNum[e.Number] = e
+	}
+	if e := byNum[1]; !e.Trusted || e.ReleaseGroup != "SubsPlease" {
+		t.Errorf("ep1 = {trusted:%v group:%q}, want {true SubsPlease} despite lower seeders", e.Trusted, e.ReleaseGroup)
+	}
+	if e := byNum[2]; e.Trusted || e.ReleaseGroup != "Random" {
+		t.Errorf("ep2 = {trusted:%v group:%q}, want {false Random}", e.Trusted, e.ReleaseGroup)
 	}
 }
 
