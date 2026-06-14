@@ -566,6 +566,16 @@ func (h *Handler) searchAvailable(ctx context.Context, media source.Media, have 
 		return []AvailableEpisode{}, []string{"couldn't determine episodes for this title — its mapping may not be available yet"}
 	}
 
+	// Respect the series' locked group when a row exists, so the manual list
+	// prefers the same group the poller auto-downloads.
+	lockGroup := ""
+	if media.ID > 0 {
+		id := int64(media.ID)
+		if s, err := h.store.Read().GetSeriesByAnilistID(ctx, &id); err == nil && s.LockedReleaseGroup != nil {
+			lockGroup = strings.TrimSpace(*s.LockedReleaseGroup)
+		}
+	}
+
 	// Query only episodes not already in the library so no source call is wasted.
 	query := make([]int, 0, len(numbers))
 	for _, n := range numbers {
@@ -586,19 +596,29 @@ func (h *Handler) searchAvailable(ctx context.Context, media source.Media, have 
 			continue // defensive: a batch hit may surface a have number
 		}
 		var best *source.AnimeTorrent
-		for _, t := range group {
-			if best == nil || t.Seeders > best.Seeders {
-				best = t
-			}
+		trusted := true
+		// Prefer locked group (trusted) → any trusted → best non-trusted (flagged).
+		if lockGroup != "" {
+			best, _ = source.SelectBest(media, group, source.SelectOptions{Group: lockGroup, RequireTrustedGroup: true})
+		}
+		if best == nil {
+			best, _ = source.SelectBest(media, group, source.SelectOptions{RequireTrustedGroup: true})
+		}
+		if best == nil {
+			// Only non-trusted releases exist: still offer the best one, flagged.
+			best, _ = source.SelectBest(media, group, source.SelectOptions{})
+			trusted = false
 		}
 		if best == nil {
 			continue
 		}
 		ep := AvailableEpisode{
-			Number:     num,
-			Title:      best.Name,
-			SourceURL:  availableSourceURL(best),
-			Resolution: best.Resolution,
+			Number:       num,
+			Title:        best.Name,
+			SourceURL:    availableSourceURL(best),
+			Resolution:   best.Resolution,
+			ReleaseGroup: best.ReleaseGroup,
+			Trusted:      trusted,
 		}
 		if best.Size > 0 {
 			sz := best.Size
@@ -731,6 +751,17 @@ func (h *Handler) enqueueAvailableEpisode(ctx context.Context, series store.Seri
 	}); err != nil {
 		h.logger.Error("download available: set queued", "id", ep.ID, "err", err)
 		return store.Episode{}, errors.New("failed to enqueue episode")
+	}
+	// Lock the series to the chosen group on the first manual download too, so the
+	// poller's later episodes prefer it. Never overwrite an existing lock; manual
+	// grabs are otherwise exempt and may use an untrusted group.
+	if group := strings.TrimSpace(req.ReleaseGroup); group != "" &&
+		(series.LockedReleaseGroup == nil || strings.TrimSpace(*series.LockedReleaseGroup) == "") {
+		if e := h.store.Write().UpdateSeriesLockedGroup(ctx, store.UpdateSeriesLockedGroupParams{
+			LockedReleaseGroup: &group, ID: series.ID,
+		}); e != nil {
+			h.logger.Warn("download available: lock release group", "series_id", series.ID, "group", group, "err", e)
+		}
 	}
 	h.hub.Broadcast(events.TypeEpisodeStatus, map[string]any{
 		"episode_id": ep.ID,

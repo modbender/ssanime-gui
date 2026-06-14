@@ -182,6 +182,108 @@ func TestPollEnqueuesAndDedupes(t *testing.T) {
 	}
 }
 
+// TestPollLocksGroupOnFirstEnqueue verifies the first enqueued episode locks the
+// series to its release group (SubsPlease wins trusted-rank), so later episodes
+// prefer it.
+func TestPollLocksGroupOnFirstEnqueue(t *testing.T) {
+	st := openStore(t)
+	ctx := context.Background()
+	series, _ := makeFeed(t, st, "RELEASING")
+	prov := &stubProvider{id: "stub", results: frierenResults()}
+	res := fakeResolver{eps: []anizip.Episode{
+		{Number: 27, AirDate: pastDate()},
+		{Number: 28, AirDate: pastDate()},
+	}}
+	p, _ := newPoller(t, st, prov, WithResolver(res))
+
+	p.PollDue(ctx)
+
+	got, err := st.Read().GetSeries(ctx, series.ID)
+	if err != nil {
+		t.Fatalf("GetSeries: %v", err)
+	}
+	if got.LockedReleaseGroup == nil || *got.LockedReleaseGroup != "SubsPlease" {
+		t.Fatalf("locked_release_group = %v, want SubsPlease", got.LockedReleaseGroup)
+	}
+}
+
+// TestPollLockedGroupPickAndNotOverwritten pre-locks the series to Erai-raws, then
+// a poll over a candidate set with both groups must pick the Erai-raws release
+// (stage-1 locked-group pick beats SubsPlease's trusted-rank) and leave the lock.
+func TestPollLockedGroupPickAndNotOverwritten(t *testing.T) {
+	st := openStore(t)
+	ctx := context.Background()
+	series, _ := makeFeed(t, st, "RELEASING")
+	if err := st.Write().UpdateSeriesLockedGroup(ctx, store.UpdateSeriesLockedGroupParams{
+		LockedReleaseGroup: strptr("Erai-raws"), ID: series.ID,
+	}); err != nil {
+		t.Fatalf("set lock: %v", err)
+	}
+
+	prov := &stubProvider{id: "stub", results: frierenResults()}
+	res := fakeResolver{eps: []anizip.Episode{{Number: 28, AirDate: pastDate()}}}
+	p, _ := newPoller(t, st, prov, WithResolver(res))
+
+	p.PollDue(ctx)
+
+	eps, err := st.Read().ListEpisodesBySeries(ctx, series.ID)
+	if err != nil {
+		t.Fatalf("ListEpisodesBySeries: %v", err)
+	}
+	if len(eps) != 1 {
+		t.Fatalf("want 1 episode (ep 28), got %d", len(eps))
+	}
+	if eps[0].ReleaseGroup == nil || *eps[0].ReleaseGroup != "Erai-raws" {
+		t.Errorf("enqueued group = %v, want Erai-raws (locked-group stage)", eps[0].ReleaseGroup)
+	}
+	got, _ := st.Read().GetSeries(ctx, series.ID)
+	if got.LockedReleaseGroup == nil || *got.LockedReleaseGroup != "Erai-raws" {
+		t.Errorf("lock = %v, want Erai-raws (unchanged)", got.LockedReleaseGroup)
+	}
+}
+
+// TestPollStage2Fallback covers the air-date+24h gate when the locked group has no
+// release for the episode. With lock=Erai-raws and only a SubsPlease release for
+// ep 5: a past air date (>24h) lets the SubsPlease fallback enqueue; a today air
+// date (<24h) keeps it skipped until the gate opens.
+func TestPollStage2Fallback(t *testing.T) {
+	cases := []struct {
+		name    string
+		airDate string
+		wantEnq bool
+	}{
+		{"past air+24h fires fallback", pastDate(), true},
+		{"within 24h skips", time.Now().Format("2006-01-02"), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			st := openStore(t)
+			ctx := context.Background()
+			series, _ := makeFeed(t, st, "RELEASING")
+			if err := st.Write().UpdateSeriesLockedGroup(ctx, store.UpdateSeriesLockedGroupParams{
+				LockedReleaseGroup: strptr("Erai-raws"), ID: series.ID,
+			}); err != nil {
+				t.Fatalf("set lock: %v", err)
+			}
+			// Provider returns only SubsPlease for ep 5 — the locked group is absent.
+			prov := &stubProvider{id: "stub", results: perEpisodeReleases(5, 5)}
+			res := fakeResolver{eps: []anizip.Episode{{Number: 5, AirDate: tc.airDate}}}
+			p, _ := newPoller(t, st, prov, WithResolver(res))
+
+			p.PollDue(ctx)
+
+			eps, _ := st.Read().ListEpisodesBySeries(ctx, series.ID)
+			if tc.wantEnq {
+				if len(eps) != 1 || eps[0].ReleaseGroup == nil || *eps[0].ReleaseGroup != "SubsPlease" {
+					t.Fatalf("want SubsPlease ep enqueued, got %d episodes", len(eps))
+				}
+			} else if len(eps) != 0 {
+				t.Fatalf("want nothing enqueued within 24h of air, got %d", len(eps))
+			}
+		})
+	}
+}
+
 func TestPollSkipsCompletedSeries(t *testing.T) {
 	st := openStore(t)
 	ctx := context.Background()

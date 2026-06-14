@@ -194,6 +194,7 @@ type Series struct {
 	MetadataRefreshedAt *int64  `json:"metadata_refreshed_at"`
 	WatchStatus         string  `json:"watch_status"`
 	BackfillFromEpisode *int64  `json:"backfill_from_episode"`
+	LockedReleaseGroup  *string `json:"locked_release_group"`
 }
 
 type Setting struct {

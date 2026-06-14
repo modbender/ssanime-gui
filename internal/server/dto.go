@@ -680,11 +680,13 @@ type ActivityResponse struct {
 
 // AvailableEpisode is one source-available, not-yet-downloaded episode.
 type AvailableEpisode struct {
-	Number     int    `json:"number"`
-	Title      string `json:"title"`
-	SourceURL  string `json:"source_url"`
-	Size       *int64 `json:"size"`
-	Resolution string `json:"resolution"`
+	Number       int    `json:"number"`
+	Title        string `json:"title"`
+	SourceURL    string `json:"source_url"`
+	Size         *int64 `json:"size"`
+	Resolution   string `json:"resolution"`
+	ReleaseGroup string `json:"release_group"`
+	Trusted      bool   `json:"trusted"`
 }
 
 // AvailableResponse is the GET /api/anilist/{id}/available payload. Warnings
@@ -698,7 +700,8 @@ type AvailableResponse struct {
 // DownloadAvailableRequest is the POST /api/anilist/{id}/available/download body:
 // a source-found episode the user chose to download (subscribed or not).
 type DownloadAvailableRequest struct {
-	SourceURL  string `json:"source_url"`
-	Number     int    `json:"number"`
-	Resolution string `json:"resolution"`
+	SourceURL    string `json:"source_url"`
+	Number       int    `json:"number"`
+	Resolution   string `json:"resolution"`
+	ReleaseGroup string `json:"release_group"`
 }

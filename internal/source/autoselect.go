@@ -9,17 +9,12 @@ import (
 
 // TrustedReleaseGroups are the original-source subbing groups we prefer. The app
 // re-encodes itself, so we want clean, untouched original releases — not remuxes
-// or re-encodes from secondary groups. Ordered by preference (earlier = better);
-// this drives a tie-break bonus, not a hard filter, so an unknown group can still
-// win on seeders when no trusted group is present.
+// or re-encodes from secondary groups. Ordered by preference (earlier = better).
+// Auto-download is trusted-only: a release outside this list is never selected by
+// the poller, so this list also acts as the hard allowlist behind RequireTrustedGroup.
 var TrustedReleaseGroups = []string{
 	"SubsPlease",
 	"Erai-raws",
-	"ASW",
-	"EMBER",
-	"Judas",
-	"Anime Time",
-	"Tsundere-Raws",
 }
 
 // trustedRank returns the preference index of a group (lower = better), or -1 if
@@ -52,6 +47,9 @@ type SelectOptions struct {
 	PreferBatch bool
 	// RequireTrustedGroup drops any release not from a trusted group.
 	RequireTrustedGroup bool
+	// Group, when set, is a hard filter: only releases whose ReleaseGroup equals it
+	// (case-insensitive) pass. Used for the per-series locked-group stage.
+	Group string
 	// MinSeeders drops releases below this seeder count (0 disables; -1 seeders
 	// means "unknown" and always passes).
 	MinSeeders int
@@ -78,6 +76,10 @@ func SelectBest(media Media, torrents []*AnimeTorrent, opts SelectOptions) (*Ani
 		}
 		// Trusted-group hard filter (optional).
 		if opts.RequireTrustedGroup && trustedRank(t.ReleaseGroup) < 0 {
+			continue
+		}
+		// Locked-group hard filter (optional).
+		if opts.Group != "" && !strings.EqualFold(t.ReleaseGroup, opts.Group) {
 			continue
 		}
 		// Seeder floor (unknown seeders == -1 always passes).
