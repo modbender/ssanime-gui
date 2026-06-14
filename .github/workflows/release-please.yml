@@ -43,7 +43,7 @@ jobs:
       # Requires "Allow GitHub Actions to create and approve pull requests" under
       # Settings -> Actions -> General -> Workflow permissions, or the default
       # GITHUB_TOKEN cannot open the Release PR. See docs/distribution.md.
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -273,7 +273,7 @@ jobs:
       - name: upload unsigned bundles for signing (windows)
         id: unsigned-bundles
         if: matrix.os == 'windows-latest' && env.SIGNPATH_API_TOKEN != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unsigned-windows-bundles
           # Globs share the common root desktop/target/release/bundle, so the
@@ -285,7 +285,7 @@ jobs:
 
       - name: sign windows installers (SignPath)
         if: matrix.os == 'windows-latest' && env.SIGNPATH_API_TOKEN != ''
-        uses: signpath/github-action-submit-signing-request@v1
+        uses: signpath/github-action-submit-signing-request@v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
