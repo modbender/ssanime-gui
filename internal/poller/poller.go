@@ -10,6 +10,7 @@ package poller
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -175,19 +176,51 @@ func (p *Poller) PollDue(ctx context.Context) {
 		p.logger.Error("poller: list due feeds", "err", err)
 		return
 	}
+	// Load the user-configured trusted-group allowlist once per cycle (not per
+	// feed/episode) and pass it down to selection.
+	trustedGroups := p.trustedReleaseGroups(ctx)
 	for _, feed := range feeds {
 		if ctx.Err() != nil {
 			return
 		}
-		if err := p.pollFeed(ctx, feed); err != nil {
+		if err := p.pollFeed(ctx, feed, trustedGroups); err != nil {
 			p.logger.Warn("poller: feed failed", "feed", feed.ID, "url", feed.Url, "err", err)
 		}
 	}
 }
 
+// trustedReleaseGroups reads the user-configured trusted-group allowlist from
+// settings. A non-nil slice (empty = "no trust filter") overrides the package
+// default; on read failure it returns nil so selection falls back to the default.
+func (p *Poller) trustedReleaseGroups(ctx context.Context) []string {
+	set, err := p.store.Read().GetSettings(ctx)
+	if err != nil {
+		p.logger.Warn("poller: read settings for trusted groups", "err", err)
+		return nil
+	}
+	return decodeTrustedGroups(set.TrustedReleaseGroups)
+}
+
+// decodeTrustedGroups parses the settings JSON-array trusted_release_groups value.
+// Blank/invalid → the package default; an explicit '[]' → an empty (non-nil) slice,
+// the "no trust filter" signal.
+func decodeTrustedGroups(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return append([]string(nil), source.TrustedReleaseGroups...)
+	}
+	var groups []string
+	if err := json.Unmarshal([]byte(raw), &groups); err != nil {
+		return append([]string(nil), source.TrustedReleaseGroups...)
+	}
+	if groups == nil {
+		groups = []string{}
+	}
+	return groups
+}
+
 // pollFeed fetches one feed, dedupes against its seen_cache, enqueues new
 // episodes, updates last_checked_at + seen_cache, and emits feed.checked.
-func (p *Poller) pollFeed(ctx context.Context, feed store.Feed) error {
+func (p *Poller) pollFeed(ctx context.Context, feed store.Feed, trustedGroups []string) error {
 	// Gate: the feed must map to a registered provider. The per-episode search
 	// below drives the actual provider calls through the registry, so the
 	// returned provider itself is unused here.
@@ -260,7 +293,7 @@ func (p *Poller) pollFeed(ctx context.Context, feed store.Feed) error {
 		if lockGroup != "" {
 			// Stage 1: locked group, trusted-only.
 			if b, err := source.SelectBest(media, group, source.SelectOptions{
-				Group: lockGroup, RequireTrustedGroup: true, Resolution: res, Episode: ep,
+				Group: lockGroup, RequireTrustedGroup: true, Resolution: res, Episode: ep, TrustedGroups: trustedGroups,
 			}); err == nil {
 				best = b
 			}
@@ -268,7 +301,7 @@ func (p *Poller) pollFeed(ctx context.Context, feed store.Feed) error {
 			if best == nil {
 				if ad, ok := airDates[ep]; ok && !p.now().Before(ad.Add(24*time.Hour)) {
 					if b, err := source.SelectBest(media, group, source.SelectOptions{
-						RequireTrustedGroup: true, Resolution: res, Episode: ep,
+						RequireTrustedGroup: true, Resolution: res, Episode: ep, TrustedGroups: trustedGroups,
 					}); err == nil {
 						best = b
 					}
@@ -278,7 +311,7 @@ func (p *Poller) pollFeed(ctx context.Context, feed store.Feed) error {
 		} else {
 			// First episode (no lock yet): trusted-only; enqueue sets the lock.
 			if b, err := source.SelectBest(media, group, source.SelectOptions{
-				RequireTrustedGroup: true, Resolution: res, Episode: ep,
+				RequireTrustedGroup: true, Resolution: res, Episode: ep, TrustedGroups: trustedGroups,
 			}); err == nil {
 				best = b
 			}

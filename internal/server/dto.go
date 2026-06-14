@@ -2,8 +2,10 @@ package server
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/modbender/ssanime-gui/internal/extension"
+	"github.com/modbender/ssanime-gui/internal/source"
 	"github.com/modbender/ssanime-gui/internal/store"
 )
 
@@ -259,69 +261,108 @@ type ResolvedProfileResponse struct {
 // ---- Settings ----
 
 type PutSettingsRequest struct {
-	DownloadRoot        string  `json:"download_root"`
-	EncodedRoot         string  `json:"encoded_root"`
-	CleanupPolicy       string  `json:"cleanup_policy"`
-	ProcessedDir        *string `json:"processed_dir"`
-	NamingTemplate      string  `json:"naming_template"`
-	DownloadBackend     *int64  `json:"download_backend"`
-	DefaultProfileID    *int64  `json:"default_profile_id"`
-	ConcurrencyDownload int64   `json:"concurrency_download"`
-	ConcurrencyEncode   int64   `json:"concurrency_encode"`
-	FfmpegPath          *string `json:"ffmpeg_path"`
-	YtdlpPath           *string `json:"ytdlp_path"`
-	Port                int64   `json:"port"`
-	DohEnabled          bool    `json:"doh_enabled"`
-	SetupCompleted      bool    `json:"setup_completed"`
-	ShowNsfw            bool    `json:"show_nsfw"`
+	DownloadRoot         string   `json:"download_root"`
+	EncodedRoot          string   `json:"encoded_root"`
+	CleanupPolicy        string   `json:"cleanup_policy"`
+	ProcessedDir         *string  `json:"processed_dir"`
+	NamingTemplate       string   `json:"naming_template"`
+	DownloadBackend      *int64   `json:"download_backend"`
+	DefaultProfileID     *int64   `json:"default_profile_id"`
+	ConcurrencyDownload  int64    `json:"concurrency_download"`
+	ConcurrencyEncode    int64    `json:"concurrency_encode"`
+	FfmpegPath           *string  `json:"ffmpeg_path"`
+	YtdlpPath            *string  `json:"ytdlp_path"`
+	Port                 int64    `json:"port"`
+	DohEnabled           bool     `json:"doh_enabled"`
+	SetupCompleted       bool     `json:"setup_completed"`
+	ShowNsfw             bool     `json:"show_nsfw"`
+	TrustedReleaseGroups []string `json:"trusted_release_groups"`
 }
 
 // SettingsResponse is the stable settings wire shape. It serialises the int64
 // flag columns (doh_enabled, setup_completed, show_nsfw) as JSON booleans so GET
 // and PUT use the same types and a client can round-trip the object unchanged.
 type SettingsResponse struct {
-	ID                  int64   `json:"id"`
-	DownloadRoot        string  `json:"download_root"`
-	EncodedRoot         string  `json:"encoded_root"`
-	CleanupPolicy       string  `json:"cleanup_policy"`
-	ProcessedDir        *string `json:"processed_dir"`
-	NamingTemplate      string  `json:"naming_template"`
-	DownloadBackend     *int64  `json:"download_backend"`
-	DefaultProfileID    *int64  `json:"default_profile_id"`
-	ConcurrencyDownload int64   `json:"concurrency_download"`
-	ConcurrencyEncode   int64   `json:"concurrency_encode"`
-	FfmpegPath          *string `json:"ffmpeg_path"`
-	YtdlpPath           *string `json:"ytdlp_path"`
-	Port                int64   `json:"port"`
-	DohEnabled          bool    `json:"doh_enabled"`
-	SetupCompleted      bool    `json:"setup_completed"`
-	ShowNsfw            bool    `json:"show_nsfw"`
-	AddedAt             int64   `json:"added_at"`
-	ModifiedAt          int64   `json:"modified_at"`
+	ID                   int64    `json:"id"`
+	DownloadRoot         string   `json:"download_root"`
+	EncodedRoot          string   `json:"encoded_root"`
+	CleanupPolicy        string   `json:"cleanup_policy"`
+	ProcessedDir         *string  `json:"processed_dir"`
+	NamingTemplate       string   `json:"naming_template"`
+	DownloadBackend      *int64   `json:"download_backend"`
+	DefaultProfileID     *int64   `json:"default_profile_id"`
+	ConcurrencyDownload  int64    `json:"concurrency_download"`
+	ConcurrencyEncode    int64    `json:"concurrency_encode"`
+	FfmpegPath           *string  `json:"ffmpeg_path"`
+	YtdlpPath            *string  `json:"ytdlp_path"`
+	Port                 int64    `json:"port"`
+	DohEnabled           bool     `json:"doh_enabled"`
+	SetupCompleted       bool     `json:"setup_completed"`
+	ShowNsfw             bool     `json:"show_nsfw"`
+	TrustedReleaseGroups []string `json:"trusted_release_groups"`
+	AddedAt              int64    `json:"added_at"`
+	ModifiedAt           int64    `json:"modified_at"`
 }
 
 // toSettingsResponse maps the sqlc Setting row to the bool-flagged wire shape.
 func toSettingsResponse(s store.Setting) SettingsResponse {
 	return SettingsResponse{
-		ID:                  s.ID,
-		DownloadRoot:        s.DownloadRoot,
-		EncodedRoot:         s.EncodedRoot,
-		CleanupPolicy:       s.CleanupPolicy,
-		ProcessedDir:        s.ProcessedDir,
-		NamingTemplate:      s.NamingTemplate,
-		DownloadBackend:     s.DownloadBackend,
-		DefaultProfileID:    s.DefaultProfileID,
-		ConcurrencyDownload: s.ConcurrencyDownload,
-		ConcurrencyEncode:   s.ConcurrencyEncode,
-		FfmpegPath:          s.FfmpegPath,
-		YtdlpPath:           s.YtdlpPath,
-		Port:                s.Port,
-		DohEnabled:          s.DohEnabled != 0,
-		SetupCompleted:      s.SetupCompleted != 0,
-		ShowNsfw:            s.ShowNsfw != 0,
-		AddedAt:             s.AddedAt,
-		ModifiedAt:          s.ModifiedAt,
+		ID:                   s.ID,
+		DownloadRoot:         s.DownloadRoot,
+		EncodedRoot:          s.EncodedRoot,
+		CleanupPolicy:        s.CleanupPolicy,
+		ProcessedDir:         s.ProcessedDir,
+		NamingTemplate:       s.NamingTemplate,
+		DownloadBackend:      s.DownloadBackend,
+		DefaultProfileID:     s.DefaultProfileID,
+		ConcurrencyDownload:  s.ConcurrencyDownload,
+		ConcurrencyEncode:    s.ConcurrencyEncode,
+		FfmpegPath:           s.FfmpegPath,
+		YtdlpPath:            s.YtdlpPath,
+		Port:                 s.Port,
+		DohEnabled:           s.DohEnabled != 0,
+		SetupCompleted:       s.SetupCompleted != 0,
+		ShowNsfw:             s.ShowNsfw != 0,
+		TrustedReleaseGroups: decodeTrustedGroups(s.TrustedReleaseGroups),
+		AddedAt:              s.AddedAt,
+		ModifiedAt:           s.ModifiedAt,
 	}
+}
+
+// decodeTrustedGroups parses the JSON-array trusted_release_groups column into a
+// slice for the wire shape. A null/blank/invalid value falls back to the package
+// default so a row predating the column still presents the standard allowlist; an
+// explicitly-empty array '[]' round-trips as an empty (non-nil) slice — the
+// "no trust filter" signal.
+func decodeTrustedGroups(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return append([]string(nil), source.TrustedReleaseGroups...)
+	}
+	var groups []string
+	if err := json.Unmarshal([]byte(raw), &groups); err != nil {
+		return append([]string(nil), source.TrustedReleaseGroups...)
+	}
+	if groups == nil {
+		groups = []string{}
+	}
+	return groups
+}
+
+// encodeTrustedGroups trims blank entries and JSON-encodes the trusted-group list
+// for persistence. An empty/all-blank input encodes to '[]' (no trust filter), not
+// the default — the user explicitly clearing the list is honoured.
+func encodeTrustedGroups(groups []string) string {
+	cleaned := make([]string, 0, len(groups))
+	for _, g := range groups {
+		if g = strings.TrimSpace(g); g != "" {
+			cleaned = append(cleaned, g)
+		}
+	}
+	b, err := json.Marshal(cleaned)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
 }
 
 // ---- Stats ----

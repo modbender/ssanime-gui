@@ -9,9 +9,9 @@ INSERT INTO settings (
     id, download_root, encoded_root, cleanup_policy, processed_dir,
     naming_template, download_backend, default_profile_id,
     concurrency_download, concurrency_encode, ffmpeg_path, ytdlp_path,
-    port, doh_enabled
+    port, doh_enabled, trusted_release_groups
 ) VALUES (
-    1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 RETURNING *;
 
@@ -21,7 +21,7 @@ UPDATE settings SET
     naming_template = ?, download_backend = ?, default_profile_id = ?,
     concurrency_download = ?, concurrency_encode = ?, ffmpeg_path = ?,
     ytdlp_path = ?, port = ?, doh_enabled = ?, setup_completed = ?,
-    show_nsfw = ?, modified_at = unixepoch()
+    show_nsfw = ?, trusted_release_groups = ?, modified_at = unixepoch()
 WHERE id = 1
 RETURNING *;
 

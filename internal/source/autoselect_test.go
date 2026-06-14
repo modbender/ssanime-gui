@@ -153,3 +153,78 @@ func TestSelectBestGroupFilter(t *testing.T) {
 		t.Error("expected error when the locked group has no release")
 	}
 }
+
+// TestSelectBestCustomTrustedGroups confirms opts.TrustedGroups overrides the
+// package default: a group the default never trusted (ASW) becomes trusted and is
+// selectable, while a default-trusted group (SubsPlease) excluded from the custom
+// list is dropped under RequireTrustedGroup.
+func TestSelectBestCustomTrustedGroups(t *testing.T) {
+	media := frierenMedia()
+	torrents := []*AnimeTorrent{
+		{Name: "[ASW] Sousou no Frieren - 01 (1080p)", ReleaseGroup: "ASW",
+			Resolution: "1080p", EpisodeNumber: 1, Seeders: 5000},
+		{Name: "[SubsPlease] Sousou no Frieren - 01 (1080p)", ReleaseGroup: "SubsPlease",
+			Resolution: "1080p", EpisodeNumber: 1, Seeders: 100},
+	}
+
+	// Custom list trusts ASW only. ASW is now selectable...
+	best, err := SelectBest(media, torrents, SelectOptions{
+		Resolution: "1080", Episode: 1, RequireTrustedGroup: true,
+		TrustedGroups: []string{"ASW"},
+	})
+	if err != nil {
+		t.Fatalf("SelectBest custom trusted: %v", err)
+	}
+	if best.ReleaseGroup != "ASW" {
+		t.Errorf("best group = %q, want ASW (custom trusted list)", best.ReleaseGroup)
+	}
+
+	// ...and a default-trusted group not in the custom list is rejected when it's
+	// the only candidate.
+	only := []*AnimeTorrent{torrents[1]}
+	if _, err := SelectBest(media, only, SelectOptions{
+		Resolution: "1080", Episode: 1, RequireTrustedGroup: true,
+		TrustedGroups: []string{"ASW"},
+	}); err == nil {
+		t.Error("expected error: SubsPlease is not in the custom trusted list")
+	}
+}
+
+// TestSelectBestEmptyTrustedGroupsNoFilter confirms an explicitly-empty (non-nil)
+// TrustedGroups disables the trusted-only hard filter: SelectBest falls back to
+// best-available and returns a release instead of erroring.
+func TestSelectBestEmptyTrustedGroupsNoFilter(t *testing.T) {
+	media := frierenMedia()
+	torrents := []*AnimeTorrent{
+		{Name: "[Nobody] Sousou no Frieren - 01 (1080p)", ReleaseGroup: "Nobody",
+			Resolution: "1080p", EpisodeNumber: 1, Seeders: 999},
+	}
+
+	best, err := SelectBest(media, torrents, SelectOptions{
+		Resolution: "1080", Episode: 1, RequireTrustedGroup: true,
+		TrustedGroups: []string{}, // explicit empty = no trust filter
+	})
+	if err != nil {
+		t.Fatalf("SelectBest empty trusted: %v", err)
+	}
+	if best.ReleaseGroup != "Nobody" {
+		t.Errorf("best group = %q, want Nobody (no trust filter, best-available)", best.ReleaseGroup)
+	}
+}
+
+// TestSelectBestNilTrustedGroupsUsesDefault confirms a nil TrustedGroups still
+// uses the package default (existing callers/tests behaviour is unchanged): an
+// untrusted-by-default group is dropped under RequireTrustedGroup.
+func TestSelectBestNilTrustedGroupsUsesDefault(t *testing.T) {
+	media := frierenMedia()
+	torrents := []*AnimeTorrent{
+		{Name: "[Nobody] Sousou no Frieren - 01 (1080p)", ReleaseGroup: "Nobody",
+			Resolution: "1080p", EpisodeNumber: 1, Seeders: 999},
+	}
+	if _, err := SelectBest(media, torrents, SelectOptions{
+		Resolution: "1080", Episode: 1, RequireTrustedGroup: true,
+		TrustedGroups: nil, // nil → package default applies
+	}); err == nil {
+		t.Error("expected error: nil TrustedGroups falls back to the default allowlist")
+	}
+}

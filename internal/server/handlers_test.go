@@ -139,6 +139,74 @@ func TestPutSettings(t *testing.T) {
 	}
 }
 
+// TestSettingsTrustedReleaseGroups verifies the trusted_release_groups contract:
+// GET returns the seeded default; PUT persists a replacement and trims blank
+// entries; PUT with an explicit empty array round-trips as empty (no trust filter).
+func TestSettingsTrustedReleaseGroups(t *testing.T) {
+	srv := newTestServer(t)
+
+	// GET on a fresh install returns the default allowlist.
+	rec := getJSON(t, srv, "/api/settings")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET settings: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	got := decodeBody[SettingsResponse](t, rec)
+	if got.Data == nil {
+		t.Fatal("settings data is nil")
+	}
+	if want := []string{"SubsPlease", "Erai-raws"}; !equalStrs(got.Data.TrustedReleaseGroups, want) {
+		t.Fatalf("default trusted = %v, want %v", got.Data.TrustedReleaseGroups, want)
+	}
+
+	base := PutSettingsRequest{
+		DownloadRoot:        "/tmp/dl",
+		EncodedRoot:         "/tmp/lib",
+		CleanupPolicy:       "delete",
+		NamingTemplate:      "{series}/{episode}.{ext}",
+		ConcurrencyDownload: 2,
+		ConcurrencyEncode:   1,
+		Port:                8080,
+		DohEnabled:          true,
+	}
+
+	// PUT a custom list with blank entries — blanks must be trimmed on save.
+	custom := base
+	custom.TrustedReleaseGroups = []string{"ASW", "  ", "", "Judas"}
+	if rec := putJSON(t, srv, "/api/settings", custom); rec.Code != http.StatusOK {
+		t.Fatalf("PUT custom: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	rec = getJSON(t, srv, "/api/settings")
+	got = decodeBody[SettingsResponse](t, rec)
+	if want := []string{"ASW", "Judas"}; !equalStrs(got.Data.TrustedReleaseGroups, want) {
+		t.Fatalf("after custom PUT trusted = %v, want %v (blanks trimmed)", got.Data.TrustedReleaseGroups, want)
+	}
+
+	// PUT an explicit empty array — persists as empty (no trust filter).
+	empty := base
+	empty.TrustedReleaseGroups = []string{}
+	if rec := putJSON(t, srv, "/api/settings", empty); rec.Code != http.StatusOK {
+		t.Fatalf("PUT empty: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	rec = getJSON(t, srv, "/api/settings")
+	got = decodeBody[SettingsResponse](t, rec)
+	if len(got.Data.TrustedReleaseGroups) != 0 {
+		t.Fatalf("after empty PUT trusted = %v, want [] (empty)", got.Data.TrustedReleaseGroups)
+	}
+}
+
+// equalStrs reports whether two string slices are element-wise equal.
+func equalStrs(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // TestListSeriesEmpty verifies an empty library returns an array.
 func TestListSeriesEmpty(t *testing.T) {
 	srv := newTestServer(t)

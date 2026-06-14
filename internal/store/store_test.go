@@ -70,6 +70,60 @@ func TestSeedsPresent(t *testing.T) {
 	}
 }
 
+// TestTrustedReleaseGroupsRoundTrip verifies migration 00013: a fresh install
+// seeds the default JSON allowlist, and UpdateSettings persists a replacement —
+// including an explicitly-empty array — verbatim.
+func TestTrustedReleaseGroupsRoundTrip(t *testing.T) {
+	s := openTestStore(t)
+	ctx := context.Background()
+
+	set, err := s.Read().GetSettings(ctx)
+	if err != nil {
+		t.Fatalf("settings missing: %v", err)
+	}
+	if set.TrustedReleaseGroups != defaultTrustedReleaseGroups {
+		t.Errorf("seeded trusted_release_groups = %q, want %q", set.TrustedReleaseGroups, defaultTrustedReleaseGroups)
+	}
+
+	base := UpdateSettingsParams{
+		DownloadRoot:        set.DownloadRoot,
+		EncodedRoot:         set.EncodedRoot,
+		CleanupPolicy:       set.CleanupPolicy,
+		ProcessedDir:        set.ProcessedDir,
+		NamingTemplate:      set.NamingTemplate,
+		DownloadBackend:     set.DownloadBackend,
+		DefaultProfileID:    set.DefaultProfileID,
+		ConcurrencyDownload: set.ConcurrencyDownload,
+		ConcurrencyEncode:   set.ConcurrencyEncode,
+		FfmpegPath:          set.FfmpegPath,
+		YtdlpPath:           set.YtdlpPath,
+		Port:                set.Port,
+		DohEnabled:          set.DohEnabled,
+		SetupCompleted:      set.SetupCompleted,
+		ShowNsfw:            set.ShowNsfw,
+	}
+
+	custom := base
+	custom.TrustedReleaseGroups = `["ASW"]`
+	if _, err := s.Write().UpdateSettings(ctx, custom); err != nil {
+		t.Fatalf("UpdateSettings custom: %v", err)
+	}
+	got, _ := s.Read().GetSettings(ctx)
+	if got.TrustedReleaseGroups != `["ASW"]` {
+		t.Errorf("after update trusted_release_groups = %q, want [\"ASW\"]", got.TrustedReleaseGroups)
+	}
+
+	empty := base
+	empty.TrustedReleaseGroups = `[]`
+	if _, err := s.Write().UpdateSettings(ctx, empty); err != nil {
+		t.Fatalf("UpdateSettings empty: %v", err)
+	}
+	got, _ = s.Read().GetSettings(ctx)
+	if got.TrustedReleaseGroups != `[]` {
+		t.Errorf("after empty update trusted_release_groups = %q, want []", got.TrustedReleaseGroups)
+	}
+}
+
 func TestSeedIdempotent(t *testing.T) {
 	s := openTestStore(t)
 	ctx := context.Background()

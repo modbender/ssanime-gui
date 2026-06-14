@@ -7,20 +7,31 @@ import (
 	"strings"
 )
 
-// TrustedReleaseGroups are the original-source subbing groups we prefer. The app
-// re-encodes itself, so we want clean, untouched original releases — not remuxes
+// TrustedReleaseGroups is the DEFAULT original-source subbing-group allowlist. The
+// app re-encodes itself, so we want clean, untouched original releases — not remuxes
 // or re-encodes from secondary groups. Ordered by preference (earlier = better).
-// Auto-download is trusted-only: a release outside this list is never selected by
-// the poller, so this list also acts as the hard allowlist behind RequireTrustedGroup.
+// Callers may override this per-call via SelectOptions.TrustedGroups (the
+// user-configured list); this var is the fallback when that is nil/empty.
 var TrustedReleaseGroups = []string{
 	"SubsPlease",
 	"Erai-raws",
 }
 
-// trustedRank returns the preference index of a group (lower = better), or -1 if
-// the group is not in the trusted list.
-func trustedRank(group string) int {
-	for i, g := range TrustedReleaseGroups {
+// effectiveTrusted returns the trusted-group list to rank/filter against. A nil
+// opts.TrustedGroups means "not configured" → the package default. A non-nil slice
+// (including an explicitly-empty one) is taken verbatim: an empty user list is the
+// "no trust filter" signal and must NOT silently fall back to the default.
+func effectiveTrusted(opts SelectOptions) []string {
+	if opts.TrustedGroups == nil {
+		return TrustedReleaseGroups
+	}
+	return opts.TrustedGroups
+}
+
+// trustedRankIn returns the preference index of a group within trusted (lower =
+// better), or -1 if absent (case-insensitive).
+func trustedRankIn(group string, trusted []string) int {
+	for i, g := range trusted {
 		if strings.EqualFold(g, group) {
 			return i
 		}
@@ -45,8 +56,18 @@ type SelectOptions struct {
 	Episode int
 	// PreferBatch keeps batch releases instead of single episodes.
 	PreferBatch bool
-	// RequireTrustedGroup drops any release not from a trusted group.
+	// RequireTrustedGroup drops any release not from a trusted group — UNLESS the
+	// effective trusted list (TrustedGroups, or the package default when that is
+	// empty) is itself empty, in which case there is nothing to allow and this
+	// filter is skipped so selection falls back to best-available instead of
+	// dropping everything.
 	RequireTrustedGroup bool
+	// TrustedGroups overrides the package-level TrustedReleaseGroups default for
+	// this call (the user-configured allowlist). Nil/empty falls back to the
+	// default. An explicitly-empty user list reaches selection as an empty slice
+	// only after the caller resolves the default away; within selection, an empty
+	// effective list disables the trusted-only hard filter (see RequireTrustedGroup).
+	TrustedGroups []string
 	// Group, when set, is a hard filter: only releases whose ReleaseGroup equals it
 	// (case-insensitive) pass. Used for the per-series locked-group stage.
 	Group string
@@ -65,6 +86,7 @@ func SelectBest(media Media, torrents []*AnimeTorrent, opts SelectOptions) (*Ani
 	}
 
 	titles := media.Titles()
+	trusted := effectiveTrusted(opts)
 	candidates := make([]*AnimeTorrent, 0, len(torrents))
 	for _, t := range torrents {
 		if t == nil {
@@ -74,8 +96,10 @@ func SelectBest(media Media, torrents []*AnimeTorrent, opts SelectOptions) (*Ani
 		if opts.Resolution != "" && !resolutionEqual(t.Resolution, opts.Resolution) {
 			continue
 		}
-		// Trusted-group hard filter (optional).
-		if opts.RequireTrustedGroup && trustedRank(t.ReleaseGroup) < 0 {
+		// Trusted-group hard filter (optional). Skipped when the effective trusted
+		// list is empty: there is nothing to allow, so fall back to best-available
+		// rather than dropping every release.
+		if opts.RequireTrustedGroup && len(trusted) > 0 && trustedRankIn(t.ReleaseGroup, trusted) < 0 {
 			continue
 		}
 		// Locked-group hard filter (optional).
@@ -112,7 +136,7 @@ func SelectBest(media Media, torrents []*AnimeTorrent, opts SelectOptions) (*Ani
 	}
 
 	slices.SortStableFunc(candidates, func(a, b *AnimeTorrent) int {
-		sa, sb := score(a, opts), score(b, opts)
+		sa, sb := score(a, opts, trusted), score(b, opts, trusted)
 		if sa != sb {
 			return cmp.Compare(sb, sa) // higher score first
 		}
@@ -122,10 +146,11 @@ func SelectBest(media Media, torrents []*AnimeTorrent, opts SelectOptions) (*Ani
 }
 
 // score ranks one candidate by trusted group, best-release/confirmed flags, and
-// exact episode match. Seeders are the final tie-break in SelectBest, not here.
-func score(t *AnimeTorrent, opts SelectOptions) int {
+// exact episode match. trusted is the effective allowlist (empty = no trust bonus).
+// Seeders are the final tie-break in SelectBest, not here.
+func score(t *AnimeTorrent, opts SelectOptions, trusted []string) int {
 	s := 0
-	if rank := trustedRank(t.ReleaseGroup); rank >= 0 {
+	if rank := trustedRankIn(t.ReleaseGroup, trusted); rank >= 0 {
 		s += scoreTrustedBase - rank*scoreTrustedDecay
 	}
 	if t.IsBestRelease {

@@ -198,22 +198,23 @@ type Series struct {
 }
 
 type Setting struct {
-	ID                  int64   `json:"id"`
-	DownloadRoot        string  `json:"download_root"`
-	EncodedRoot         string  `json:"encoded_root"`
-	CleanupPolicy       string  `json:"cleanup_policy"`
-	ProcessedDir        *string `json:"processed_dir"`
-	NamingTemplate      string  `json:"naming_template"`
-	DownloadBackend     *int64  `json:"download_backend"`
-	DefaultProfileID    *int64  `json:"default_profile_id"`
-	ConcurrencyDownload int64   `json:"concurrency_download"`
-	ConcurrencyEncode   int64   `json:"concurrency_encode"`
-	FfmpegPath          *string `json:"ffmpeg_path"`
-	YtdlpPath           *string `json:"ytdlp_path"`
-	Port                int64   `json:"port"`
-	DohEnabled          int64   `json:"doh_enabled"`
-	AddedAt             int64   `json:"added_at"`
-	ModifiedAt          int64   `json:"modified_at"`
-	SetupCompleted      int64   `json:"setup_completed"`
-	ShowNsfw            int64   `json:"show_nsfw"`
+	ID                   int64   `json:"id"`
+	DownloadRoot         string  `json:"download_root"`
+	EncodedRoot          string  `json:"encoded_root"`
+	CleanupPolicy        string  `json:"cleanup_policy"`
+	ProcessedDir         *string `json:"processed_dir"`
+	NamingTemplate       string  `json:"naming_template"`
+	DownloadBackend      *int64  `json:"download_backend"`
+	DefaultProfileID     *int64  `json:"default_profile_id"`
+	ConcurrencyDownload  int64   `json:"concurrency_download"`
+	ConcurrencyEncode    int64   `json:"concurrency_encode"`
+	FfmpegPath           *string `json:"ffmpeg_path"`
+	YtdlpPath            *string `json:"ytdlp_path"`
+	Port                 int64   `json:"port"`
+	DohEnabled           int64   `json:"doh_enabled"`
+	AddedAt              int64   `json:"added_at"`
+	ModifiedAt           int64   `json:"modified_at"`
+	SetupCompleted       int64   `json:"setup_completed"`
+	ShowNsfw             int64   `json:"show_nsfw"`
+	TrustedReleaseGroups string  `json:"trusted_release_groups"`
 }

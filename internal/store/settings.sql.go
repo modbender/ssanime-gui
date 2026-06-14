@@ -10,7 +10,7 @@ import (
 )
 
 const getSettings = `-- name: GetSettings :one
-SELECT id, download_root, encoded_root, cleanup_policy, processed_dir, naming_template, download_backend, default_profile_id, concurrency_download, concurrency_encode, ffmpeg_path, ytdlp_path, port, doh_enabled, added_at, modified_at, setup_completed, show_nsfw FROM settings WHERE id = 1
+SELECT id, download_root, encoded_root, cleanup_policy, processed_dir, naming_template, download_backend, default_profile_id, concurrency_download, concurrency_encode, ffmpeg_path, ytdlp_path, port, doh_enabled, added_at, modified_at, setup_completed, show_nsfw, trusted_release_groups FROM settings WHERE id = 1
 `
 
 func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
@@ -35,6 +35,7 @@ func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
 		&i.ModifiedAt,
 		&i.SetupCompleted,
 		&i.ShowNsfw,
+		&i.TrustedReleaseGroups,
 	)
 	return i, err
 }
@@ -44,27 +45,28 @@ INSERT INTO settings (
     id, download_root, encoded_root, cleanup_policy, processed_dir,
     naming_template, download_backend, default_profile_id,
     concurrency_download, concurrency_encode, ffmpeg_path, ytdlp_path,
-    port, doh_enabled
+    port, doh_enabled, trusted_release_groups
 ) VALUES (
-    1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
-RETURNING id, download_root, encoded_root, cleanup_policy, processed_dir, naming_template, download_backend, default_profile_id, concurrency_download, concurrency_encode, ffmpeg_path, ytdlp_path, port, doh_enabled, added_at, modified_at, setup_completed, show_nsfw
+RETURNING id, download_root, encoded_root, cleanup_policy, processed_dir, naming_template, download_backend, default_profile_id, concurrency_download, concurrency_encode, ffmpeg_path, ytdlp_path, port, doh_enabled, added_at, modified_at, setup_completed, show_nsfw, trusted_release_groups
 `
 
 type InsertSettingsParams struct {
-	DownloadRoot        string  `json:"download_root"`
-	EncodedRoot         string  `json:"encoded_root"`
-	CleanupPolicy       string  `json:"cleanup_policy"`
-	ProcessedDir        *string `json:"processed_dir"`
-	NamingTemplate      string  `json:"naming_template"`
-	DownloadBackend     *int64  `json:"download_backend"`
-	DefaultProfileID    *int64  `json:"default_profile_id"`
-	ConcurrencyDownload int64   `json:"concurrency_download"`
-	ConcurrencyEncode   int64   `json:"concurrency_encode"`
-	FfmpegPath          *string `json:"ffmpeg_path"`
-	YtdlpPath           *string `json:"ytdlp_path"`
-	Port                int64   `json:"port"`
-	DohEnabled          int64   `json:"doh_enabled"`
+	DownloadRoot         string  `json:"download_root"`
+	EncodedRoot          string  `json:"encoded_root"`
+	CleanupPolicy        string  `json:"cleanup_policy"`
+	ProcessedDir         *string `json:"processed_dir"`
+	NamingTemplate       string  `json:"naming_template"`
+	DownloadBackend      *int64  `json:"download_backend"`
+	DefaultProfileID     *int64  `json:"default_profile_id"`
+	ConcurrencyDownload  int64   `json:"concurrency_download"`
+	ConcurrencyEncode    int64   `json:"concurrency_encode"`
+	FfmpegPath           *string `json:"ffmpeg_path"`
+	YtdlpPath            *string `json:"ytdlp_path"`
+	Port                 int64   `json:"port"`
+	DohEnabled           int64   `json:"doh_enabled"`
+	TrustedReleaseGroups string  `json:"trusted_release_groups"`
 }
 
 func (q *Queries) InsertSettings(ctx context.Context, arg InsertSettingsParams) (Setting, error) {
@@ -82,6 +84,7 @@ func (q *Queries) InsertSettings(ctx context.Context, arg InsertSettingsParams) 
 		arg.YtdlpPath,
 		arg.Port,
 		arg.DohEnabled,
+		arg.TrustedReleaseGroups,
 	)
 	var i Setting
 	err := row.Scan(
@@ -103,6 +106,7 @@ func (q *Queries) InsertSettings(ctx context.Context, arg InsertSettingsParams) 
 		&i.ModifiedAt,
 		&i.SetupCompleted,
 		&i.ShowNsfw,
+		&i.TrustedReleaseGroups,
 	)
 	return i, err
 }
@@ -142,27 +146,28 @@ UPDATE settings SET
     naming_template = ?, download_backend = ?, default_profile_id = ?,
     concurrency_download = ?, concurrency_encode = ?, ffmpeg_path = ?,
     ytdlp_path = ?, port = ?, doh_enabled = ?, setup_completed = ?,
-    show_nsfw = ?, modified_at = unixepoch()
+    show_nsfw = ?, trusted_release_groups = ?, modified_at = unixepoch()
 WHERE id = 1
-RETURNING id, download_root, encoded_root, cleanup_policy, processed_dir, naming_template, download_backend, default_profile_id, concurrency_download, concurrency_encode, ffmpeg_path, ytdlp_path, port, doh_enabled, added_at, modified_at, setup_completed, show_nsfw
+RETURNING id, download_root, encoded_root, cleanup_policy, processed_dir, naming_template, download_backend, default_profile_id, concurrency_download, concurrency_encode, ffmpeg_path, ytdlp_path, port, doh_enabled, added_at, modified_at, setup_completed, show_nsfw, trusted_release_groups
 `
 
 type UpdateSettingsParams struct {
-	DownloadRoot        string  `json:"download_root"`
-	EncodedRoot         string  `json:"encoded_root"`
-	CleanupPolicy       string  `json:"cleanup_policy"`
-	ProcessedDir        *string `json:"processed_dir"`
-	NamingTemplate      string  `json:"naming_template"`
-	DownloadBackend     *int64  `json:"download_backend"`
-	DefaultProfileID    *int64  `json:"default_profile_id"`
-	ConcurrencyDownload int64   `json:"concurrency_download"`
-	ConcurrencyEncode   int64   `json:"concurrency_encode"`
-	FfmpegPath          *string `json:"ffmpeg_path"`
-	YtdlpPath           *string `json:"ytdlp_path"`
-	Port                int64   `json:"port"`
-	DohEnabled          int64   `json:"doh_enabled"`
-	SetupCompleted      int64   `json:"setup_completed"`
-	ShowNsfw            int64   `json:"show_nsfw"`
+	DownloadRoot         string  `json:"download_root"`
+	EncodedRoot          string  `json:"encoded_root"`
+	CleanupPolicy        string  `json:"cleanup_policy"`
+	ProcessedDir         *string `json:"processed_dir"`
+	NamingTemplate       string  `json:"naming_template"`
+	DownloadBackend      *int64  `json:"download_backend"`
+	DefaultProfileID     *int64  `json:"default_profile_id"`
+	ConcurrencyDownload  int64   `json:"concurrency_download"`
+	ConcurrencyEncode    int64   `json:"concurrency_encode"`
+	FfmpegPath           *string `json:"ffmpeg_path"`
+	YtdlpPath            *string `json:"ytdlp_path"`
+	Port                 int64   `json:"port"`
+	DohEnabled           int64   `json:"doh_enabled"`
+	SetupCompleted       int64   `json:"setup_completed"`
+	ShowNsfw             int64   `json:"show_nsfw"`
+	TrustedReleaseGroups string  `json:"trusted_release_groups"`
 }
 
 func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (Setting, error) {
@@ -182,6 +187,7 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		arg.DohEnabled,
 		arg.SetupCompleted,
 		arg.ShowNsfw,
+		arg.TrustedReleaseGroups,
 	)
 	var i Setting
 	err := row.Scan(
@@ -203,6 +209,7 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		&i.ModifiedAt,
 		&i.SetupCompleted,
 		&i.ShowNsfw,
+		&i.TrustedReleaseGroups,
 	)
 	return i, err
 }
