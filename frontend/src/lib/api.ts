@@ -448,6 +448,8 @@ export const api = {
     default_profile_id?: number
   }) => post<SeriesDetail>('/series', body),
   getSeries: (id: number) => get<SeriesDetail>(`/series/${id}`),
+  getSeriesByAnilist: (anilistId: number) =>
+    get<SeriesDetail>(`/series/by-anilist/${anilistId}`),
   patchSeries: (id: number, body: {
     subscribed?: boolean
     favorite?: boolean

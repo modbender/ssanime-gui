@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -167,7 +168,7 @@ func (h *Handler) handleGetSeries(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	series, err := h.store.Read().GetSeries(r.Context(), id)
+	detail, err := h.buildSeriesDetail(r.Context(), id)
 	if errors.Is(err, sql.ErrNoRows) {
 		WriteError(w, http.StatusNotFound, "series not found")
 		return
@@ -177,12 +178,22 @@ func (h *Handler) handleGetSeries(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "failed to get series")
 		return
 	}
+	WriteJSON(w, http.StatusOK, detail)
+}
 
-	episodes, err := h.store.Read().ListEpisodesBySeries(r.Context(), id)
+// buildSeriesDetail assembles the full SeriesDetail DTO for a local series id:
+// the series row, its episodes (with encoded outputs), and the derived status.
+// Shared by GET /series/{id} and GET /series/by-anilist/{anilistId} so the
+// DTO shape lives in one place. Returns sql.ErrNoRows when the row is absent.
+func (h *Handler) buildSeriesDetail(ctx context.Context, id int64) (SeriesDetail, error) {
+	series, err := h.store.Read().GetSeries(ctx, id)
 	if err != nil {
-		h.logger.Error("list episodes", "series_id", id, "err", err)
-		WriteError(w, http.StatusInternalServerError, "failed to list episodes")
-		return
+		return SeriesDetail{}, err
+	}
+
+	episodes, err := h.store.Read().ListEpisodesBySeries(ctx, id)
+	if err != nil {
+		return SeriesDetail{}, err
 	}
 
 	details := make([]EpisodeDetail, 0, len(episodes))
@@ -192,12 +203,12 @@ func (h *Handler) handleGetSeries(w http.ResponseWriter, r *http.Request) {
 		if ep.Status == "archived" {
 			archived++
 		}
-		outputs, _ := h.store.Read().ListEncodedOutputsByEpisode(r.Context(), ep.ID)
+		outputs, _ := h.store.Read().ListEncodedOutputsByEpisode(ctx, ep.ID)
 		details = append(details, episodeToDetail(ep, series.Title, outputs))
 	}
 	ds := derivedStatus(series.AiringStatus, series.EpisodeCount, total, archived)
 
-	WriteJSON(w, http.StatusOK, SeriesDetail{
+	return SeriesDetail{
 		ID:               series.ID,
 		UUID:             series.Uuid,
 		Title:            series.Title,
@@ -222,7 +233,36 @@ func (h *Handler) handleGetSeries(w http.ResponseWriter, r *http.Request) {
 		Episodes:         details,
 		AddedAt:          series.AddedAt,
 		ModifiedAt:       series.ModifiedAt,
-	})
+	}, nil
+}
+
+// handleGetSeriesByAnilist serves the same SeriesDetail DTO as GET /series/{id}
+// but keyed by AniList id, so the discovery route can detect an already-tracked
+// series and render the tracked view. 404 when no series row maps to the id.
+func (h *Handler) handleGetSeriesByAnilist(w http.ResponseWriter, r *http.Request) {
+	anilistID, ok := parseAnilistID(w, r)
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	id64 := int64(anilistID)
+	series, err := h.store.Read().GetSeriesByAnilistID(ctx, &id64)
+	if errors.Is(err, sql.ErrNoRows) {
+		WriteError(w, http.StatusNotFound, "series not found")
+		return
+	}
+	if err != nil {
+		h.logger.Error("get series by anilist", "anilist_id", anilistID, "err", err)
+		WriteError(w, http.StatusInternalServerError, "failed to get series")
+		return
+	}
+	detail, err := h.buildSeriesDetail(ctx, series.ID)
+	if err != nil {
+		h.logger.Error("get series by anilist: build detail", "id", series.ID, "err", err)
+		WriteError(w, http.StatusInternalServerError, "failed to get series")
+		return
+	}
+	WriteJSON(w, http.StatusOK, detail)
 }
 
 func (h *Handler) handleCreateSeries(w http.ResponseWriter, r *http.Request) {
