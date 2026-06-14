@@ -12,6 +12,8 @@
   import Extensions from './pages/Extensions.svelte'
   import WelcomeModal from '$lib/components/WelcomeModal.svelte'
   import SourceGateModal from '$lib/components/SourceGateModal.svelte'
+  import ToastHost from '$lib/components/ToastHost.svelte'
+  import ConfirmHost from '$lib/components/ConfirmHost.svelte'
   import { startSSE } from '$lib/sse.svelte'
   import { reloadSources } from '$lib/sources.svelte'
   import { activityState, startActivity } from '$lib/activity.svelte'
@@ -78,4 +80,6 @@
 
   <WelcomeModal />
   <SourceGateModal />
+  <ConfirmHost />
+  <ToastHost />
 </Router>

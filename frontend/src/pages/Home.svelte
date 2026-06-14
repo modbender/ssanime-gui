@@ -14,12 +14,14 @@
   import Spinner from '$lib/components/Spinner.svelte'
   import Button from '$lib/components/Button.svelte'
   import { markTracked, trackedAnilistIds } from '$lib/discovery.svelte'
+  import { watchBucket } from '$lib/utils'
   import { requireSource } from '$lib/sources.svelte'
   import { sseState } from '$lib/sse.svelte'
 
   let rows = $state<DiscoveryRow[]>([])
   let heroItems = $state<DiscoveryItem[]>([])
   let activitySeries = $state<ActivitySeries[]>([])
+  let watching = $state<SeriesProgress[]>([])
   let discoveryLoading = $state(true)
   let discoveryFailed = $state(false)
   let trackingId = $state<number | null>(null)
@@ -76,18 +78,33 @@
     heroItems = a.slice(0, HERO_COUNT)
   }
 
-  // Seed the optimistic tracked-set so discovery cards paint as tracked.
+  // Seed the tracked-set so discovery cards/Hero paint as "Subscribed". Authoritative:
+  // rebuilt from the server each load so an unsubscribed series drops back to
+  // "Subscribe" instead of lingering. Only actively-subscribed rows count — an
+  // unsubscribed-but-downloaded series (Library "Downloaded") must NOT show tracked.
   async function loadTrackedSeed() {
     try {
       const res = await api.getTracked()
-      for (const s of [
+      const all = [
         ...(res.in_progress ?? []),
         ...(res.completed ?? []),
         ...(res.paused ?? []),
         ...(res.dropped ?? []),
-      ]) {
-        if (s.anilist_id != null) trackedAnilistIds.add(s.anilist_id)
+      ]
+      // Continue-watching row: subscribed series in the "watching" bucket (same
+      // rule Library uses), regardless of whether anything is downloading now.
+      watching = all.filter((s) => watchBucket(s) === 'watching')
+      const next = new Set<number>()
+      for (const s of all) {
+        if (s.subscribed && s.anilist_id != null) next.add(s.anilist_id)
       }
+      // Rebuild in place: drop stale ids, keep any optimistic add from an in-flight
+      // subscribe (its id is already in `next` if the server has it, else re-added
+      // by markTracked on the user action).
+      for (const id of trackedAnilistIds) {
+        if (!next.has(id)) trackedAnilistIds.delete(id)
+      }
+      for (const id of next) trackedAnilistIds.add(id)
     } catch {
       // Non-fatal: discovery still works without optimistic tracked flags.
     }
@@ -192,6 +209,17 @@
   {/if}
 
   <div class="px-6 sm:px-10 pb-16 -mt-2 space-y-12">
+    <!-- CONTINUE WATCHING — subscribed "watching" series, regardless of download state. -->
+    {#if watching.length > 0}
+      <Carousel title="Continue watching" count={watching.length}>
+        {#each watching as s (s.id)}
+          <div class="snap-start shrink-0 w-[150px]">
+            <PosterCard series={s} />
+          </div>
+        {/each}
+      </Carousel>
+    {/if}
+
     <!-- CURRENTLY DOWNLOADING — shown only when something is actually in flight. -->
     {#if inProgress.length > 0}
       <Carousel title="Currently downloading" count={inProgress.length}>

@@ -43,3 +43,6 @@ mage_output_file.go
 
 # Internal design specs + plans — kept local, not published to the public repo
 /docs/superpowers/
+
+# Local env config (e.g. SSANIME_TEST_REPO_INDEX for the live extension test)
+.env
