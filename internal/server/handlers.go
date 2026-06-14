@@ -44,22 +44,32 @@ func (h *Handler) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "cleanup_policy must be delete|keep|move")
 		return
 	}
+	// Preserve the stored trusted list when the client omits the field (nil),
+	// rather than wiping it to an empty allowlist. A sent (even empty) list is
+	// honoured: empty means "no trust filter".
+	trusted := req.TrustedReleaseGroups
+	if trusted == nil {
+		if cur, err := h.store.Read().GetSettings(r.Context()); err == nil {
+			trusted = decodeTrustedGroups(cur.TrustedReleaseGroups)
+		}
+	}
 	set, err := h.store.Write().UpdateSettings(r.Context(), store.UpdateSettingsParams{
-		DownloadRoot:        req.DownloadRoot,
-		EncodedRoot:         req.EncodedRoot,
-		CleanupPolicy:       req.CleanupPolicy,
-		ProcessedDir:        req.ProcessedDir,
-		NamingTemplate:      req.NamingTemplate,
-		DownloadBackend:     req.DownloadBackend,
-		DefaultProfileID:    req.DefaultProfileID,
-		ConcurrencyDownload: req.ConcurrencyDownload,
-		ConcurrencyEncode:   req.ConcurrencyEncode,
-		FfmpegPath:          req.FfmpegPath,
-		YtdlpPath:           req.YtdlpPath,
-		Port:                req.Port,
-		DohEnabled:          boolToInt64(req.DohEnabled),
-		SetupCompleted:      boolToInt64(req.SetupCompleted),
-		ShowNsfw:            boolToInt64(req.ShowNsfw),
+		DownloadRoot:         req.DownloadRoot,
+		EncodedRoot:          req.EncodedRoot,
+		CleanupPolicy:        req.CleanupPolicy,
+		ProcessedDir:         req.ProcessedDir,
+		NamingTemplate:       req.NamingTemplate,
+		DownloadBackend:      req.DownloadBackend,
+		DefaultProfileID:     req.DefaultProfileID,
+		ConcurrencyDownload:  req.ConcurrencyDownload,
+		ConcurrencyEncode:    req.ConcurrencyEncode,
+		FfmpegPath:           req.FfmpegPath,
+		YtdlpPath:            req.YtdlpPath,
+		Port:                 req.Port,
+		DohEnabled:           boolToInt64(req.DohEnabled),
+		SetupCompleted:       boolToInt64(req.SetupCompleted),
+		ShowNsfw:             boolToInt64(req.ShowNsfw),
+		TrustedReleaseGroups: encodeTrustedGroups(trusted),
 	})
 	if err != nil {
 		h.logger.Error("update settings", "err", err)

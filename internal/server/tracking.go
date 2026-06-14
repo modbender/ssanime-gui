@@ -561,6 +561,11 @@ func (h *Handler) searchAvailable(ctx context.Context, media source.Media, have 
 		return []AvailableEpisode{}, nil
 	}
 
+	// Load the user-configured trusted-group allowlist once for this request. A
+	// non-nil (incl. empty) list overrides source.TrustedReleaseGroups; on read
+	// failure we leave it nil so selection uses the default.
+	trustedGroups := h.trustedReleaseGroups(ctx)
+
 	numbers := h.resolveEpisodeNumbers(ctx, media)
 	if len(numbers) == 0 {
 		return []AvailableEpisode{}, []string{"couldn't determine episodes for this title — its mapping may not be available yet"}
@@ -599,14 +604,14 @@ func (h *Handler) searchAvailable(ctx context.Context, media source.Media, have 
 		trusted := true
 		// Prefer locked group (trusted) → any trusted → best non-trusted (flagged).
 		if lockGroup != "" {
-			best, _ = source.SelectBest(media, group, source.SelectOptions{Group: lockGroup, RequireTrustedGroup: true})
+			best, _ = source.SelectBest(media, group, source.SelectOptions{Group: lockGroup, RequireTrustedGroup: true, TrustedGroups: trustedGroups})
 		}
 		if best == nil {
-			best, _ = source.SelectBest(media, group, source.SelectOptions{RequireTrustedGroup: true})
+			best, _ = source.SelectBest(media, group, source.SelectOptions{RequireTrustedGroup: true, TrustedGroups: trustedGroups})
 		}
 		if best == nil {
 			// Only non-trusted releases exist: still offer the best one, flagged.
-			best, _ = source.SelectBest(media, group, source.SelectOptions{})
+			best, _ = source.SelectBest(media, group, source.SelectOptions{TrustedGroups: trustedGroups})
 			trusted = false
 		}
 		if best == nil {
@@ -878,6 +883,19 @@ func mediaFromMedia(m anilist.Media) source.Media {
 		out.RomajiTitle = m.EnglishTitle
 	}
 	return out
+}
+
+// trustedReleaseGroups reads the user-configured trusted-group allowlist from
+// settings for passing as SelectOptions.TrustedGroups. It returns a non-nil slice
+// (empty = "no trust filter", explicitly configured) so callers override the
+// package default; on read failure it returns nil so selection uses the default.
+func (h *Handler) trustedReleaseGroups(ctx context.Context) []string {
+	set, err := h.store.Read().GetSettings(ctx)
+	if err != nil {
+		h.logger.Warn("trusted groups: read settings", "err", err)
+		return nil
+	}
+	return decodeTrustedGroups(set.TrustedReleaseGroups)
 }
 
 // i64ptr returns a pointer to an int64 literal, for the *int64 query args.

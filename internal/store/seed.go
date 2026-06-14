@@ -19,6 +19,11 @@ const (
 
 	defaultConcurrencyDownload = 3
 	defaultConcurrencyEncode   = 1
+
+	// defaultTrustedReleaseGroups is the JSON-encoded trusted-group allowlist a
+	// fresh install boots with. Mirrors the column default in migration 00013 and
+	// source.TrustedReleaseGroups; an explicitly empty array disables the filter.
+	defaultTrustedReleaseGroups = `["SubsPlease","Erai-raws"]`
 )
 
 // pointer helpers keep the seed literal readable: sqlc nullable columns are *T.
@@ -111,16 +116,17 @@ func (s *Store) seedSettings(ctx context.Context, cfg *config.Config, profileID,
 		return nil
 	}
 	_, err = s.write.InsertSettings(ctx, InsertSettingsParams{
-		DownloadRoot:        filepath.Join(cfg.DataDir, "downloads"),
-		EncodedRoot:         filepath.Join(cfg.DataDir, "library"),
-		CleanupPolicy:       "delete",
-		NamingTemplate:      defaultNamingTemplate,
-		DownloadBackend:     &clientID,
-		DefaultProfileID:    &profileID,
-		ConcurrencyDownload: defaultConcurrencyDownload,
-		ConcurrencyEncode:   defaultConcurrencyEncode,
-		Port:                int64(config.DefaultPort),
-		DohEnabled:          1,
+		DownloadRoot:         filepath.Join(cfg.DataDir, "downloads"),
+		EncodedRoot:          filepath.Join(cfg.DataDir, "library"),
+		CleanupPolicy:        "delete",
+		NamingTemplate:       defaultNamingTemplate,
+		DownloadBackend:      &clientID,
+		DefaultProfileID:     &profileID,
+		ConcurrencyDownload:  defaultConcurrencyDownload,
+		ConcurrencyEncode:    defaultConcurrencyEncode,
+		Port:                 int64(config.DefaultPort),
+		DohEnabled:           1,
+		TrustedReleaseGroups: defaultTrustedReleaseGroups,
 	})
 	return err
 }
