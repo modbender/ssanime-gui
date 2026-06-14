@@ -27,8 +27,8 @@ const callTimeout = 15 * time.Second
 // ("export default new class ...").
 //
 // The captured expression is trimmed of trailing semicolons/whitespace before
-// being wrapped: the exten.pages.dev extensions end their default export with
-// "};" and a stray ";" inside the wrapping parens is a syntax error.
+// being wrapped: some extensions end their default export with "};" and a
+// stray ";" inside the wrapping parens is a syntax error.
 func stripExportDefault(src string) string {
 	const marker = "export default"
 	idx := strings.Index(src, marker)
@@ -327,9 +327,9 @@ func (v *VM) bindFetch(loop *eventloop.EventLoop, rt *goja.Runtime) {
 
 // bindGlobals injects the browser globals Hayase extensions touch at load and
 // during search: atob/btoa (base64) and a minimal navigator object. Several
-// exten.pages.dev extensions decode their API base with atob(...) at module
-// scope and read navigator.onLine before searching; without these the program
-// throws ReferenceError before any method runs.
+// extensions decode their API base with atob(...) at module scope and read
+// navigator.onLine before searching; without these the program throws
+// ReferenceError before any method runs.
 func (v *VM) bindGlobals(rt *goja.Runtime) {
 	rt.Set("atob", func(call goja.FunctionCall) goja.Value {
 		decoded, err := decodeBase64Lenient(call.Argument(0).String())

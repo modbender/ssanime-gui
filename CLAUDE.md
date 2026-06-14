@@ -178,6 +178,16 @@ playback**. ssanime-gui uses Svelte, a **browser-served** daemon (no Electron), 
 `anacrolix/torrent` (no external client), and **durable transcode-to-archive** (no playback). Read
 Seanime for patterns; don't assume feature parity.
 
+## Legal — never commit extension/repo/scraper source links
+
+Hardcoding links to extensions, extension repositories, or scraping-target repositories is
+**strictly against copyright law and must never be pushed to git** — not in code, not in committed
+docs, not in test fixtures, not in changelogs. The shipped binary stays neutral: it ships **no**
+site-specific scraper and **no** default/suggested repo URL (sourcing is extensions-only, user-added
+at runtime). Any repo index URL needed for local testing comes from the environment — the
+`SSANIME_TEST_REPO_INDEX` env var or a gitignored `.env` — and the test skips when it is unset.
+Reference such sources generically in comments ("Hayase-compatible extensions"), never by literal URL.
+
 ## Out of scope (explicitly deferred)
 
 Tracker/multi-site uploads, torrent creation, seedbox FTP, URL shortening; streaming/media-server

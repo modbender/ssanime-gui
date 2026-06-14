@@ -7,7 +7,7 @@
 
 * extension health UI — preview-on-add, badges, re-check ([#49](https://github.com/modbender/ssanime-gui/issues/49)) ([d6b96da](https://github.com/modbender/ssanime-gui/commit/d6b96da31539a6071a435f2ea8d2c7279307ffba))
 * extension liveness checks and centralized health state ([#48](https://github.com/modbender/ssanime-gui/issues/48)) ([ecd0715](https://github.com/modbender/ssanime-gui/commit/ecd0715493a63f0a6359d1844f8e0c918e5fe18c))
-* run real Hayase torrent extensions (exten.pages.dev sources) ([#44](https://github.com/modbender/ssanime-gui/issues/44)) ([039fa72](https://github.com/modbender/ssanime-gui/commit/039fa72417773fa2553f3ba00244784af2db336e))
+* run real Hayase torrent extensions ([#44](https://github.com/modbender/ssanime-gui/issues/44)) ([039fa72](https://github.com/modbender/ssanime-gui/commit/039fa72417773fa2553f3ba00244784af2db336e))
 * shared toast/confirm dialogs and proxied source icons ([#47](https://github.com/modbender/ssanime-gui/issues/47)) ([5ff177a](https://github.com/modbender/ssanime-gui/commit/5ff177aa567ccd52d3f478c1c0756a3f9472504b))
 * tabbed settings, sidebar revamp, working external links ([#45](https://github.com/modbender/ssanime-gui/issues/45)) ([cacd68c](https://github.com/modbender/ssanime-gui/commit/cacd68c6e96452fa384f0a39f5698ff8f62ca17a))
 
