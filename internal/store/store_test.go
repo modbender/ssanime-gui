@@ -62,8 +62,10 @@ func TestSeedsPresent(t *testing.T) {
 	if set.DefaultProfileID == nil || *set.DefaultProfileID != prof.ID {
 		t.Errorf("settings default_profile_id = %v, want %d", set.DefaultProfileID, prof.ID)
 	}
-	if set.DownloadBackend == nil || *set.DownloadBackend != client.ID {
-		t.Errorf("settings download_backend = %v, want %d", set.DownloadBackend, client.ID)
+	// download_backend is seeded null ("Auto"): the queue resolves it to the
+	// default download client at run time rather than pinning a client id.
+	if set.DownloadBackend != nil {
+		t.Errorf("settings download_backend = %v, want nil (Auto)", set.DownloadBackend)
 	}
 	if set.NamingTemplate != defaultNamingTemplate {
 		t.Errorf("naming_template = %q, want %q", set.NamingTemplate, defaultNamingTemplate)

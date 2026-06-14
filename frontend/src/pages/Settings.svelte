@@ -65,6 +65,12 @@
     try {
       ;[settings, profiles] = await Promise.all([api.getSettings(), api.listProfiles()])
       form = { ...settings! }
+      // Only "Auto" (null) is a real backend today — external torrent clients and
+      // yt-dlp are deferred. Normalize any legacy pinned client id to Auto so the
+      // control and a subsequent save agree. (Auto resolves to the embedded
+      // torrent client server-side.) Replace with a real client list when those
+      // backends ship.
+      form.download_backend = null
     } catch (e: any) {
       error = e.message
     } finally {
@@ -101,12 +107,6 @@
     { value: 'keep', label: 'Keep source files' },
     { value: 'delete', label: 'Delete source after encode' },
     { value: 'move', label: 'Move source to processed dir' },
-  ]
-
-  const backendOptions = [
-    { value: null, label: 'Auto (embedded torrent)' },
-    { value: 0, label: 'Embedded anacrolix/torrent' },
-    { value: 1, label: 'yt-dlp (streaming/HLS)' },
   ]
 
   // Helper to convert null↔'' for optional text fields in the form
@@ -315,10 +315,9 @@
                   bind:value={form.download_backend}
                   class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
                 >
-                  {#each backendOptions as opt}
-                    <option value={opt.value}>{opt.label}</option>
-                  {/each}
+                  <option value={null}>Auto (embedded torrent)</option>
                 </select>
+                <p class="text-xs text-[var(--color-muted)] mt-1">Episodes download through the built-in torrent client. External clients and yt-dlp aren't available yet.</p>
               </div>
             </section>
 

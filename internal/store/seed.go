@@ -37,11 +37,13 @@ func (s *Store) seed(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 		return err
 	}
-	clientID, err := s.seedDefaultDownloadClient(ctx)
-	if err != nil {
+	// The embedded client must exist so the Auto backend (null download_backend)
+	// resolves to it via GetDefaultDownloadClient; its id is not pinned into
+	// settings — Auto is the default.
+	if _, err := s.seedDefaultDownloadClient(ctx); err != nil {
 		return err
 	}
-	return s.seedSettings(ctx, cfg, profileID, clientID)
+	return s.seedSettings(ctx, cfg, profileID)
 }
 
 // seedBuiltinProfile inserts the immutable "Automin (x265)" profile if absent
@@ -105,9 +107,11 @@ func (s *Store) seedDefaultDownloadClient(ctx context.Context) (int64, error) {
 }
 
 // seedSettings inserts the singleton settings row (id=1) if absent, wiring the
-// default profile + embedded download backend and paths rooted under the app
-// data dir.
-func (s *Store) seedSettings(ctx context.Context, cfg *config.Config, profileID, clientID int64) error {
+// default profile and paths rooted under the app data dir. download_backend is
+// left null ("Auto"): the queue resolves it to the default download client (the
+// embedded torrent client) at run time, so the backend isn't pinned to a
+// specific client id.
+func (s *Store) seedSettings(ctx context.Context, cfg *config.Config, profileID int64) error {
 	exists, err := s.write.SettingsExist(ctx)
 	if err != nil {
 		return err
@@ -120,7 +124,7 @@ func (s *Store) seedSettings(ctx context.Context, cfg *config.Config, profileID,
 		EncodedRoot:          filepath.Join(cfg.DataDir, "library"),
 		CleanupPolicy:        "delete",
 		NamingTemplate:       defaultNamingTemplate,
-		DownloadBackend:      &clientID,
+		DownloadBackend:      nil,
 		DefaultProfileID:     &profileID,
 		ConcurrencyDownload:  defaultConcurrencyDownload,
 		ConcurrencyEncode:    defaultConcurrencyEncode,
