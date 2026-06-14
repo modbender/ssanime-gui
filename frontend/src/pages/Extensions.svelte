@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { api, type ExtensionRepo, type Extension, type Settings as SettingsType } from '$lib/api'
+  import { api, type ExtensionRepo, type Extension, type ExtensionPreviewEntry, type Settings as SettingsType } from '$lib/api'
   import Button from '$lib/components/Button.svelte'
   import Modal from '$lib/components/Modal.svelte'
   import Spinner from '$lib/components/Spinner.svelte'
   import { reloadSources } from '$lib/sources.svelte'
   import { toast } from '$lib/toast.svelte'
   import { confirm } from '$lib/confirm.svelte'
-  import { formatDate } from '$lib/utils'
+  import { formatDate, relativeTime } from '$lib/utils'
 
   let repos = $state<ExtensionRepo[]>([])
   let extensions = $state<Extension[]>([])
@@ -20,11 +20,21 @@
   let addUrl = $state('')
   let adding = $state(false)
 
+  // Add-repo preview / liveness gate
+  let previewing = $state(false)
+  let previewUrl = $state('') // the URL the current preview corresponds to
+  let previewEntries = $state<ExtensionPreviewEntry[] | null>(null)
+  let previewError = $state('')
+
+  const usableCount = $derived(previewEntries?.filter((e) => e.usable).length ?? 0)
+  const previewReady = $derived(previewEntries != null && usableCount > 0 && addUrl.trim() === previewUrl)
+
   // Per-row in-flight markers
   let syncing = $state<number | null>(null)
   let removingRepo = $state<number | null>(null)
   let togglingExt = $state<number | null>(null)
   let removingExt = $state<number | null>(null)
+  let checkingExt = $state<number | null>(null)
   let savingNsfw = $state(false)
 
   // Extension ids whose icon URL failed to load — fall back to the placeholder
@@ -36,6 +46,13 @@
   const visibleExtensions = $derived(
     showNsfw ? extensions : extensions.filter((e) => !e.nsfw),
   )
+
+  // A repo is "fully unreachable" when it owns ≥1 installed source and every
+  // one of them last tested unhealthy. Mixed/unchecked repos show nothing.
+  function repoAllUnreachable(repoId: number): boolean {
+    const owned = extensions.filter((e) => e.repo_id === repoId)
+    return owned.length > 0 && owned.every((e) => e.healthy === false)
+  }
 
   async function load() {
     loading = true
@@ -64,20 +81,67 @@
   function openAdd() {
     addName = ''
     addUrl = ''
+    previewUrl = ''
+    previewEntries = null
+    previewError = ''
     addOpen = true
   }
 
+  // Invalidate a stale preview whenever the URL diverges from the one it ran
+  // against, so a preview for repo A can't gate adding repo B.
+  $effect(() => {
+    if (previewEntries != null && addUrl.trim() !== previewUrl) {
+      previewEntries = null
+      previewError = ''
+    }
+  })
+
+  async function runPreview() {
+    const url = addUrl.trim()
+    if (!url || previewing) return
+    previewing = true
+    previewError = ''
+    previewEntries = null
+    try {
+      const res = await api.previewExtensionRepo(url)
+      previewUrl = url
+      previewEntries = res.entries
+    } catch (e: any) {
+      previewUrl = url
+      previewError = `Repository unreachable or invalid: ${e.message}`
+    } finally {
+      previewing = false
+    }
+  }
+
   async function addRepo() {
-    if (!addName.trim() || !addUrl.trim()) return
+    if (!addName.trim() || !addUrl.trim() || !previewReady) return
     adding = true
     try {
-      await api.createExtensionRepo({ name: addName.trim(), url: addUrl.trim() })
+      const repo = await api.createExtensionRepo({ name: addName.trim(), url: addUrl.trim() })
+      await api.syncExtensionRepo(repo.id)
       addOpen = false
       repos = await api.listExtensionRepos()
+      await refreshExtensions()
     } catch (e: any) {
       toast.error(e.message)
     } finally {
       adding = false
+    }
+  }
+
+  async function recheckExtension(ext: Extension) {
+    if (checkingExt != null) return
+    checkingExt = ext.id
+    try {
+      const res = await api.testExtension(ext.id)
+      await refreshExtensions()
+      if (res.healthy) toast.success(`${ext.name} is healthy`)
+      else toast.error(`${ext.name} unreachable: ${res.error || 'unknown error'}`)
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      checkingExt = null
     }
   }
 
@@ -219,6 +283,12 @@
                       {#if !repo.enabled}
                         <span class="inline-flex items-center bg-[var(--color-surface-2)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--color-muted)] ring-1 ring-[var(--color-border)]">Disabled</span>
                       {/if}
+                      {#if repoAllUnreachable(repo.id)}
+                        <span class="inline-flex items-center gap-1.5 bg-[var(--color-error)]/15 px-2 py-0.5 text-[11px] font-semibold text-[var(--color-error)] ring-1 ring-[var(--color-error)]/30" title="Every installed source from this repository failed its last health check">
+                          <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-error)]"></span>
+                          Sources unreachable
+                        </span>
+                      {/if}
                     </div>
                     <div class="flex items-center gap-3 text-xs text-[var(--color-muted)] flex-wrap">
                       <span class="font-mono truncate max-w-md text-[var(--color-text-dim)]" title={repo.url}>{repo.url}</span>
@@ -358,8 +428,44 @@
                       {#if !ext.enabled}
                         <span class="inline-flex items-center bg-[var(--color-surface-2)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-muted)] ring-1 ring-[var(--color-border)]">Disabled</span>
                       {/if}
+                      {#if ext.healthy === true}
+                        <span class="inline-flex items-center gap-1.5 bg-[var(--color-success)]/15 px-2 py-0.5 text-[11px] font-semibold text-[var(--color-success)] ring-1 ring-[var(--color-success)]/30">
+                          <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-success)]"></span>
+                          Healthy
+                        </span>
+                      {:else if ext.healthy === false}
+                        <span class="inline-flex items-center gap-1.5 bg-[var(--color-error)]/15 px-2 py-0.5 text-[11px] font-semibold text-[var(--color-error)] ring-1 ring-[var(--color-error)]/30" title={ext.health_error ?? 'Source failed its last health check'}>
+                          <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-error)]"></span>
+                          Unreachable
+                        </span>
+                      {:else}
+                        <span class="inline-flex items-center gap-1.5 bg-[var(--color-surface-2)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-muted)] ring-1 ring-[var(--color-border)]" title="This source hasn't been health-checked yet">
+                          <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-muted)]"></span>
+                          Unchecked
+                        </span>
+                      {/if}
                     </div>
+                    {#if ext.health_checked_at}
+                      <p class="mt-1 text-[11px] text-[var(--color-faint)]">Checked {relativeTime(ext.health_checked_at)}</p>
+                    {/if}
                   </div>
+
+                  <!-- Re-check -->
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onclick={() => recheckExtension(ext)}
+                    disabled={checkingExt === ext.id}
+                    title="Re-check this source's health"
+                    class="shrink-0 hover:text-[var(--accent)]"
+                  >
+                    {#if checkingExt === ext.id}<Spinner size={12} />{:else}
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" aria-hidden="true">
+                        <path d="M23 4v6h-6M1 20v-6h6" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    {/if}
+                  </Button>
 
                   <!-- Remove -->
                   <Button
@@ -393,7 +499,7 @@
 <Modal bind:open={addOpen} title="Add repository">
   {#snippet footer()}
     <Button variant="ghost" onclick={() => { addOpen = false }}>Cancel</Button>
-    <Button onclick={addRepo} disabled={adding || !addName.trim() || !addUrl.trim()}>
+    <Button onclick={addRepo} disabled={adding || !addName.trim() || !previewReady}>
       {#if adding}<Spinner size={14} />{/if}
       Add
     </Button>
@@ -412,17 +518,76 @@
     </div>
     <div>
       <label for="repo-url" class="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">Repository index URL</label>
-      <input
-        id="repo-url"
-        type="text"
-        bind:value={addUrl}
-        placeholder="https://example.com/index.json"
-        class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] font-mono transition-colors duration-200 focus:outline-none focus:border-[var(--accent)] focus:bg-[var(--color-surface-2)]"
-      />
+      <div class="flex items-center gap-2">
+        <input
+          id="repo-url"
+          type="text"
+          bind:value={addUrl}
+          placeholder="https://example.com/index.json"
+          onkeydown={(e) => { if (e.key === 'Enter') runPreview() }}
+          class="flex-1 min-w-0 h-9 border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] font-mono transition-colors duration-200 focus:outline-none focus:border-[var(--accent)] focus:bg-[var(--color-surface-2)]"
+        />
+        <Button variant="secondary" onclick={runPreview} disabled={previewing || !addUrl.trim()}>
+          {#if previewing}<Spinner size={14} />{/if}
+          Preview
+        </Button>
+      </div>
       <p class="text-xs text-[var(--color-muted)] mt-1.5">
         Paste a source repository's index URL. Sources are unaffiliated with SSAnime — add only
         ones you trust.
       </p>
     </div>
+
+    <!-- Preview result -->
+    {#if previewing}
+      <div class="flex items-center justify-center gap-2 py-6 text-sm text-[var(--color-muted)]">
+        <Spinner size={16} /> Fetching repository index…
+      </div>
+    {:else if previewError}
+      <p class="text-sm text-[var(--color-error)] border border-[var(--color-error)]/30 bg-[var(--color-error)]/10 px-3.5 py-2.5">{previewError}</p>
+    {:else if previewEntries != null}
+      {#if previewEntries.length === 0 || usableCount === 0}
+        <p class="text-sm text-[var(--color-muted)] border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 py-2.5">No usable extensions in this repository.</p>
+      {:else}
+        <div class="border border-[var(--color-border)] bg-[var(--color-surface-2)] overflow-hidden">
+          <div class="px-3.5 py-2 border-b border-[var(--color-border)] flex items-center justify-between">
+            <span class="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">Extensions</span>
+            <span class="text-[11px] font-medium text-[var(--color-muted)]">{usableCount} usable / {previewEntries.length}</span>
+          </div>
+          <ul class="divide-y divide-[var(--color-border)]/60 max-h-56 overflow-y-auto">
+            {#each previewEntries as entry (entry.ext_id)}
+              <li class="flex items-center gap-3 px-3.5 py-2.5">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-sm font-medium text-[var(--color-text)] truncate">{entry.name}</span>
+                    <span class="inline-flex items-center bg-white/[0.06] px-2 py-0.5 text-[11px] font-medium tabular-nums text-[var(--color-text-dim)] ring-1 ring-white/10">v{entry.version}</span>
+                    {#if entry.type}
+                      <span class="inline-flex items-center bg-white/[0.06] px-2 py-0.5 text-[11px] font-medium uppercase text-[var(--color-text-dim)] ring-1 ring-white/10">{entry.type}</span>
+                    {/if}
+                    {#if entry.nsfw}
+                      <span class="inline-flex items-center bg-[var(--color-error)]/15 px-2 py-0.5 text-[11px] font-semibold text-[var(--color-error)] ring-1 ring-[var(--color-error)]/30">NSFW</span>
+                    {/if}
+                  </div>
+                  {#if !entry.usable && entry.error}
+                    <p class="mt-0.5 text-[11px] text-[var(--color-muted)] truncate" title={entry.error}>{entry.error}</p>
+                  {/if}
+                </div>
+                {#if entry.usable}
+                  <span class="shrink-0 inline-flex items-center gap-1.5 bg-[var(--color-success)]/15 px-2 py-0.5 text-[11px] font-semibold text-[var(--color-success)] ring-1 ring-[var(--color-success)]/30">
+                    <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-success)]"></span>
+                    Usable
+                  </span>
+                {:else}
+                  <span class="shrink-0 inline-flex items-center gap-1.5 bg-[var(--color-error)]/15 px-2 py-0.5 text-[11px] font-semibold text-[var(--color-error)] ring-1 ring-[var(--color-error)]/30" title={entry.error}>
+                    <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-error)]"></span>
+                    Unreachable
+                  </span>
+                {/if}
+              </li>
+            {/each}
+          </ul>
+        </div>
+      {/if}
+    {/if}
   </div>
 </Modal>
