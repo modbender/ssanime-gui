@@ -356,7 +356,7 @@ func startDaemon(cfg *config.Config, logger *slog.Logger, logBridge *logging.Hub
 	}
 
 	// --- Feed poller ---
-	feedPoller := poller.New(st, registry, hub, logger)
+	feedPoller := poller.New(st, registry, hub, logger, poller.WithResolver(anizip.New()))
 	feedPoller.Start()
 	add(feedPoller.Stop)
 

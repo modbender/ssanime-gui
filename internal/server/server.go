@@ -149,7 +149,6 @@ func New(st *store.Store, hub *events.Hub, logger *slog.Logger, cfg Config) http
 				r.Patch("/", h.handlePatchSeries)
 				r.Delete("/", h.handleDeleteSeries)
 				r.Get("/episodes", h.handleListEpisodes)
-				r.Post("/scan", h.handleScanEpisodes)
 				r.Post("/refresh", h.handleRefreshSeries)
 				r.Post("/status", h.handleSetSeriesStatus)
 				r.Post("/unsubscribe", h.handleUnsubscribeSeries)

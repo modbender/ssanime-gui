@@ -149,6 +149,9 @@ type Querier interface {
 	UpdateExtensionSettings(ctx context.Context, arg UpdateExtensionSettingsParams) error
 	UpdateFeed(ctx context.Context, arg UpdateFeedParams) (Feed, error)
 	UpdateSeries(ctx context.Context, arg UpdateSeriesParams) (Series, error)
+	// SetSeriesBackfillFrom records the highest-aired episode at first-subscribe as
+	// the poller's auto-download floor. NULL/0 means no floor (take everything).
+	UpdateSeriesBackfillFrom(ctx context.Context, arg UpdateSeriesBackfillFromParams) error
 	// UpdateSeriesMetadata refreshes the volatile AniList-derived columns for one
 	// series, preserving user/display fields (title, subscribed, favorite,
 	// season_number, default_profile_id, feed_title are never touched). Authoritative

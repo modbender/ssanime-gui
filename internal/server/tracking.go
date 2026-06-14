@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/modbender/ssanime-gui/internal/anilist"
@@ -259,11 +258,21 @@ func (h *Handler) handleTrackSeries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Layer subscription on top: subscribe + land on the polled watch status.
+	// On the FIRST subscribe, freeze the backfill watermark at the highest aired
+	// episode so the poller treats the existing backlog as "not auto-downloaded"
+	// and only chases genuinely-new episodes. Re-subscribe leaves the floor alone.
 	if series.Subscribed != 1 {
 		if e := h.store.Write().SetSeriesSubscribed(ctx, store.SetSeriesSubscribedParams{ID: series.ID, Subscribed: 1}); e != nil {
 			h.logger.Error("track: subscribe", "id", series.ID, "err", e)
 			WriteError(w, http.StatusInternalServerError, "failed to subscribe series")
 			return
+		}
+		var floor *int64
+		if n := h.highestAiredEpisode(ctx, series, req.AnilistID); n > 0 {
+			floor = &n
+		}
+		if e := h.store.Write().UpdateSeriesBackfillFrom(ctx, store.UpdateSeriesBackfillFromParams{BackfillFromEpisode: floor, ID: series.ID}); e != nil {
+			h.logger.Warn("track: set backfill floor", "id", series.ID, "err", e)
 		}
 	}
 	if e := h.store.Write().SetSeriesWatchStatus(ctx, store.SetSeriesWatchStatusParams{ID: series.ID, WatchStatus: watchStatusWatching}); e != nil {
@@ -533,10 +542,6 @@ func (h *Handler) searchMediaForAnilist(w http.ResponseWriter, ctx context.Conte
 	return source.Media{}, false
 }
 
-// availableSearchWorkers bounds the episode×provider search fan-out so a long
-// season across several providers doesn't fire dozens of concurrent JS calls.
-const availableSearchWorkers = 8
-
 // searchAvailable drives a per-episode source search for one media and returns the
 // best release per episode number (excluding numbers in have), plus a warning per
 // failed provider. Per-episode is required for correctness: Hayase extensions
@@ -547,12 +552,12 @@ const availableSearchWorkers = 8
 // The episode-number set comes from ani.zip's per-episode map (authoritative, since
 // media.EpisodeCount is null for currently-releasing shows), falling back to
 // media.EpisodeCount. When neither is known it returns no episodes with a clear
-// warning. The episode×provider matrix is searched through a bounded worker pool;
-// per-provider warnings are deduplicated so one systematically-failing provider
-// yields one warning, not one per episode.
+// warning. Already-have numbers are filtered before the query so no source call is
+// wasted on episodes already in the library. The matrix search and per-provider
+// warning dedup live in source.SearchEpisodes; here we pick the highest-seeded
+// release per episode.
 func (h *Handler) searchAvailable(ctx context.Context, media source.Media, have map[int]struct{}) ([]AvailableEpisode, []string) {
-	providers := h.registry.List()
-	if len(providers) == 0 {
+	if len(h.registry.List()) == 0 {
 		return []AvailableEpisode{}, nil
 	}
 
@@ -561,153 +566,84 @@ func (h *Handler) searchAvailable(ctx context.Context, media source.Media, have 
 		return []AvailableEpisode{}, []string{"couldn't determine episodes for this title — its mapping may not be available yet"}
 	}
 
-	// One unit of work per (episode, provider) cell, skipping already-have episodes.
-	type job struct {
-		num int
-		pid string
-	}
-	jobs := make([]job, 0, len(numbers)*len(providers))
+	// Query only episodes not already in the library so no source call is wasted.
+	query := make([]int, 0, len(numbers))
 	for _, n := range numbers {
 		if _, ok := have[n]; ok {
 			continue
 		}
-		for _, pid := range providers {
-			jobs = append(jobs, job{num: n, pid: pid})
-		}
+		query = append(query, n)
 	}
 
-	type result struct {
-		num int
-		pid string
-		t   *source.AnimeTorrent // best for this cell, nil when none/error
-		err error
-	}
-	jobCh := make(chan job)
-	resCh := make(chan result, len(jobs))
-
-	workers := availableSearchWorkers
-	if workers > len(jobs) {
-		workers = len(jobs)
-	}
-	var wg sync.WaitGroup
-	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := range jobCh {
-				if ctx.Err() != nil {
-					resCh <- result{num: j.num, pid: j.pid, err: ctx.Err()}
-					continue
-				}
-				p, ok := h.registry.Get(j.pid)
-				if !ok {
-					continue
-				}
-				opts := source.SmartSearchOptions{Media: media, EpisodeNumber: j.num, BestReleases: true}
-				torrents, err := p.SmartSearch(ctx, opts)
-				if err != nil {
-					resCh <- result{num: j.num, pid: j.pid, err: err}
-					continue
-				}
-				resCh <- result{num: j.num, pid: j.pid, t: bestForEpisode(torrents, j.num)}
-			}
-		}()
-	}
-	go func() {
-		defer close(jobCh)
-		for _, j := range jobs {
-			select {
-			case <-ctx.Done():
-				return
-			case jobCh <- j:
-			}
-		}
-	}()
-	go func() { wg.Wait(); close(resCh) }()
-
-	best := map[int]*source.AnimeTorrent{}
-	// providerErr records, per provider, whether every cell errored and one sample
-	// error message — so a provider that rejects the same way for every episode
-	// collapses to a single warning.
-	type provStat struct {
-		total  int
-		failed int
-		sample string
-	}
-	stats := map[string]*provStat{}
-	for _, pid := range providers {
-		stats[pid] = &provStat{}
+	candidates, warnings := source.SearchEpisodes(ctx, h.registry, media, query, source.SmartSearchOptions{BestReleases: true})
+	for _, msg := range warnings {
+		h.logger.Warn("available: provider search failed", "detail", msg)
 	}
 
-	for res := range resCh {
-		st := stats[res.pid]
-		if st != nil {
-			st.total++
-			if res.err != nil {
-				st.failed++
-				if st.sample == "" {
-					st.sample = res.err.Error()
-				}
-			}
-		}
-		if res.err != nil {
-			continue
-		}
-		if res.t == nil {
-			continue
-		}
-		num := res.t.EpisodeNumber
-		if num <= 0 {
-			num = res.num // queried number is authoritative when the parse is missing
-		}
+	episodes := make([]AvailableEpisode, 0, len(candidates))
+	for num, group := range candidates {
 		if _, ok := have[num]; ok {
+			continue // defensive: a batch hit may surface a have number
+		}
+		var best *source.AnimeTorrent
+		for _, t := range group {
+			if best == nil || t.Seeders > best.Seeders {
+				best = t
+			}
+		}
+		if best == nil {
 			continue
 		}
-		cur, ok := best[num]
-		if !ok || res.t.Seeders > cur.Seeders {
-			best[num] = res.t
-		}
-	}
-
-	episodes := make([]AvailableEpisode, 0, len(best))
-	for num, t := range best {
 		ep := AvailableEpisode{
 			Number:     num,
-			Title:      t.Name,
-			SourceURL:  availableSourceURL(t),
-			Resolution: t.Resolution,
+			Title:      best.Name,
+			SourceURL:  availableSourceURL(best),
+			Resolution: best.Resolution,
 		}
-		if t.Size > 0 {
-			sz := t.Size
+		if best.Size > 0 {
+			sz := best.Size
 			ep.Size = &sz
 		}
 		episodes = append(episodes, ep)
 	}
 	sort.Slice(episodes, func(i, j int) bool { return episodes[i].Number < episodes[j].Number })
-
-	// One warning per provider that failed every episode it was queried for; a
-	// provider with at least one success is healthy enough to omit.
-	var warnings []string
-	fullyFailed := 0
-	for _, pid := range providers {
-		st := stats[pid]
-		if st == nil || st.total == 0 {
-			continue
-		}
-		if st.failed == st.total {
-			fullyFailed++
-			warnings = append(warnings, fmt.Sprintf("%s: %s", pid, st.sample))
-			h.logger.Warn("available: provider failed every episode", "provider", pid, "err", st.sample)
-		}
-	}
-	sort.Strings(warnings)
-
-	// When every installed source failed for every episode, collapse the
-	// per-provider noise into a single actionable message pointing at Extensions.
-	if fullyFailed == len(providers) {
-		warnings = []string{"All installed sources are unreachable — check Extensions."}
-	}
 	return episodes, warnings
+}
+
+// highestAiredEpisode returns the highest episode number that had aired at the
+// moment of subscribe, used as the poller's backfill floor. ani.zip air dates
+// are authoritative; failing that it falls back to the series' EpisodeCount (the
+// whole known run counts as backlog). 0 means "no floor" — a brand-new
+// not-yet-aired series legitimately yields none, so the poller takes everything.
+func (h *Handler) highestAiredEpisode(ctx context.Context, series store.Series, anilistID int64) int64 {
+	if h.anizip != nil && anilistID > 0 {
+		if eps, err := h.anizip.GetEpisodes(ctx, int(anilistID)); err == nil {
+			now := time.Now()
+			var max int64
+			for _, e := range eps {
+				ad := strings.TrimSpace(e.AirDate)
+				if ad == "" {
+					continue
+				}
+				airTime, perr := time.Parse("2006-01-02", ad)
+				if perr != nil || airTime.After(now) {
+					continue
+				}
+				if int64(e.Number) > max {
+					max = int64(e.Number)
+				}
+			}
+			if max > 0 {
+				return max
+			}
+		} else {
+			h.logger.Info("track: anizip air-date resolve failed", "anilist_id", anilistID, "err", err)
+		}
+	}
+	if series.EpisodeCount != nil && *series.EpisodeCount > 0 {
+		return *series.EpisodeCount
+	}
+	return 0
 }
 
 // resolveEpisodeNumbers returns the sorted set of episode numbers to search for a
@@ -739,27 +675,6 @@ func (h *Handler) resolveEpisodeNumbers(ctx context.Context, media source.Media)
 		return nums
 	}
 	return nil
-}
-
-// bestForEpisode picks the highest-seeded release from a provider's results for a
-// queried episode number. A torrent whose parsed EpisodeNumber is a different
-// valid number (a multi-episode/batch hit) is skipped here — it is bucketed to its
-// own episode by the caller only when it surfaces under that episode's query.
-func bestForEpisode(torrents []*source.AnimeTorrent, queried int) *source.AnimeTorrent {
-	var best *source.AnimeTorrent
-	for _, t := range torrents {
-		num := t.EpisodeNumber
-		if num <= 0 {
-			num = queried // unparsed number: trust the queried episode
-		}
-		if num != queried {
-			continue // a different parsed episode: not this cell's result
-		}
-		if best == nil || t.Seeders > best.Seeders {
-			best = t
-		}
-	}
-	return best
 }
 
 // enqueueAvailableEpisode finds-or-creates the (series, number) episode for a

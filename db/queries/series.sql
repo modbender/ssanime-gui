@@ -105,6 +105,11 @@ UPDATE series SET subscribed = ?, modified_at = unixepoch() WHERE id = ?;
 -- name: SetSeriesFavorite :exec
 UPDATE series SET favorite = ?, modified_at = unixepoch() WHERE id = ?;
 
+-- SetSeriesBackfillFrom records the highest-aired episode at first-subscribe as
+-- the poller's auto-download floor. NULL/0 means no floor (take everything).
+-- name: UpdateSeriesBackfillFrom :exec
+UPDATE series SET backfill_from_episode = ?, modified_at = unixepoch() WHERE id = ?;
+
 -- name: SetSeriesAiringStatus :exec
 UPDATE series SET airing_status = ?, modified_at = unixepoch() WHERE id = ?;
 
