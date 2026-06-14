@@ -92,10 +92,14 @@ func beside(known, tool string) string {
 	return dir + string(os.PathSeparator) + exe
 }
 
-// execCommand is a thin alias over exec.CommandContext kept so call sites read
-// uniformly and are easy to grep.
+// execCommand wraps exec.CommandContext so every ffmpeg/ffprobe spawn goes
+// through one place. On Windows it suppresses the child console window
+// (hideConsole) so a GUI-launched daemon doesn't pop up a terminal — and so a
+// user can't kill an encode by closing that window.
 func execCommand(ctx context.Context, name string, args ...string) *exec.Cmd {
-	return exec.CommandContext(ctx, name, args...)
+	cmd := exec.CommandContext(ctx, name, args...)
+	hideConsole(cmd)
+	return cmd
 }
 
 func fileExists(p string) bool {
@@ -108,7 +112,7 @@ func isWindows() bool { return os.PathSeparator == '\\' }
 // ProbeDuration returns the media duration in seconds via ffprobe. It is the
 // anchor for real percent progress (out_time / duration).
 func (t Tools) ProbeDuration(ctx context.Context, input string) (float64, error) {
-	cmd := exec.CommandContext(ctx, t.FFprobe,
+	cmd := execCommand(ctx, t.FFprobe,
 		"-v", "error",
 		"-show_entries", "format=duration",
 		"-of", "default=noprint_wrappers=1:nokey=1",
@@ -137,7 +141,7 @@ type ProgressFunc func(percent float64, speed string)
 // cancellable: on cancel the process is killed and a wrapped context error is
 // returned. stderr is captured so a non-zero exit reports the real ffmpeg cause.
 func (t Tools) Run(ctx context.Context, args []string, totalSeconds float64, onProgress ProgressFunc) error {
-	cmd := exec.CommandContext(ctx, t.FFmpeg, args...)
+	cmd := execCommand(ctx, t.FFmpeg, args...)
 	// Kill the whole process on context cancel rather than waiting for a clean
 	// exit, matching the ported Wails model.
 	cmd.Cancel = func() error {
