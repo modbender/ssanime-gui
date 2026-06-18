@@ -277,7 +277,7 @@ export interface Extension {
   repo_id: number | null
   ext_id: string
   name: string
-  version: string
+  version: string | null
   lang: string | null
   enabled: boolean
   nsfw: boolean
