@@ -59,3 +59,67 @@ Not CPU — the machine is fine. The real issues:
 **Trigger to pick up:** a real user tracking enough series that the boot burst or a
 source throttle is observed, or before any "bulk import / OPML subscribe" feature
 ships.
+
+## Non-torrent (direct / HLS) sources + yt-dlp download lane
+
+**Status:** deferred. The whole app is torrent-first, and the sourcing contract is
+torrent-*only* — there is currently no way for a source to be anything but a torrent.
+This unlocks the dormant yt-dlp lane and covers the long tail of titles with no viable
+torrent.
+
+### Why it's wanted
+
+A direct/HLS lane is a *fallback for the minority of episodes a torrent can't serve*:
+dead/low-seeder torrents (niche, older, regional titles) and pre-torrent simulcasts (an
+episode is on a streaming site hours before any torrent exists). It is **not** an
+upgrade for the common case — the streaming sources actually worth pulling are
+Widevine-DRM'd (yt-dlp can't touch those), and the DRM-free ones mostly rehost
+re-encoded torrent rips. So: real value for the tail, low value for the bulk, and a
+standing maintenance tax (yt-dlp breaks weekly as sites change).
+
+### Current state (as of 2026-06-19) — torrent-only by contract
+
+The download seam is already polymorphic, but the *source* contract is not:
+
+- The `Downloader` interface (`internal/download`) was designed for multiple backends;
+  only the embedded `anacrolix/torrent` backend exists. yt-dlp is provisioned-and-
+  reachable in `internal/binaries` (`EnsureYtDlp`/`UpdateYtDlp`, kept dormant), but no
+  code invokes it (startup provisioning was removed — nothing to download for).
+- The blocker is upstream of the downloader: the `source.Provider` interface exposes
+  only `GetTorrentMagnetLink` / `GetTorrentInfoHash` (`internal/source/types.go:156`),
+  and the sole result type `AnimeTorrent` carries `Magnet` / `Link` / `InfoHash` only
+  (`types.go:119`) — **no field can hold a direct/HLS video URL**. Extensions are
+  tagged torrent-only: `IndexEntry.Type` is `"torrent"` and the only constant is
+  `ExtTypeTorrent` (`internal/extension/types.go`). This is the Hayase format, whose
+  extensions are all torrent providers. So a non-torrent source cannot even be
+  *represented*, let alone downloaded.
+
+### Plan (in dependency order — each step is useless without the prior)
+
+1. **Grow the source contract.** Add a non-torrent source shape (a direct/HLS URL +
+   kind) to the result type and a resolve method to `source.Provider`; add a non-torrent
+   `ExtType` (e.g. `"hls"` / `"direct"`) and stop hardcoding `ExtTypeTorrent` on install.
+2. **Route by source kind.** Teach autoselect + the download enqueue path to dispatch a
+   non-torrent source to the right `Downloader` backend instead of assuming a magnet.
+3. **Build the yt-dlp `Downloader` backend.** Invoke the (already-provisioned) yt-dlp
+   binary for direct/HLS, with progress parsing into the existing pipeline; re-add the
+   `EnsureYtDlp` startup provisioning and re-surface its Settings path field (both left
+   dormant for exactly this).
+4. **Fallback policy.** Define when the non-torrent lane is *preferred* (e.g. no
+   seeders / no torrent within a window) vs an explicit alternate source, and how it
+   shows in the UI.
+
+### Open questions
+
+- Does any extension in the ecosystem actually return direct/HLS sources, or would this
+  require authoring a new extension *type* the Hayase format doesn't define? (If the
+  latter, the contract change is ours to spec and there's no producer yet.)
+- yt-dlp self-update: once the lane is live, wire `UpdateYtDlp` on the same silent
+  background cadence as extension auto-update (it breaks weekly — same churn rationale).
+- DRM reality check: scope which sources are even feasible before investing, so the lane
+  isn't built for sources yt-dlp can't decrypt.
+
+**Trigger to pick up:** a source extension actually starts returning non-torrent
+(direct/HLS) links, or a concrete need for the no-viable-torrent tail is observed.
+Until a *producer* of non-torrent sources exists, this is unreachable and stays
+dormant.
