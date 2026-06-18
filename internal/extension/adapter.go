@@ -28,7 +28,6 @@ type JSProvider struct {
 	name    string
 	vm      *VM
 	logger  *slog.Logger
-	extType string // "torrent"
 	// resolver fills cross-tracker ids (anidb/tvdb/tmdb/...) from ani.zip so the
 	// Hayase options object is fully populated. Nil-safe: when absent the adapter
 	// falls back to whatever ids Media already carries.

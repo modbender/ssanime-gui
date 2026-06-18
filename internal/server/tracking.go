@@ -913,8 +913,6 @@ func parseSeriesSynonyms(raw *string) []string {
 	return syn
 }
 
-func strPtr(s string) *string { return &s }
-
 func strPtrVal(s *string) string {
 	if s == nil {
 		return ""

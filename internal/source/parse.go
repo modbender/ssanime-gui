@@ -85,17 +85,6 @@ func isBatch(m *habari.Metadata) bool {
 	return false
 }
 
-// resolutionInt converts a habari resolution string ("1080p", "1080") to an int,
-// or 0 when it can't be read. Used to populate episodes.resolution.
-func resolutionInt(res string) int {
-	digits := episodeRe.FindString(res)
-	if digits == "" {
-		return 0
-	}
-	n, _ := strconv.Atoi(digits)
-	return n
-}
-
 // buildMagnet constructs a magnet URI from an info hash and display name when a
 // provider exposes only the hash (nyaa RSS without a magnet element).
 func buildMagnet(infoHash, displayName string) string {

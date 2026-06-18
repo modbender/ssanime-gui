@@ -3,23 +3,7 @@ package source
 import (
 	"regexp"
 	"strings"
-	"time"
 )
-
-// preferredTitle picks the best title to search a provider with: romaji first
-// (release groups name files in romaji), then english, then the first synonym.
-func preferredTitle(m Media) string {
-	if m.RomajiTitle != "" {
-		return m.RomajiTitle
-	}
-	if m.EnglishTitle != nil && *m.EnglishTitle != "" {
-		return *m.EnglishTitle
-	}
-	if len(m.Synonyms) > 0 {
-		return m.Synonyms[0]
-	}
-	return ""
-}
 
 // nonAlnum collapses everything that isn't a letter/digit to a single space,
 // for loose title comparison ("Sousou no Frieren" vs "Frieren - Sousou no").
@@ -95,10 +79,4 @@ func filterSmart(results []*AnimeTorrent, opts SmartSearchOptions) []*AnimeTorre
 func resolutionEqual(a, b string) bool {
 	return strings.EqualFold(strings.TrimSuffix(strings.ToLower(a), "p"),
 		strings.TrimSuffix(strings.ToLower(b), "p"))
-}
-
-// parseTime is a thin wrapper kept here so providers don't import time directly
-// just for one format parse.
-func parseTime(layout, value string) (time.Time, error) {
-	return time.Parse(layout, value)
 }
