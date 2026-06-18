@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte'
   let {
     open = $bindable(false),
     title = '',
@@ -7,8 +8,8 @@
   }: {
     open?: boolean
     title?: string
-    children?: any
-    footer?: any
+    children?: Snippet
+    footer?: Snippet
   } = $props()
 
   function close() { open = false }

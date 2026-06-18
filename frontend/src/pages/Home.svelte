@@ -14,7 +14,7 @@
   import Spinner from '$lib/components/Spinner.svelte'
   import Button from '$lib/components/Button.svelte'
   import { markTracked, trackedAnilistIds } from '$lib/discovery.svelte'
-  import { watchBucket } from '$lib/utils'
+  import { errMessage, watchBucket } from '$lib/utils'
   import { requireSource } from '$lib/sources.svelte'
   import { sseState } from '$lib/sse.svelte'
 
@@ -163,10 +163,10 @@
       await api.trackSeries({ anilist_id: item.anilist_id })
       // Pull the now-tracked series into the activity-backed downloading row.
       refreshActivity()
-    } catch (e: any) {
+    } catch (e: unknown) {
       // 409 / already-tracked: backend may surface this as an error string.
       // Treat "already" as success; otherwise roll back the optimistic flag.
-      const msg = String(e?.message ?? '').toLowerCase()
+      const msg = errMessage(e).toLowerCase()
       if (!msg.includes('already') && !msg.includes('exist')) {
         trackedAnilistIds.delete(item.anilist_id)
       }

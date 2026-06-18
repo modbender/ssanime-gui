@@ -3,6 +3,7 @@
   import { sseState } from '$lib/sse.svelte'
   import Button from '$lib/components/Button.svelte'
   import Spinner from '$lib/components/Spinner.svelte'
+  import { errMessage } from '$lib/utils'
 
   let historicLines = $state<string[]>([])
   let loading = $state(true)
@@ -17,8 +18,8 @@
     try {
       const res = await api.getLogs()
       historicLines = res.lines
-    } catch (e: any) {
-      error = e.message
+    } catch (e: unknown) {
+      error = errMessage(e)
     } finally {
       loading = false
     }

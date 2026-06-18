@@ -6,6 +6,17 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+/** Narrow an unknown thrown value to its display message, falling back to its
+ *  string form when it is not an Error. */
+export function errMessage(e: unknown): string {
+  if (e instanceof Error) return e.message
+  if (typeof e === 'string') return e
+  if (e != null && typeof e === 'object' && 'message' in e) {
+    return String((e as { message: unknown }).message)
+  }
+  return String(e)
+}
+
 /** Default accent (violet) used when a series has no cover_color. */
 export const DEFAULT_ACCENT = '#7c6af0'
 

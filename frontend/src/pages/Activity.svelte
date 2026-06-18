@@ -13,6 +13,7 @@
   import { episodeOverall, episodeStage, liveStatus } from '$lib/pipeline.svelte'
   import { isActive } from '$lib/pipeline-math'
   import {
+    errMessage,
     formatBytes,
     formatDate,
     statusColor,
@@ -38,8 +39,8 @@
     try {
       const res = await api.getActivity()
       series = res.series ?? []
-    } catch (e: any) {
-      error = e.message
+    } catch (e: unknown) {
+      error = errMessage(e)
     } finally {
       loading = false
       seeded = true
@@ -123,8 +124,8 @@
     try {
       const res = await api.setSeriesStatus(s.id, status)
       series = series.map((x) => (x.id === s.id ? { ...x, ...res.series } : x))
-    } catch (e: any) {
-      toast.error(e.message)
+    } catch (e: unknown) {
+      toast.error(errMessage(e))
       await load()
     } finally {
       const done = new Set(statusBusy); done.delete(s.id); statusBusy = done
@@ -138,8 +139,8 @@
     try {
       await api.retryEpisode(ep.id)
       await load()
-    } catch (e: any) {
-      toast.error(e.message)
+    } catch (e: unknown) {
+      toast.error(errMessage(e))
     } finally {
       const done = new Set(epBusy); done.delete(ep.id); epBusy = done
     }
@@ -153,15 +154,15 @@
       const out = ep.outputs.find((o) => o.encoded_path)
       if (out) await api.revealOutput(out.id)
       else await api.revealEpisodeSource(ep.id)
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error(revealError(e))
     } finally {
       const done = new Set(epBusy); done.delete(ep.id); epBusy = done
     }
   }
 
-  function revealError(e: any): string {
-    const msg = String(e?.message ?? '')
+  function revealError(e: unknown): string {
+    const msg = errMessage(e)
     if (msg.includes('409')) return 'File was cleaned up or moved.'
     if (msg.includes('404')) return 'File path is not set yet.'
     if (msg.includes('403')) return 'File is outside the managed folders.'

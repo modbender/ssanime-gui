@@ -4,7 +4,7 @@
   import Button from '$lib/components/Button.svelte'
   import Spinner from '$lib/components/Spinner.svelte'
   import PosterCard from '$lib/components/PosterCard.svelte'
-  import { watchBucket, watchStatusLabel } from '$lib/utils'
+  import { errMessage, watchBucket, watchStatusLabel } from '$lib/utils'
   import { navigate } from 'svelte-routing'
   import { scrollScrim } from '$lib/scrollScrim'
 
@@ -21,8 +21,8 @@
     error = ''
     try {
       all = await api.listSeries({ library: true })
-    } catch (e: any) {
-      error = e.message
+    } catch (e: unknown) {
+      error = errMessage(e)
     } finally {
       loading = false
     }

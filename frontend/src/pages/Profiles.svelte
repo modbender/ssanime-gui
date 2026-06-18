@@ -7,6 +7,7 @@
   import Spinner from '$lib/components/Spinner.svelte'
   import { toast } from '$lib/toast.svelte'
   import { confirm } from '$lib/confirm.svelte'
+  import { errMessage } from '$lib/utils'
   import { scrollScrim } from '$lib/scrollScrim'
 
   let profiles = $state<Profile[]>([])
@@ -72,8 +73,8 @@
     error = ''
     try {
       profiles = await api.listProfiles()
-    } catch (e: any) {
-      error = e.message
+    } catch (e: unknown) {
+      error = errMessage(e)
     } finally {
       loading = false
     }
@@ -175,8 +176,8 @@
       }
       editOpen = false
       await load()
-    } catch (e: any) {
-      toast.error(e.message)
+    } catch (e: unknown) {
+      toast.error(errMessage(e))
     } finally {
       saving = false
     }
@@ -193,8 +194,8 @@
     try {
       await api.deleteProfile(id)
       profiles = profiles.filter(p => p.id !== id)
-    } catch (e: any) {
-      toast.error(e.message)
+    } catch (e: unknown) {
+      toast.error(errMessage(e))
     } finally {
       deleting = null
     }
@@ -207,8 +208,8 @@
     loadingResolved = true
     try {
       resolved = await api.getResolvedProfile(p.id)
-    } catch (e: any) {
-      toast.error(e.message)
+    } catch (e: unknown) {
+      toast.error(errMessage(e))
       resolvedOpen = false
     } finally {
       loadingResolved = false

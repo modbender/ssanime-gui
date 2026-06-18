@@ -1,5 +1,6 @@
 <script lang="ts">
   import { cn } from '$lib/utils'
+  import type { Snippet } from 'svelte'
 
   type Variant = 'default' | 'secondary' | 'ghost' | 'destructive' | 'outline'
   type Size = 'sm' | 'md' | 'lg' | 'icon'
@@ -21,7 +22,7 @@
     onclick?: (e: MouseEvent) => void
     type?: 'button' | 'submit' | 'reset'
     title?: string
-    children?: any
+    children?: Snippet
   } = $props()
 
   const variantClasses: Record<Variant, string> = {

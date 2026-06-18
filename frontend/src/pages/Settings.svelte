@@ -4,6 +4,7 @@
   import Input from '$lib/components/Input.svelte'
   import Spinner from '$lib/components/Spinner.svelte'
   import LogStream from '$lib/components/LogStream.svelte'
+  import { errMessage } from '$lib/utils'
   import { scrollScrim } from '$lib/scrollScrim'
 
   type TabId = 'general' | 'processing' | 'network' | 'binaries' | 'logs'
@@ -72,8 +73,8 @@
       // torrent client server-side.) Replace with a real client list when those
       // backends ship.
       form.download_backend = null
-    } catch (e: any) {
-      error = e.message
+    } catch (e: unknown) {
+      error = errMessage(e)
     } finally {
       loading = false
     }
@@ -97,8 +98,8 @@
       settings = { ...updated }
       saved = true
       setTimeout(() => { saved = false }, 2500)
-    } catch (e: any) {
-      saveError = e.message
+    } catch (e: unknown) {
+      saveError = errMessage(e)
     } finally {
       saving = false
     }

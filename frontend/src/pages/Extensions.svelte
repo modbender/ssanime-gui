@@ -6,7 +6,7 @@
   import { reloadSources } from '$lib/sources.svelte'
   import { toast } from '$lib/toast.svelte'
   import { confirm } from '$lib/confirm.svelte'
-  import { formatDate, relativeTime } from '$lib/utils'
+  import { errMessage, formatDate, relativeTime } from '$lib/utils'
   import { scrollScrim } from '$lib/scrollScrim'
 
   let repos = $state<ExtensionRepo[]>([])
@@ -64,8 +64,8 @@
         api.listExtensions(),
         api.getSettings(),
       ])
-    } catch (e: any) {
-      error = e.message
+    } catch (e: unknown) {
+      error = errMessage(e)
     } finally {
       loading = false
     }
@@ -107,9 +107,9 @@
       const res = await api.previewExtensionRepo(url)
       previewUrl = url
       previewEntries = res.entries
-    } catch (e: any) {
+    } catch (e: unknown) {
       previewUrl = url
-      previewError = `Repository unreachable or invalid: ${e.message}`
+      previewError = `Repository unreachable or invalid: ${errMessage(e)}`
     } finally {
       previewing = false
     }
@@ -124,8 +124,8 @@
       addOpen = false
       repos = await api.listExtensionRepos()
       await refreshExtensions()
-    } catch (e: any) {
-      toast.error(e.message)
+    } catch (e: unknown) {
+      toast.error(errMessage(e))
     } finally {
       adding = false
     }
@@ -139,8 +139,8 @@
       await refreshExtensions()
       if (res.healthy) toast.success(`${ext.name} is healthy`)
       else toast.error(`${ext.name} unreachable: ${res.error || 'unknown error'}`)
-    } catch (e: any) {
-      toast.error(e.message)
+    } catch (e: unknown) {
+      toast.error(errMessage(e))
     } finally {
       checkingExt = null
     }
@@ -153,8 +153,8 @@
       await api.syncExtensionRepo(repo.id)
       ;[repos] = await Promise.all([api.listExtensionRepos()])
       await refreshExtensions()
-    } catch (e: any) {
-      toast.error(e.message)
+    } catch (e: unknown) {
+      toast.error(errMessage(e))
     } finally {
       syncing = null
     }
@@ -173,8 +173,8 @@
       // The backend cascade-deletes the repo's sources; reflect that here so a
       // phantom row doesn't linger in the installed list.
       await refreshExtensions()
-    } catch (e: any) {
-      toast.error(e.message)
+    } catch (e: unknown) {
+      toast.error(errMessage(e))
     } finally {
       removingRepo = null
     }
@@ -189,8 +189,8 @@
         : await api.enableExtension(ext.id)
       extensions = extensions.map((e) => (e.id === ext.id ? updated : e))
       await reloadSources()
-    } catch (e: any) {
-      toast.error(e.message)
+    } catch (e: unknown) {
+      toast.error(errMessage(e))
     } finally {
       togglingExt = null
     }
@@ -203,7 +203,7 @@
       await api.uninstallExtension(ext.id)
       extensions = extensions.filter((e) => e.id !== ext.id)
       await reloadSources()
-    } catch (e: any) {
+    } catch (e: unknown) {
       // The row may already be gone server-side (e.g. removed with its repo).
       // Reconcile against the server before surfacing an error.
       const fresh = await api.listExtensions().catch(() => null)
@@ -211,7 +211,7 @@
         extensions = fresh
         await reloadSources()
       } else {
-        toast.error(e.message)
+        toast.error(errMessage(e))
       }
     } finally {
       removingExt = null
@@ -224,8 +224,8 @@
     const next = { ...settings, show_nsfw: !settings.show_nsfw }
     try {
       settings = await api.putSettings(next)
-    } catch (e: any) {
-      toast.error(e.message)
+    } catch (e: unknown) {
+      toast.error(errMessage(e))
     } finally {
       savingNsfw = false
     }
