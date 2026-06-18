@@ -4,6 +4,7 @@
   import Input from '$lib/components/Input.svelte'
   import Spinner from '$lib/components/Spinner.svelte'
   import LogStream from '$lib/components/LogStream.svelte'
+  import { scrollScrim } from '$lib/scrollScrim'
 
   type TabId = 'general' | 'processing' | 'network' | 'binaries' | 'logs'
   const tabs: { id: TabId; label: string }[] = [
@@ -114,9 +115,9 @@
   function textNull(val: string): string | null { return val.trim() || null }
 </script>
 
-<div class="flex flex-col h-full overflow-hidden">
+<div class="flex flex-col h-full overflow-hidden" use:scrollScrim>
   <!-- Page header -->
-  <div class="sticky top-0 z-10 px-6 sm:px-10 pt-4 border-b border-[var(--color-border)] bg-[var(--color-bg)]/95 backdrop-blur-md">
+  <div class="sticky top-0 z-10 px-6 sm:px-10 pt-4 bg-transparent backdrop-blur-0 border-b border-transparent transition-[background-color,border-color,backdrop-filter] duration-300 [.scrolled_&]:bg-[var(--color-bg)]/85 [.scrolled_&]:backdrop-blur-md [.scrolled_&]:border-[var(--color-border)]">
     <div class="flex items-center justify-between">
       <h1 class="text-[15px] font-semibold tracking-tight">Settings</h1>
       {#if activeTab !== 'logs'}

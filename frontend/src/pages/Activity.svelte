@@ -19,6 +19,7 @@
     watchStatusColor,
     watchStatusLabel,
   } from '$lib/utils'
+  import { scrollScrim } from '$lib/scrollScrim'
 
   let series = $state<ActivitySeries[]>([])
   let loading = $state(true)
@@ -181,9 +182,9 @@
   const totalActive = $derived(series.reduce((n, s) => n + activeCount(s), 0))
 </script>
 
-<div class="flex flex-col h-full overflow-y-auto">
+<div class="flex flex-col h-full overflow-y-auto" use:scrollScrim>
   <!-- Header -->
-  <div class="sticky top-0 z-10 flex items-center justify-between px-6 sm:px-10 py-4 border-b border-[var(--color-border)] bg-[var(--color-bg)]/95 backdrop-blur-md">
+  <div class="sticky top-0 z-10 flex items-center justify-between px-6 sm:px-10 py-4 bg-transparent backdrop-blur-0 border-b border-transparent transition-[background-color,border-color,backdrop-filter] duration-300 [.scrolled_&]:bg-[var(--color-bg)]/85 [.scrolled_&]:backdrop-blur-md [.scrolled_&]:border-[var(--color-border)]">
     <div class="flex items-baseline gap-2.5">
       <h1 class="text-[15px] font-semibold tracking-tight">Activity</h1>
       {#if !loading && totalActive > 0}

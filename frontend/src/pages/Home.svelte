@@ -181,7 +181,7 @@
 <div class="relative flex flex-col h-full overflow-y-auto">
   <!-- Warm-up overlay: blurs the skeletons loading behind it until discovery lands. -->
   {#if discoveryLoading && rows.length === 0}
-    <div class="absolute inset-0 z-30 flex items-center justify-center bg-[var(--color-bg)]/40 backdrop-blur-md">
+    <div class="absolute inset-0 z-20 flex items-center justify-center bg-[var(--color-bg)]/40 backdrop-blur-md">
       <div class="flex flex-col items-center gap-4 px-6 text-center">
         <Spinner size={38} />
         <div class="space-y-1">
@@ -194,10 +194,10 @@
 
   <!-- HERO -->
   {#if discoveryLoading && heroItems.length === 0}
-    <div class="relative min-h-[72vh] w-full shrink-0 overflow-hidden">
+    <div class="relative min-h-[72vh] -ml-[var(--rail)] w-[calc(100%+var(--rail))] shrink-0 overflow-hidden">
       <div class="absolute inset-0 bg-gradient-to-br from-white/[0.04] to-transparent animate-pulse"></div>
       <div class="absolute inset-0 bg-gradient-to-t from-[var(--color-bg)] via-[var(--color-bg)]/50 to-transparent"></div>
-      <div class="relative w-full px-6 sm:px-10 pt-32 pb-12 space-y-4">
+      <div class="relative w-full pr-6 sm:pr-10 pl-[calc(var(--rail)+1.5rem)] sm:pl-[calc(var(--rail)+2.5rem)] pt-32 pb-12 space-y-4">
         <div class="h-3 w-28 bg-white/[0.06] animate-pulse"></div>
         <div class="h-12 w-2/3 max-w-xl bg-white/[0.06] animate-pulse"></div>
         <div class="h-4 w-1/2 max-w-md bg-white/[0.05] animate-pulse"></div>

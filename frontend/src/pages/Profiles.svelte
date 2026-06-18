@@ -7,6 +7,7 @@
   import Spinner from '$lib/components/Spinner.svelte'
   import { toast } from '$lib/toast.svelte'
   import { confirm } from '$lib/confirm.svelte'
+  import { scrollScrim } from '$lib/scrollScrim'
 
   let profiles = $state<Profile[]>([])
   let loading = $state(true)
@@ -224,9 +225,9 @@
   const presets = ['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow', 'placebo']
 </script>
 
-<div class="flex flex-col h-full overflow-y-auto">
+<div class="flex flex-col h-full overflow-y-auto" use:scrollScrim>
   <!-- Page header -->
-  <div class="sticky top-0 z-10 flex items-center justify-between px-6 sm:px-10 py-4 border-b border-[var(--color-border)] bg-[var(--color-bg)]/95 backdrop-blur-md">
+  <div class="sticky top-0 z-10 flex items-center justify-between px-6 sm:px-10 py-4 bg-transparent backdrop-blur-0 border-b border-transparent transition-[background-color,border-color,backdrop-filter] duration-300 [.scrolled_&]:bg-[var(--color-bg)]/85 [.scrolled_&]:backdrop-blur-md [.scrolled_&]:border-[var(--color-border)]">
     <div class="flex items-baseline gap-2.5">
       <h1 class="text-[15px] font-semibold tracking-tight">Encode profiles</h1>
       {#if !loading && profiles.length > 0}

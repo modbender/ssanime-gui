@@ -615,7 +615,7 @@
   {:else if series || preview || detail}
     <!-- ─── Cinematic header ─────────────────────────────────────── -->
     <section
-      class="relative w-full shrink-0 overflow-hidden"
+      class="relative -ml-[var(--rail)] w-[calc(100%+var(--rail))] shrink-0 overflow-hidden"
       style="--accent: {accent}; --accent-rgb: {accentRgb}; --accent-fg: {accentFg}; --accent-text: {accentTxt}; --accent-text-rgb: {accentTxtRgb};"
     >
       <!-- Banner layer -->
@@ -649,7 +649,7 @@
       ></div>
 
       <!-- Back affordance -->
-      <div class="relative px-6 sm:px-10 pt-5">
+      <div class="relative pr-6 sm:pr-10 pl-[calc(var(--rail)+1.5rem)] sm:pl-[calc(var(--rail)+2.5rem)] pt-5">
         <Button variant="ghost" size="sm" onclick={() => navigate(series ? '/library' : '/')}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
           {series ? 'Library' : 'Home'}
@@ -657,7 +657,7 @@
       </div>
 
       <!-- Content -->
-      <div class="relative px-6 sm:px-10 pt-10 pb-9 sm:pt-16 sm:pb-12">
+      <div class="relative pr-6 sm:pr-10 pl-[calc(var(--rail)+1.5rem)] sm:pl-[calc(var(--rail)+2.5rem)] pt-10 pb-9 sm:pt-16 sm:pb-12">
         <div class="flex flex-col gap-6 sm:flex-row sm:items-end sm:gap-7 animate-fade-up">
           <!-- Poster -->
           <div class="shrink-0">

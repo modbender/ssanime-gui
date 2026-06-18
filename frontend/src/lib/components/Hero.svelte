@@ -85,7 +85,7 @@
 
 {#if featured}
   <section
-    class="relative w-full overflow-hidden flex items-end min-h-[72vh] shrink-0"
+    class="relative -ml-[var(--rail)] w-[calc(100%+var(--rail))] overflow-hidden flex items-end min-h-[72vh] shrink-0"
     style="--accent: {accent}; --accent-rgb: {accentRgb}; --accent-fg: {accentFg}; --accent-text: {accentTxt}; --accent-text-rgb: {accentTxtRgb};"
   >
     <!-- Banner layer -->
@@ -118,8 +118,8 @@
       style="background: linear-gradient(to top, var(--color-bg) 0%, rgb(8 8 11 / 0.55) 28%, rgb(8 8 11 / 0.12) 60%, transparent 100%);"
     ></div>
 
-    <!-- Content -->
-    <div class="relative w-full px-6 sm:px-10 pt-32 pb-12 max-w-[1500px]">
+    <!-- Content — left padding clears the floating rail; art behind it stays full-bleed -->
+    <div class="relative w-full pr-6 sm:pr-10 pl-[calc(var(--rail)+1.5rem)] sm:pl-[calc(var(--rail)+2.5rem)] pt-32 pb-12 max-w-[1500px]">
       <div class="max-w-2xl animate-fade-up">
         <!-- eyebrow -->
         <div class="flex items-center gap-2 mb-4">

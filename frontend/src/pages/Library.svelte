@@ -6,6 +6,7 @@
   import PosterCard from '$lib/components/PosterCard.svelte'
   import { watchBucket, watchStatusLabel } from '$lib/utils'
   import { navigate } from 'svelte-routing'
+  import { scrollScrim } from '$lib/scrollScrim'
 
   let all = $state<SeriesProgress[]>([])
   let loading = $state(true)
@@ -66,9 +67,9 @@
   ]
 </script>
 
-<div class="flex flex-col h-full overflow-y-auto">
+<div class="flex flex-col h-full overflow-y-auto" use:scrollScrim>
   <!-- Header -->
-  <div class="sticky top-0 z-10 bg-[var(--color-bg)]/85 backdrop-blur-md border-b border-[var(--color-border)]">
+  <div class="sticky top-0 z-10 bg-transparent backdrop-blur-0 border-b border-transparent transition-[background-color,border-color,backdrop-filter] duration-300 [.scrolled_&]:bg-[var(--color-bg)]/85 [.scrolled_&]:backdrop-blur-md [.scrolled_&]:border-[var(--color-border)]">
     <div class="px-6 sm:px-10 py-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div class="flex items-baseline gap-2.5">
         <h1 class="text-xl font-bold tracking-tight">Library</h1>
