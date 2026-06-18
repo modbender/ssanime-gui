@@ -2,6 +2,41 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Commands
+
+Module `github.com/modbender/ssanime-gui`, Go 1.25+. The whole app is **cgo-free** (`CGO_ENABLED=0`)
+except the macOS systray. Builds go through Mage; CI inlines the raw commands (see below).
+
+```sh
+# Backend (Go) — the CI gate is exactly these three
+go build ./...
+go vet ./...
+go test ./...
+
+go test ./internal/encode/...            # one package
+go test ./internal/encode -run TestName  # one test by name
+go test ./... -count=1                    # bypass the test cache
+
+# Frontend (Svelte SPA) — run from frontend/, always bun (never npm/pnpm/yarn)
+cd frontend
+bun install --frozen-lockfile
+bun run check    # svelte-check + tsc typecheck — the CI gate (no Go-side equivalent)
+bun run build    # emits to internal/server/dist (go:embed source — rebuild before `mage server`)
+bun run dev      # Vite dev server for UI-only iteration
+
+# Mage (local convenience; run from repo root) — `mage -l` lists targets
+mage server      # build host-OS daemon -> ssanime[.exe]
+mage frontend    # build SPA into internal/server/dist (dep of server/tauri)
+mage tauri       # frontend -> sidecar -> Tauri bundle (installers in desktop/target/release/bundle/)
+mage run         # build + launch the daemon
+mage buildAll    # cross-compile windows/linux (+ darwin only on a Mac)
+mage test / vet / clean
+```
+
+**sqlc codegen** (`sqlc.yaml`): schema in `db/migrations/` (goose), queries in `db/queries/`, generated
+Go into `internal/store`. After editing either, regenerate with `sqlc generate` (via `go run`/`go tool`
+or a local `sqlc`) — the generated files are committed, so a stale `internal/store` is a real bug.
+
 ## Current state
 
 This repo is **implemented and building**. The Go daemon (`cmd/ssanime` + 19 `internal/` packages),
