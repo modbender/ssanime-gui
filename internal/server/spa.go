@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-// distFS holds the built Svelte SPA. The real frontend lands in a later phase;
-// for now dist/ contains only a placeholder index.html so this compiles.
+// distFS holds the built Svelte SPA. dist/ is produced by `bun run build` in
+// frontend/ and embedded here; rebuild it after changing frontend source.
 //
 //go:embed all:dist
 var distFS embed.FS
