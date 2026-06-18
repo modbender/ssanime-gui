@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/modbender/ssanime-gui/internal/events"
 	"github.com/modbender/ssanime-gui/internal/source"
 	"github.com/modbender/ssanime-gui/internal/store"
 )
@@ -37,7 +38,20 @@ type Manager struct {
 	// resolver fills cross-tracker ids for the Hayase options object. Nil until
 	// SetResolver is called; nil-safe (providers fall back to Media ids).
 	resolver IDResolver
+	// hub receives the extensions.updated SSE event when the background updater
+	// applies one or more updates. Nil until SetHub; nil-safe (no broadcast).
+	hub *events.Hub
+
+	// Background auto-updater lifecycle (StartAutoUpdater/StopAutoUpdater).
+	updaterMu      sync.Mutex
+	updaterStarted bool
+	updaterCancel  context.CancelFunc
+	updaterDone    chan struct{}
 }
+
+// SetHub wires the events hub the background auto-updater broadcasts on. Call
+// before StartAutoUpdater.
+func (m *Manager) SetHub(h *events.Hub) { m.hub = h }
 
 // SetResolver wires the ani.zip id-resolver used to populate the Hayase options
 // object for every JS provider this manager registers. Call before

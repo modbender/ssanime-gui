@@ -69,6 +69,19 @@ ON CONFLICT (ext_id) DO UPDATE SET
     modified_at = unixepoch()
 RETURNING *;
 
+-- name: UpdateExtensionPayload :one
+UPDATE extensions SET
+    name = ?,
+    version = ?,
+    source_url = ?,
+    payload = ?,
+    nsfw = ?,
+    icon = ?,
+    settings = ?,
+    modified_at = unixepoch()
+WHERE id = ?
+RETURNING *;
+
 -- name: SetExtensionEnabled :exec
 UPDATE extensions SET enabled = ?, modified_at = unixepoch() WHERE id = ?;
 
