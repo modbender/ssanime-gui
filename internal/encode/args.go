@@ -46,32 +46,52 @@ func muxerFor(container string) string {
 // merged on top in buildX265Params.
 var baseX265Params = defaults.Values.Encode.BaseX265Params
 
+// isGPUCodec reports whether a profile codec selects the hardware lane. The
+// virtual "gpu-auto" codec is resolved to a concrete encoder before BuildArgs.
+func isGPUCodec(codec string) bool {
+	return strings.EqualFold(strings.TrimSpace(codec), "gpu-auto")
+}
+
 // BuildArgs assembles the complete ffmpeg argument list for one resolved profile
 // at one target resolution, plus a JSON snapshot of the effective encode params
 // for reproducibility (persisted on the encoded_outputs row). input/output are
-// absolute file paths.
-func BuildArgs(res Resolved, resolution int, tags ColorTags, input, output string) ([]string, string, error) {
+// absolute file paths. encoder is the concrete video encoder to use (libx265
+// for the x265 lane, or the probed hardware encoder when the profile codec is
+// gpu-auto). sel is the resolved per-track mapping from SelectTracks.
+func BuildArgs(res Resolved, resolution int, tags ColorTags, sel TrackSelection, encoder, input, output string) ([]string, string, error) {
 	height, ok := resolutionHeights[resolution]
 	if !ok {
 		return nil, "", fmt.Errorf("unsupported target resolution %d", resolution)
 	}
-
-	x265 := buildX265Params(res, tags)
-	vf := buildVideoFilters(res, height)
+	gpu := encoder != "" && encoder != cpuEncoder
 
 	args := []string{
 		"-hide_banner",
 		"-nostdin",
 		"-i", input,
-		"-map", "0",
-		// Carry chapters and global metadata from the source into the output.
-		"-map_chapters", "0",
-		"-map_metadata", "0",
-		"-c:v", "libx265",
-		"-pix_fmt", pixFmt(res.BitDepth),
-		"-crf", strconv.FormatFloat(res.CRF, 'f', -1, 64),
-		"-preset", res.Preset,
-		"-x265-params", x265,
+	}
+	// Stream mapping. The wildcard MKV-soft case keeps the legacy blind -map 0
+	// (so chapters/attachments/data also carry through); every other case maps
+	// video + the selected audio (and soft subs) explicitly.
+	args = append(args, mapArgs(sel)...)
+	// Carry chapters and global metadata from the source into the output.
+	args = append(args, "-map_chapters", "0", "-map_metadata", "0")
+
+	// Video codec + quality. GPU encoders ignore the entire x265 recipe.
+	var x265, vf string
+	if gpu {
+		args = append(args, gpuVideoArgs(encoder, res, tags)...)
+		vf = buildVideoFilters(res, height, sel, input, true)
+	} else {
+		x265 = buildX265Params(res, tags)
+		vf = buildVideoFilters(res, height, sel, input, false)
+		args = append(args,
+			"-c:v", "libx265",
+			"-pix_fmt", pixFmt(res.BitDepth),
+			"-crf", strconv.FormatFloat(res.CRF, 'f', -1, 64),
+			"-preset", res.Preset,
+			"-x265-params", x265,
+		)
 	}
 	// Source color signaling: re-tag the container output so players read the
 	// correct primaries/transfer/matrix instead of guessing. Only present tags
@@ -79,19 +99,44 @@ func BuildArgs(res Resolved, resolution int, tags ColorTags, input, output strin
 	args = append(args, colorFlags(tags)...)
 	args = append(args, "-vf", vf)
 	args = append(args, audioArgs(res.Audio)...)
-	// Subtitles + attachments: copy through for softsub-friendly mkv. ffmpeg
-	// ignores a copy of an absent stream type, so this is safe across sources.
-	args = append(args, "-c:s", "copy", "-c:t", "copy")
+	// Subtitles + attachments: copy through for softsub-friendly mkv when soft
+	// subs are kept. When burning (no soft subs) the sub/attachment copy is
+	// dropped — they would otherwise re-add the rendered track.
+	if sel.SoftSubs && !sel.BurnSub {
+		args = append(args, "-c:s", "copy", "-c:t", "copy")
+	}
 	// Explicit muxer (-f) so a temp output filename without a recognized
 	// extension (e.g. "<final>.mkv.tmp") still selects the right container.
 	args = append(args, "-f", muxerFor(res.Container))
 	args = append(args, "-progress", "pipe:1", "-y", output)
 
-	snapshot, err := buildSnapshot(res, resolution, height, x265, vf, tags)
+	snapshot, err := buildSnapshot(res, resolution, height, x265, vf, tags, sel, encoder)
 	if err != nil {
 		return nil, "", err
 	}
 	return args, snapshot, nil
+}
+
+// mapArgs builds the -map flags for the selection. The non-explicit case is the
+// MKV all-passthrough default: a single blind -map 0 (legacy behaviour). The
+// explicit case maps video first, then each kept audio, then each kept soft sub.
+func mapArgs(sel TrackSelection) []string {
+	if !sel.Explicit {
+		return []string{"-map", "0"}
+	}
+	// 0:V:0 (uppercase) selects the first real video stream, excluding
+	// attached-picture streams (e.g. an embedded cover-art mjpeg) that 0:v:0
+	// could otherwise grab and encode as a slideshow.
+	args := []string{"-map", "0:V:0"}
+	for _, idx := range sel.AudioStreamIndices {
+		args = append(args, "-map", fmt.Sprintf("0:%d", idx))
+	}
+	if sel.SoftSubs && !sel.BurnSub {
+		for _, idx := range sel.SubtitleStreamIndices {
+			args = append(args, "-map", fmt.Sprintf("0:%d", idx))
+		}
+	}
+	return args
 }
 
 // colorFlags emits the ffmpeg output color-signaling flags for the present tags,
@@ -153,6 +198,82 @@ func buildX265Params(res Resolved, tags ColorTags) string {
 	return dedupeLastWins(parts)
 }
 
+// gpuEncoderSpec maps a hardware HEVC encoder to its constant-quality argument
+// shape. quality maps an x265-style CRF (0..51, lower = better) to that
+// encoder's quality scale; flags(q) returns the encoder-specific arg tokens for
+// the mapped quality. Verified against `ffmpeg -h encoder=<name>` (ffmpeg 7.0).
+type gpuEncoderSpec struct {
+	quality func(crf float64) int
+	flags   func(q int) []string
+}
+
+// identityCQ keeps the CRF on the encoder's own 0..51 CQP/CQ scale (clamped),
+// since NVENC/QSV/AMF/VAAPI all use a 0..51 quantizer where the CRF value maps
+// directly closely enough for a constant-quality target.
+func identityCQ(crf float64) int { return clampInt(int(crf+0.5), 0, 51) }
+
+// videoToolboxQuality inverts CRF onto VideoToolbox's 0..100 scale (higher =
+// better). CRF 0 -> 100, CRF 51 -> ~0; a linear inversion is the documented
+// approximation since VideoToolbox exposes no CRF.
+func videoToolboxQuality(crf float64) int {
+	q := 100 - int(crf/51.0*100+0.5)
+	return clampInt(q, 1, 100)
+}
+
+// gpuEncoderSpecs holds the per-encoder constant-quality recipe. NO x265 knobs
+// (psy-rd/aq-mode/deblock/-x265-params) apply here — those are libx265-only.
+var gpuEncoderSpecs = map[string]gpuEncoderSpec{
+	"hevc_nvenc": {
+		quality: identityCQ,
+		flags: func(q int) []string {
+			return []string{"-preset", "p7", "-tune", "hq", "-rc", "vbr", "-cq", strconv.Itoa(q), "-b:v", "0"}
+		},
+	},
+	"hevc_qsv": {
+		quality: identityCQ,
+		flags: func(q int) []string {
+			return []string{"-global_quality", strconv.Itoa(q), "-preset", "veryslow"}
+		},
+	},
+	"hevc_amf": {
+		quality: identityCQ,
+		flags: func(q int) []string {
+			qs := strconv.Itoa(q)
+			return []string{"-rc", "cqp", "-qp_i", qs, "-qp_p", qs, "-qp_b", qs, "-quality", "quality"}
+		},
+	},
+	"hevc_videotoolbox": {
+		quality: videoToolboxQuality,
+		flags: func(q int) []string {
+			return []string{"-q:v", strconv.Itoa(q)}
+		},
+	},
+}
+
+// gpuVideoArgs builds the video-encoder args for a hardware HEVC encoder: the
+// -c:v, GPU presets are always 8-bit yuv420p (device/player compatibility), the
+// per-encoder constant-quality flags, and color signaling reuse. An unknown
+// encoder (should not happen) falls back to a bare -c:v + cq.
+func gpuVideoArgs(encoder string, res Resolved, tags ColorTags) []string {
+	args := []string{"-c:v", encoder, "-pix_fmt", "yuv420p"}
+	spec, ok := gpuEncoderSpecs[encoder]
+	if !ok {
+		return append(args, "-cq", strconv.Itoa(identityCQ(res.CRF)))
+	}
+	return append(args, spec.flags(spec.quality(res.CRF))...)
+}
+
+// clampInt bounds v to [lo, hi].
+func clampInt(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
 // pixFmt selects the output pixel format. 10-bit (yuv420p10le) nearly eliminates
 // x265-introduced gradient banding on flat anime backgrounds; libx265 infers
 // main10 from the 10-bit format, so no -profile:v is needed. Any other value is
@@ -165,13 +286,21 @@ func pixFmt(bitDepth int) string {
 }
 
 // buildVideoFilters builds the -vf chain in the correct order: deinterlace
-// (yadif) before any scaling, optional smartblur, then the scale to the target
-// height (-2 width keeps the aspect ratio with an even dimension), then optional
-// deband (after scale so it operates at the output resolution).
-func buildVideoFilters(res Resolved, height int) string {
+// (yadif) before any scaling, optional subtitle burn-in (rendered at the
+// authored resolution so it scales proportionally with the video), optional
+// smartblur, then the scale to the target height (-2 width keeps the aspect
+// ratio with an even dimension), then optional deband (after scale so it
+// operates at the output resolution). When gpu is true the smartblur/deband
+// CPU filters still apply — only the encoder differs.
+func buildVideoFilters(res Resolved, height int, sel TrackSelection, input string, gpu bool) string {
 	var vf []string
 	if res.Deinterlace {
 		vf = append(vf, "yadif=1")
+	}
+	// Burn-in BEFORE scale: subs render at the source resolution then scale with
+	// the video. si selects the chosen sub among subtitle streams.
+	if sel.BurnSub {
+		vf = append(vf, fmt.Sprintf("subtitles='%s':si=%d", escapeSubtitlesPath(input), sel.BurnSubFilterIndex))
 	}
 	if res.SmartBlur {
 		vf = append(vf, smartblurChain)
@@ -181,6 +310,18 @@ func buildVideoFilters(res Resolved, height int) string {
 		vf = append(vf, "deband")
 	}
 	return strings.Join(vf, ",")
+}
+
+// escapeSubtitlesPath escapes a path for the subtitles filter's quoted filename
+// argument. The filtergraph parser unwraps one layer of single-quoting and the
+// libavfilter option parser then treats `\` `:` specially, so a Windows path
+// like C:\a'b must become C\:\\a\'b inside the single quotes. Order matters:
+// backslash first so the escapes added for `:` and `'` are not re-escaped.
+func escapeSubtitlesPath(p string) string {
+	p = strings.ReplaceAll(p, `\`, `\\`)
+	p = strings.ReplaceAll(p, `:`, `\:`)
+	p = strings.ReplaceAll(p, `'`, `\'`)
+	return p
 }
 
 // audioArgs maps the profile audio directive to ffmpeg args. "copy" passes the
@@ -195,11 +336,14 @@ func audioArgs(audio string) []string {
 }
 
 // buildSnapshot serializes the effective encode parameters to a stable JSON
-// string stored on the output row for reproducibility.
-func buildSnapshot(res Resolved, resolution, height int, x265, vf string, tags ColorTags) (string, error) {
+// string stored on the output row for reproducibility. It records the resolved
+// encoder (e.g. hevc_nvenc or libx265 on fallback), burn-in, and the chosen
+// audio/subtitle stream indices + languages so a re-encode is reproducible.
+func buildSnapshot(res Resolved, resolution, height int, x265, vf string, tags ColorTags, sel TrackSelection, encoder string) (string, error) {
 	snap := map[string]any{
 		"profile_id":  res.ProfileID,
 		"codec":       res.Codec,
+		"encoder":     encoder,
 		"crf":         res.CRF,
 		"preset":      res.Preset,
 		"resolution":  resolution,
@@ -212,6 +356,19 @@ func buildSnapshot(res Resolved, resolution, height int, x265, vf string, tags C
 		"deinterlace": res.Deinterlace,
 		"bit_depth":   res.BitDepth,
 		"deband":      res.Deband,
+		"burn_subs":   sel.BurnSub,
+	}
+	if len(sel.AudioStreamIndices) > 0 {
+		snap["audio_stream_indices"] = sel.AudioStreamIndices
+	}
+	if sel.AudioLang != "" {
+		snap["audio_lang"] = sel.AudioLang
+	}
+	if sel.BurnSub {
+		snap["subtitle_stream_index"] = sel.BurnSubAbsoluteIndex
+		snap["subtitle_lang"] = sel.BurnSubLang
+	} else if len(sel.SubtitleStreamIndices) > 0 {
+		snap["subtitle_stream_indices"] = sel.SubtitleStreamIndices
 	}
 	// Record only the present color tags for reproducibility.
 	color := map[string]string{}

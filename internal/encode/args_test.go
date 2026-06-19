@@ -8,6 +8,10 @@ import (
 // p is a local pointer helper for building nullable chain rows in tests.
 func ptr[T any](v T) *T { return &v }
 
+// mkvSel is the default MKV all-passthrough selection used by the x265 arg
+// tests: soft subs copied, blind -map 0 (Explicit=false), no burn.
+func mkvSel() TrackSelection { return TrackSelection{SoftSubs: true} }
+
 func TestBuildArgsEmitsEveryKnob(t *testing.T) {
 	res := Resolved{
 		ProfileID:         1,
@@ -26,7 +30,7 @@ func TestBuildArgsEmitsEveryKnob(t *testing.T) {
 		X265Params:        "ctu=64:rc-lookahead=40",
 		OutputResolutions: []int{1080, 720, 480},
 	}
-	args, snapshot, err := BuildArgs(res, 720, ColorTags{}, "/in/source.mkv", "/out/ep.mkv")
+	args, snapshot, err := BuildArgs(res, 720, ColorTags{}, mkvSel(), cpuEncoder, "/in/source.mkv", "/out/ep.mkv")
 	if err != nil {
 		t.Fatalf("BuildArgs: %v", err)
 	}
@@ -85,7 +89,7 @@ func TestBuildArgs10BitPixFmt(t *testing.T) {
 		AQStrength: 1, AQMode: 2, Audio: "copy", Container: "mkv",
 		BitDepth: 10, OutputResolutions: []int{1080},
 	}
-	args, snapshot, err := BuildArgs(res, 1080, ColorTags{}, "/in", "/out")
+	args, snapshot, err := BuildArgs(res, 1080, ColorTags{}, mkvSel(), cpuEncoder, "/in", "/out")
 	if err != nil {
 		t.Fatalf("BuildArgs: %v", err)
 	}
@@ -103,7 +107,7 @@ func TestBuildArgs8BitDefaultPixFmt(t *testing.T) {
 			AQStrength: 1, AQMode: 2, Audio: "copy", Container: "mkv",
 			BitDepth: bd, OutputResolutions: []int{1080},
 		}
-		args, _, err := BuildArgs(res, 1080, ColorTags{}, "/in", "/out")
+		args, _, err := BuildArgs(res, 1080, ColorTags{}, mkvSel(), cpuEncoder, "/in", "/out")
 		if err != nil {
 			t.Fatalf("BuildArgs bd=%d: %v", bd, err)
 		}
@@ -120,7 +124,7 @@ func TestBuildArgsDebandFilter(t *testing.T) {
 		AQStrength: 1, AQMode: 2, Audio: "copy", Container: "mkv",
 		Deband: true, OutputResolutions: []int{720},
 	}
-	args, snapshot, err := BuildArgs(res, 720, ColorTags{}, "/in", "/out")
+	args, snapshot, err := BuildArgs(res, 720, ColorTags{}, mkvSel(), cpuEncoder, "/in", "/out")
 	if err != nil {
 		t.Fatalf("BuildArgs: %v", err)
 	}
@@ -144,7 +148,7 @@ func TestBuildArgsNoDebandWhenOff(t *testing.T) {
 		AQStrength: 1, AQMode: 2, Audio: "copy", Container: "mkv",
 		OutputResolutions: []int{720},
 	}
-	args, _, err := BuildArgs(res, 720, ColorTags{}, "/in", "/out")
+	args, _, err := BuildArgs(res, 720, ColorTags{}, mkvSel(), cpuEncoder, "/in", "/out")
 	if err != nil {
 		t.Fatalf("BuildArgs: %v", err)
 	}
@@ -159,7 +163,7 @@ func TestBuildArgsNoOptionalFilters(t *testing.T) {
 		AQStrength: 1, AQMode: 2, Audio: "aac", Container: "mkv",
 		OutputResolutions: []int{1080},
 	}
-	args, _, err := BuildArgs(res, 1080, ColorTags{}, "in.mkv", "out.mkv")
+	args, _, err := BuildArgs(res, 1080, ColorTags{}, mkvSel(), cpuEncoder, "in.mkv", "out.mkv")
 	if err != nil {
 		t.Fatalf("BuildArgs: %v", err)
 	}
@@ -174,7 +178,7 @@ func TestBuildArgsNoOptionalFilters(t *testing.T) {
 
 func TestBuildArgsUnsupportedResolution(t *testing.T) {
 	res := Resolved{OutputResolutions: []int{1080}}
-	if _, _, err := BuildArgs(res, 999, ColorTags{}, "in", "out"); err == nil {
+	if _, _, err := BuildArgs(res, 999, ColorTags{}, mkvSel(), cpuEncoder, "in", "out"); err == nil {
 		t.Fatal("expected error for unsupported resolution")
 	}
 }
@@ -209,7 +213,7 @@ func TestBuildArgsColorTagsPresent(t *testing.T) {
 		AQStrength: 1, AQMode: 2, Audio: "copy", Container: "mkv",
 	}
 	tags := ColorTags{Range: "tv", Space: "bt709", Primaries: "bt709", Transfer: "bt709"}
-	args, _, err := BuildArgs(res, 720, tags, "/in", "/out")
+	args, _, err := BuildArgs(res, 720, tags, mkvSel(), cpuEncoder, "/in", "/out")
 	if err != nil {
 		t.Fatalf("BuildArgs: %v", err)
 	}
@@ -231,7 +235,7 @@ func TestBuildArgsColorTagsAbsent(t *testing.T) {
 		CRF: 24, Preset: "slow", Deblock: "1,1", PsyRD: 1, PsyRDOQ: 1,
 		AQStrength: 1, AQMode: 2, Audio: "copy", Container: "mkv",
 	}
-	args, _, err := BuildArgs(res, 720, ColorTags{}, "/in", "/out")
+	args, _, err := BuildArgs(res, 720, ColorTags{}, mkvSel(), cpuEncoder, "/in", "/out")
 	if err != nil {
 		t.Fatalf("BuildArgs: %v", err)
 	}
@@ -263,7 +267,7 @@ func TestBuildArgsColorBT2020(t *testing.T) {
 		AQStrength: 1, AQMode: 2, Audio: "copy", Container: "mkv",
 	}
 	tags := normalizeColorTags("tv", "bt2020nc", "bt2020", "smpte2084")
-	args, _, err := BuildArgs(res, 1080, tags, "/in", "/out")
+	args, _, err := BuildArgs(res, 1080, tags, mkvSel(), cpuEncoder, "/in", "/out")
 	if err != nil {
 		t.Fatalf("BuildArgs: %v", err)
 	}

@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/modbender/ssanime-gui/internal/defaults"
 	"github.com/modbender/ssanime-gui/internal/store"
@@ -59,6 +60,13 @@ type Resolved struct {
 	X265Params        string // raw passthrough merged into -x265-params
 	BitDepth          int    // 8 or 10; 10 emits yuv420p10le to curb banding
 	Deband            bool
+	BurnSubs          bool
+	// AudioLanguages / SubtitleLanguages are the per-track language selection.
+	// nil = the wildcard/passthrough sentinel (MKV: All; MP4: Default track). A
+	// non-nil (possibly empty) slice is Specific mode: normalized language codes
+	// in priority order.
+	AudioLanguages    []string
+	SubtitleLanguages []string
 	OutputResolutions []int
 }
 
@@ -82,6 +90,9 @@ type chainRow struct {
 	X265Params        *string
 	BitDepth          *int64
 	Deband            *int64
+	BurnSubs          *int64
+	AudioLanguages    *string
+	SubtitleLanguages *string
 	OutputResolutions *string
 }
 
@@ -91,7 +102,8 @@ func rowFromChain(r store.ResolveProfileChainRow) chainRow {
 		Deinterlace: r.Deinterlace, Deblock: r.Deblock, PsyRd: r.PsyRd,
 		PsyRdoq: r.PsyRdoq, AqStrength: r.AqStrength, AqMode: r.AqMode,
 		Audio: r.Audio, Container: r.Container, X265Params: r.X265Params,
-		BitDepth: r.BitDepth, Deband: r.Deband,
+		BitDepth: r.BitDepth, Deband: r.Deband, BurnSubs: r.BurnSubs,
+		AudioLanguages: r.AudioLanguages, SubtitleLanguages: r.SubtitleLanguages,
 		OutputResolutions: r.OutputResolutions,
 	}
 }
@@ -149,9 +161,10 @@ func resolveChain(chain []chainRow) Resolved {
 
 	var (
 		codec, preset, deblock, audio, container, x265, outRes *string
+		audioLangs, subLangs                                   *string
 		crf, psyRD, psyRDOQ, aqStrength                        *float64
 		aqMode                                                 *int64
-		smartblur, deinterlace, bitDepth, deband               *int64
+		smartblur, deinterlace, bitDepth, deband, burnSubs     *int64
 	)
 	// First non-NULL (child-first order) wins for each knob.
 	pickStr := func(dst **string, v *string) {
@@ -177,6 +190,8 @@ func resolveChain(chain []chainRow) Resolved {
 		pickStr(&container, row.Container)
 		pickStr(&x265, row.X265Params)
 		pickStr(&outRes, row.OutputResolutions)
+		pickStr(&audioLangs, row.AudioLanguages)
+		pickStr(&subLangs, row.SubtitleLanguages)
 		pickF(&crf, row.Crf)
 		pickF(&psyRD, row.PsyRd)
 		pickF(&psyRDOQ, row.PsyRdoq)
@@ -186,6 +201,7 @@ func resolveChain(chain []chainRow) Resolved {
 		pickI(&deinterlace, row.Deinterlace)
 		pickI(&bitDepth, row.BitDepth)
 		pickI(&deband, row.Deband)
+		pickI(&burnSubs, row.BurnSubs)
 	}
 
 	if codec != nil {
@@ -227,9 +243,30 @@ func resolveChain(chain []chainRow) Resolved {
 		res.BitDepth = int(*bitDepth)
 	}
 	res.Deband = deband != nil && *deband == 1
+	res.BurnSubs = burnSubs != nil && *burnSubs == 1
+	// nil pointer (whole chain NULL) stays the wildcard sentinel (nil slice).
+	res.AudioLanguages = parseLanguages(audioLangs)
+	res.SubtitleLanguages = parseLanguages(subLangs)
 	res.OutputResolutions = parseResolutions(outRes)
 
 	return res
+}
+
+// parseLanguages decodes the JSON language array. A nil/blank pointer is the
+// wildcard sentinel (nil slice). An explicit array — even empty — is Specific
+// mode and returns a non-nil slice so callers distinguish "[]" from wildcard.
+func parseLanguages(raw *string) []string {
+	if raw == nil || strings.TrimSpace(*raw) == "" {
+		return nil
+	}
+	var out []string
+	if err := json.Unmarshal([]byte(*raw), &out); err != nil {
+		return nil
+	}
+	if out == nil {
+		out = []string{}
+	}
+	return out
 }
 
 // parseResolutions decodes the json int set in output_resolutions, falling back

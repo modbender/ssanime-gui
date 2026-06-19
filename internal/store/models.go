@@ -50,6 +50,9 @@ type EncodeProfile struct {
 	ModifiedAt        int64    `json:"modified_at"`
 	BitDepth          *int64   `json:"bit_depth"`
 	Deband            *int64   `json:"deband"`
+	BurnSubs          *int64   `json:"burn_subs"`
+	AudioLanguages    *string  `json:"audio_languages"`
+	SubtitleLanguages *string  `json:"subtitle_languages"`
 }
 
 type EncodedOutput struct {

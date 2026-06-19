@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/modbender/ssanime-gui/internal/config"
+	"github.com/modbender/ssanime-gui/internal/defaults"
 )
 
 // openTestStore opens a fresh Store backed by a temp-file DB (WAL + the dual
@@ -138,8 +139,9 @@ func TestSeedIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list profiles: %v", err)
 	}
-	if len(profiles) != 1 {
-		t.Errorf("profile count = %d, want 1", len(profiles))
+	wantProfiles := len(defaults.Values.Profiles)
+	if len(profiles) != wantProfiles {
+		t.Errorf("profile count = %d, want %d (no duplicates after re-seed)", len(profiles), wantProfiles)
 	}
 	clients, err := s.Read().ListDownloadClients(ctx)
 	if err != nil {

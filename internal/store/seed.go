@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
 
 	"github.com/modbender/ssanime-gui/internal/config"
@@ -94,6 +95,9 @@ func (s *Store) seedBuiltinProfile(ctx context.Context, prof defaults.Profile) (
 		X265Params:        nil,
 		BitDepth:          p(prof.BitDepth),
 		Deband:            p(b2i(prof.Deband)),
+		BurnSubs:          boolPtrToInt(prof.BurnSubs),
+		AudioLanguages:    langsToJSON(prof.AudioLanguages),
+		SubtitleLanguages: langsToJSON(prof.SubtitleLanguages),
 		OutputResolutions: p(prof.OutputResolutions),
 	})
 	if err != nil {
@@ -108,6 +112,28 @@ func b2i(b bool) int64 {
 		return 1
 	}
 	return 0
+}
+
+// boolPtrToInt maps a *bool to the nullable 0/1 column (nil → NULL = inherit).
+func boolPtrToInt(b *bool) *int64 {
+	if b == nil {
+		return nil
+	}
+	return p(b2i(*b))
+}
+
+// langsToJSON encodes a builtin's language preference into the nullable JSON
+// column. A nil pointer is the wildcard/passthrough sentinel (NULL = All /
+// Default); a non-nil slice (even empty) serializes to a JSON array.
+func langsToJSON(langs *[]string) *string {
+	if langs == nil {
+		return nil
+	}
+	b, err := json.Marshal(*langs)
+	if err != nil {
+		return nil
+	}
+	return p(string(b))
 }
 
 // seedDefaultDownloadClient inserts the embedded anacrolix client as the default

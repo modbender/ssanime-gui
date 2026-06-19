@@ -69,14 +69,20 @@ func TestHistoricalValues(t *testing.T) {
 		t.Errorf("encode.base_x265_params = %v, want %v", e.BaseX265Params, wantBase)
 	}
 
-	// Builtin seed profile (internal/store/seed.go). Note aq_mode=2 here while the
-	// encode fallback above is aq_mode=3 — a deliberate, preserved divergence.
-	if len(Values.Profiles) != 1 {
-		t.Fatalf("profiles len = %d, want 1", len(Values.Profiles))
+	// Encode fallback burn-subs default.
+	if e.DefaultBurnSubs {
+		t.Errorf("encode.default_burn_subs = %v, want false", e.DefaultBurnSubs)
+	}
+
+	// Builtin seed profiles (internal/store/seed.go): the SSAnime 2×2 matrix. Note
+	// aq_mode=2 here while the encode fallback above is aq_mode=3 — a deliberate,
+	// preserved divergence.
+	if len(Values.Profiles) != 4 {
+		t.Fatalf("profiles len = %d, want 4 (SSAnime 2×2 matrix)", len(Values.Profiles))
 	}
 	p := Values.Profiles[0]
-	if p.Name != "Automin (x265)" || !p.Builtin {
-		t.Errorf("profile name/builtin = %q/%v, want Automin (x265)/true", p.Name, p.Builtin)
+	if p.Name != "SSAnime" || !p.Builtin {
+		t.Errorf("profile name/builtin = %q/%v, want SSAnime/true", p.Name, p.Builtin)
 	}
 	if p.Codec != "x265" || p.CRF != 24.2 || p.Preset != "slow" {
 		t.Errorf("profile codec/crf/preset = %q/%v/%q", p.Codec, p.CRF, p.Preset)
@@ -95,6 +101,40 @@ func TestHistoricalValues(t *testing.T) {
 	}
 	if p.BitDepth != 10 || p.Deband {
 		t.Errorf("profile bit_depth/deband = %d/%v, want 10/false (10-bit fixes anime gradient banding)", p.BitDepth, p.Deband)
+	}
+	if p.BurnSubs == nil || *p.BurnSubs {
+		t.Errorf("SSAnime burn_subs = %v, want false", p.BurnSubs)
+	}
+	if p.AudioLanguages != nil || p.SubtitleLanguages != nil {
+		t.Errorf("SSAnime languages should be null (wildcard): audio=%v sub=%v", p.AudioLanguages, p.SubtitleLanguages)
+	}
+
+	// The 2×2 matrix: codec × container with the expected burn_subs + audio.
+	wantMatrix := []struct {
+		name      string
+		codec     string
+		container string
+		audio     string
+		burn      bool
+	}{
+		{"SSAnime", "x265", "mkv", "copy", false},
+		{"SSAnime (GPU · MKV)", "gpu-auto", "mkv", "copy", false},
+		{"SSAnime (x265 · MP4)", "x265", "mp4", "aac", true},
+		{"SSAnime (GPU · MP4)", "gpu-auto", "mp4", "aac", true},
+	}
+	for i, want := range wantMatrix {
+		got := Values.Profiles[i]
+		if got.Name != want.name || got.Codec != want.codec || got.Container != want.container || got.Audio != want.audio {
+			t.Errorf("profile[%d] = %q/%q/%q/%q, want %q/%q/%q/%q", i,
+				got.Name, got.Codec, got.Container, got.Audio,
+				want.name, want.codec, want.container, want.audio)
+		}
+		if got.BurnSubs == nil || *got.BurnSubs != want.burn {
+			t.Errorf("profile[%d] %q burn_subs = %v, want %v", i, got.Name, got.BurnSubs, want.burn)
+		}
+		if !got.Builtin {
+			t.Errorf("profile[%d] %q must be builtin", i, got.Name)
+		}
 	}
 
 	// Seed settings (internal/store/seed.go).

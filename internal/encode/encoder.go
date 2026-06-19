@@ -38,6 +38,7 @@ type Encoder interface {
 // FFmpegEncoder is the production Encoder backed by ffmpeg/ffprobe.
 type FFmpegEncoder struct {
 	tools Tools
+	gpu   *GPUResolver
 }
 
 // NewFFmpegEncoder discovers ffmpeg/ffprobe (honoring an override) and returns a
@@ -47,7 +48,17 @@ func NewFFmpegEncoder(ffmpegOverride string) (*FFmpegEncoder, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &FFmpegEncoder{tools: tools}, nil
+	return &FFmpegEncoder{tools: tools, gpu: NewGPUResolver(tools, nil)}, nil
+}
+
+// resolveEncoder maps the profile codec to the concrete video encoder: gpu-auto
+// probes the hardware lane (falling back to libx265), x265 stays libx265.
+func (e *FFmpegEncoder) resolveEncoder(codec string) string {
+	if isGPUCodec(codec) {
+		name, _ := e.gpu.ResolveGPUEncoder()
+		return name
+	}
+	return cpuEncoder
 }
 
 // Encode builds the full ffmpeg arg list for the request and runs it with real
@@ -58,7 +69,15 @@ func (e *FFmpegEncoder) Encode(ctx context.Context, req EncodeRequest, onProgres
 		// Color tags fall back to none (no re-tagging); the encode still runs.
 		tags = ColorTags{}
 	}
-	args, snapshot, err := BuildArgs(req.Resolved, req.Resolution, tags, req.Input, req.Output)
+	streams, err := e.tools.ProbeStreams(ctx, req.Input)
+	if err != nil {
+		// Track selection falls back to the all-passthrough default; the encode
+		// still runs (MKV copy-all, no burn).
+		streams = nil
+	}
+	sel := SelectTracks(req.Resolved, streams)
+	encoder := e.resolveEncoder(req.Resolved.Codec)
+	args, snapshot, err := BuildArgs(req.Resolved, req.Resolution, tags, sel, encoder, req.Input, req.Output)
 	if err != nil {
 		return EncodeResult{}, err
 	}
@@ -88,7 +107,8 @@ func (e *FFmpegEncoder) Thumbnails(ctx context.Context, input, destDir string) (
 // Command returns the ffmpeg command line that would be run for a request, used
 // for logging/verification (proving every knob is wired).
 func (e *FFmpegEncoder) Command(req EncodeRequest) (string, error) {
-	args, _, err := BuildArgs(req.Resolved, req.Resolution, ColorTags{}, req.Input, req.Output)
+	encoder := e.resolveEncoder(req.Resolved.Codec)
+	args, _, err := BuildArgs(req.Resolved, req.Resolution, ColorTags{}, TrackSelection{}, encoder, req.Input, req.Output)
 	if err != nil {
 		return "", err
 	}

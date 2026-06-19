@@ -267,6 +267,40 @@ not language.
 **Trigger to pick up:** alongside the per-profile language work — they share the ffprobe
 track-introspection + tag-normalization layer.
 
+## AI subtitle generation (fallback for sub-less raw sources) — LOWEST priority
+
+**Status:** deferred, **lowest priority.** Only relevant for **raw** sources (no embedded subs) — e.g.
+TV-broadcast captures, which often hit nyaa *before* the subbed Crunchyroll-rip groups. For CR-rip or
+re-encode sources the official soft subs are already present and far better, so this never runs there.
+
+**Pipeline:** an optional encode-stage pass — **Whisper ASR** (audio → Japanese transcript, timed) →
+**LLM/MT translation** (→ English) → emit an ASS/SRT track that the existing burn-in or soft-sub path
+consumes. Gate it on "source has no usable subtitle track" so it never overrides real subs.
+
+**Honest quality ceiling:** anime is hard for this — overlapping dialogue, names/honorifics, slang,
+jokes, song lyrics — so output is "watchable but rough," well below Crunchyroll/Erai quality. Because
+this tool **archives durably**, the rough subs get stored permanently; surface that clearly and keep
+it opt-in. Heavy deps (a Whisper model + a translation model/endpoint, GPU strongly preferred), which
+is the main reason it sits at the bottom of the list.
+
+**Ties to:** the per-profile language work and [the Dialogue/Signs merge + language-detection
+entry](#language-detection-for-untagged-tracks--subtitle-merging) (shared subtitle-track plumbing),
+and the non-torrent/raw lanes.
+
+## GPU encode: Linux VAAPI (AMD/Intel) hardware path
+
+**Status:** deferred. The `gpu-auto` lane ships with NVENC (Windows/Linux), QSV (Windows/Linux),
+AMF (Windows), and VideoToolbox (macOS). **VAAPI is intentionally excluded** from the Linux
+candidates: unlike the others it cannot take software (`yuv420p`) frames — it needs a
+`-vaapi_device /dev/dri/renderD128`, a `format=nv12|vaapi,hwupload` filter, and `scale_vaapi`
+for the resize, none of which the current software-filter pipeline (smartblur/scale/deband on CPU)
+builds. Emitting `hevc_vaapi` as-is fails to open, so it would only ever fall back to libx265.
+Until wired, **Linux AMD GPUs fall back to CPU libx265** (functional, just not accelerated).
+
+**To implement:** add a VAAPI branch that initialises the device, uploads frames, and runs the
+scale on the GPU (or keeps CPU filters then a final `hwupload`), plus a probe that mirrors the real
+chain. Verify on actual AMD-on-Linux hardware before re-adding to `hwCandidates`.
+
 ## Daemon startup & idle-footprint optimizations
 
 **Status:** deferred (from a read-only perf audit). Ranked by impact/effort. The first item is

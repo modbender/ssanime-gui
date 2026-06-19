@@ -290,6 +290,53 @@ func TestCreateAndResolveProfile(t *testing.T) {
 	}
 }
 
+// TestCreateProfileLanguageFields covers the new language-track fields: a valid
+// array round-trips, an explicit null is the wildcard, and an unknown code 400s.
+func TestCreateProfileLanguageFields(t *testing.T) {
+	srv := newTestServer(t)
+
+	// Specific subtitle languages + wildcard audio (explicit null) + burn_subs.
+	burn := true
+	rec := postJSON(t, srv, "/api/profiles", CreateProfileRequest{
+		Name:              "MP4 Hardsub",
+		Codec:             strptr("x265"),
+		Container:         strptr("mp4"),
+		BurnSubs:          &burn,
+		AudioLanguages:    json.RawMessage(`null`),
+		SubtitleLanguages: json.RawMessage(`["en","ja"]`),
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	resp := decodeBody[ProfileResponse](t, rec)
+	if resp.Data == nil {
+		t.Fatalf("no data: %s", rec.Body.String())
+	}
+	if resp.Data.BurnSubs == nil || !*resp.Data.BurnSubs {
+		t.Errorf("burn_subs = %v, want true", resp.Data.BurnSubs)
+	}
+	if resp.Data.AudioLanguages != nil {
+		t.Errorf("audio_languages = %v, want null (wildcard)", *resp.Data.AudioLanguages)
+	}
+	if resp.Data.SubtitleLanguages == nil {
+		t.Fatal("subtitle_languages nil, want [en ja]")
+	}
+	if got := *resp.Data.SubtitleLanguages; len(got) != 2 || got[0] != "en" || got[1] != "ja" {
+		t.Errorf("subtitle_languages = %v, want [en ja]", got)
+	}
+
+	// Unknown language code → 400.
+	rec2 := postJSON(t, srv, "/api/profiles", CreateProfileRequest{
+		Name:              "Bad Lang",
+		SubtitleLanguages: json.RawMessage(`["zz"]`),
+	})
+	if rec2.Code != http.StatusBadRequest {
+		t.Fatalf("unknown code: want 400, got %d body=%s", rec2.Code, rec2.Body.String())
+	}
+}
+
+func strptr(s string) *string { return &s }
+
 // TestBuiltinProfileImmutable verifies PATCH and DELETE on builtin profiles return 403.
 func TestBuiltinProfileImmutable(t *testing.T) {
 	srv := newTestServer(t)

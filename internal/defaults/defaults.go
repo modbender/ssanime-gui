@@ -54,6 +54,7 @@ type Encode struct {
 	DefaultContainer         string   `json:"default_container"`
 	DefaultBitDepth          int      `json:"default_bit_depth"`
 	DefaultDeband            bool     `json:"default_deband"`
+	DefaultBurnSubs          bool     `json:"default_burn_subs"`
 	DefaultOutputResolutions []int    `json:"default_output_resolutions"`
 	SmartBlurChain           string   `json:"smartblur_chain"`
 	BaseX265Params           []string `json:"base_x265_params"`
@@ -78,7 +79,13 @@ type Profile struct {
 	Container         string  `json:"container"`
 	BitDepth          int64   `json:"bit_depth"`
 	Deband            bool    `json:"deband"`
-	OutputResolutions string  `json:"output_resolutions"`
+	// BurnSubs/AudioLanguages/SubtitleLanguages are pointers so a builtin can
+	// omit them (NULL = inherit) and so the wildcard (null) language mode is
+	// distinguishable from an explicit empty array. A nil *[]string seeds NULL.
+	BurnSubs          *bool     `json:"burn_subs"`
+	AudioLanguages    *[]string `json:"audio_languages"`
+	SubtitleLanguages *[]string `json:"subtitle_languages"`
+	OutputResolutions string    `json:"output_resolutions"`
 }
 
 // Settings holds the singleton settings row defaults a fresh install boots with.
