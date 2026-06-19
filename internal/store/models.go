@@ -48,6 +48,8 @@ type EncodeProfile struct {
 	OutputResolutions *string  `json:"output_resolutions"`
 	AddedAt           int64    `json:"added_at"`
 	ModifiedAt        int64    `json:"modified_at"`
+	BitDepth          *int64   `json:"bit_depth"`
+	Deband            *int64   `json:"deband"`
 }
 
 type EncodedOutput struct {

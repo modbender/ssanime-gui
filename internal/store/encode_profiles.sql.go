@@ -13,11 +13,11 @@ const createEncodeProfile = `-- name: CreateEncodeProfile :one
 INSERT INTO encode_profiles (
     uuid, name, builtin, parent_id, codec, crf, preset, smartblur,
     deinterlace, deblock, psy_rd, psy_rdoq, aq_strength, aq_mode, scale,
-    audio, container, x265_params, output_resolutions
+    audio, container, x265_params, bit_depth, deband, output_resolutions
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
-RETURNING id, uuid, name, builtin, parent_id, codec, crf, preset, smartblur, deinterlace, deblock, psy_rd, psy_rdoq, aq_strength, aq_mode, scale, audio, container, x265_params, output_resolutions, added_at, modified_at
+RETURNING id, uuid, name, builtin, parent_id, codec, crf, preset, smartblur, deinterlace, deblock, psy_rd, psy_rdoq, aq_strength, aq_mode, scale, audio, container, x265_params, output_resolutions, added_at, modified_at, bit_depth, deband
 `
 
 type CreateEncodeProfileParams struct {
@@ -39,6 +39,8 @@ type CreateEncodeProfileParams struct {
 	Audio             *string  `json:"audio"`
 	Container         *string  `json:"container"`
 	X265Params        *string  `json:"x265_params"`
+	BitDepth          *int64   `json:"bit_depth"`
+	Deband            *int64   `json:"deband"`
 	OutputResolutions *string  `json:"output_resolutions"`
 }
 
@@ -62,6 +64,8 @@ func (q *Queries) CreateEncodeProfile(ctx context.Context, arg CreateEncodeProfi
 		arg.Audio,
 		arg.Container,
 		arg.X265Params,
+		arg.BitDepth,
+		arg.Deband,
 		arg.OutputResolutions,
 	)
 	var i EncodeProfile
@@ -88,6 +92,8 @@ func (q *Queries) CreateEncodeProfile(ctx context.Context, arg CreateEncodeProfi
 		&i.OutputResolutions,
 		&i.AddedAt,
 		&i.ModifiedAt,
+		&i.BitDepth,
+		&i.Deband,
 	)
 	return i, err
 }
@@ -102,7 +108,7 @@ func (q *Queries) DeleteEncodeProfile(ctx context.Context, id int64) error {
 }
 
 const getEncodeProfile = `-- name: GetEncodeProfile :one
-SELECT id, uuid, name, builtin, parent_id, codec, crf, preset, smartblur, deinterlace, deblock, psy_rd, psy_rdoq, aq_strength, aq_mode, scale, audio, container, x265_params, output_resolutions, added_at, modified_at FROM encode_profiles WHERE id = ?
+SELECT id, uuid, name, builtin, parent_id, codec, crf, preset, smartblur, deinterlace, deblock, psy_rd, psy_rdoq, aq_strength, aq_mode, scale, audio, container, x265_params, output_resolutions, added_at, modified_at, bit_depth, deband FROM encode_profiles WHERE id = ?
 `
 
 func (q *Queries) GetEncodeProfile(ctx context.Context, id int64) (EncodeProfile, error) {
@@ -131,12 +137,14 @@ func (q *Queries) GetEncodeProfile(ctx context.Context, id int64) (EncodeProfile
 		&i.OutputResolutions,
 		&i.AddedAt,
 		&i.ModifiedAt,
+		&i.BitDepth,
+		&i.Deband,
 	)
 	return i, err
 }
 
 const getEncodeProfileByName = `-- name: GetEncodeProfileByName :one
-SELECT id, uuid, name, builtin, parent_id, codec, crf, preset, smartblur, deinterlace, deblock, psy_rd, psy_rdoq, aq_strength, aq_mode, scale, audio, container, x265_params, output_resolutions, added_at, modified_at FROM encode_profiles WHERE name = ?
+SELECT id, uuid, name, builtin, parent_id, codec, crf, preset, smartblur, deinterlace, deblock, psy_rd, psy_rdoq, aq_strength, aq_mode, scale, audio, container, x265_params, output_resolutions, added_at, modified_at, bit_depth, deband FROM encode_profiles WHERE name = ?
 `
 
 func (q *Queries) GetEncodeProfileByName(ctx context.Context, name string) (EncodeProfile, error) {
@@ -165,12 +173,14 @@ func (q *Queries) GetEncodeProfileByName(ctx context.Context, name string) (Enco
 		&i.OutputResolutions,
 		&i.AddedAt,
 		&i.ModifiedAt,
+		&i.BitDepth,
+		&i.Deband,
 	)
 	return i, err
 }
 
 const getEncodeProfileByUUID = `-- name: GetEncodeProfileByUUID :one
-SELECT id, uuid, name, builtin, parent_id, codec, crf, preset, smartblur, deinterlace, deblock, psy_rd, psy_rdoq, aq_strength, aq_mode, scale, audio, container, x265_params, output_resolutions, added_at, modified_at FROM encode_profiles WHERE uuid = ?
+SELECT id, uuid, name, builtin, parent_id, codec, crf, preset, smartblur, deinterlace, deblock, psy_rd, psy_rdoq, aq_strength, aq_mode, scale, audio, container, x265_params, output_resolutions, added_at, modified_at, bit_depth, deband FROM encode_profiles WHERE uuid = ?
 `
 
 func (q *Queries) GetEncodeProfileByUUID(ctx context.Context, uuid string) (EncodeProfile, error) {
@@ -199,12 +209,14 @@ func (q *Queries) GetEncodeProfileByUUID(ctx context.Context, uuid string) (Enco
 		&i.OutputResolutions,
 		&i.AddedAt,
 		&i.ModifiedAt,
+		&i.BitDepth,
+		&i.Deband,
 	)
 	return i, err
 }
 
 const listBuiltinEncodeProfiles = `-- name: ListBuiltinEncodeProfiles :many
-SELECT id, uuid, name, builtin, parent_id, codec, crf, preset, smartblur, deinterlace, deblock, psy_rd, psy_rdoq, aq_strength, aq_mode, scale, audio, container, x265_params, output_resolutions, added_at, modified_at FROM encode_profiles WHERE builtin = 1 ORDER BY name ASC
+SELECT id, uuid, name, builtin, parent_id, codec, crf, preset, smartblur, deinterlace, deblock, psy_rd, psy_rdoq, aq_strength, aq_mode, scale, audio, container, x265_params, output_resolutions, added_at, modified_at, bit_depth, deband FROM encode_profiles WHERE builtin = 1 ORDER BY name ASC
 `
 
 func (q *Queries) ListBuiltinEncodeProfiles(ctx context.Context) ([]EncodeProfile, error) {
@@ -239,6 +251,8 @@ func (q *Queries) ListBuiltinEncodeProfiles(ctx context.Context) ([]EncodeProfil
 			&i.OutputResolutions,
 			&i.AddedAt,
 			&i.ModifiedAt,
+			&i.BitDepth,
+			&i.Deband,
 		); err != nil {
 			return nil, err
 		}
@@ -254,7 +268,7 @@ func (q *Queries) ListBuiltinEncodeProfiles(ctx context.Context) ([]EncodeProfil
 }
 
 const listEncodeProfiles = `-- name: ListEncodeProfiles :many
-SELECT id, uuid, name, builtin, parent_id, codec, crf, preset, smartblur, deinterlace, deblock, psy_rd, psy_rdoq, aq_strength, aq_mode, scale, audio, container, x265_params, output_resolutions, added_at, modified_at FROM encode_profiles ORDER BY builtin DESC, name ASC
+SELECT id, uuid, name, builtin, parent_id, codec, crf, preset, smartblur, deinterlace, deblock, psy_rd, psy_rdoq, aq_strength, aq_mode, scale, audio, container, x265_params, output_resolutions, added_at, modified_at, bit_depth, deband FROM encode_profiles ORDER BY builtin DESC, name ASC
 `
 
 func (q *Queries) ListEncodeProfiles(ctx context.Context) ([]EncodeProfile, error) {
@@ -289,6 +303,8 @@ func (q *Queries) ListEncodeProfiles(ctx context.Context) ([]EncodeProfile, erro
 			&i.OutputResolutions,
 			&i.AddedAt,
 			&i.ModifiedAt,
+			&i.BitDepth,
+			&i.Deband,
 		); err != nil {
 			return nil, err
 		}
@@ -307,14 +323,15 @@ const resolveProfileChain = `-- name: ResolveProfileChain :many
 WITH RECURSIVE chain(
     id, uuid, name, builtin, parent_id, codec, crf, preset, smartblur,
     deinterlace, deblock, psy_rd, psy_rdoq, aq_strength, aq_mode, scale,
-    audio, container, x265_params, output_resolutions, added_at, modified_at, depth
+    audio, container, x265_params, bit_depth, deband, output_resolutions,
+    added_at, modified_at, depth
 ) AS (
     SELECT
         ep.id, ep.uuid, ep.name, ep.builtin, ep.parent_id, ep.codec, ep.crf,
         ep.preset, ep.smartblur, ep.deinterlace, ep.deblock, ep.psy_rd,
         ep.psy_rdoq, ep.aq_strength, ep.aq_mode, ep.scale, ep.audio,
-        ep.container, ep.x265_params, ep.output_resolutions, ep.added_at,
-        ep.modified_at, 0 AS depth
+        ep.container, ep.x265_params, ep.bit_depth, ep.deband,
+        ep.output_resolutions, ep.added_at, ep.modified_at, 0 AS depth
     FROM encode_profiles ep
     WHERE ep.id = ?
     UNION ALL
@@ -322,15 +339,16 @@ WITH RECURSIVE chain(
         p.id, p.uuid, p.name, p.builtin, p.parent_id, p.codec, p.crf,
         p.preset, p.smartblur, p.deinterlace, p.deblock, p.psy_rd,
         p.psy_rdoq, p.aq_strength, p.aq_mode, p.scale, p.audio,
-        p.container, p.x265_params, p.output_resolutions, p.added_at,
-        p.modified_at, c.depth + 1
+        p.container, p.x265_params, p.bit_depth, p.deband,
+        p.output_resolutions, p.added_at, p.modified_at, c.depth + 1
     FROM encode_profiles p
     JOIN chain c ON p.id = c.parent_id
 )
 SELECT
     id, uuid, name, builtin, parent_id, codec, crf, preset, smartblur,
     deinterlace, deblock, psy_rd, psy_rdoq, aq_strength, aq_mode, scale,
-    audio, container, x265_params, output_resolutions, added_at, modified_at
+    audio, container, x265_params, bit_depth, deband, output_resolutions,
+    added_at, modified_at
 FROM chain ORDER BY depth ASC
 `
 
@@ -354,6 +372,8 @@ type ResolveProfileChainRow struct {
 	Audio             *string  `json:"audio"`
 	Container         *string  `json:"container"`
 	X265Params        *string  `json:"x265_params"`
+	BitDepth          *int64   `json:"bit_depth"`
+	Deband            *int64   `json:"deband"`
 	OutputResolutions *string  `json:"output_resolutions"`
 	AddedAt           int64    `json:"added_at"`
 	ModifiedAt        int64    `json:"modified_at"`
@@ -390,6 +410,8 @@ func (q *Queries) ResolveProfileChain(ctx context.Context, id int64) ([]ResolveP
 			&i.Audio,
 			&i.Container,
 			&i.X265Params,
+			&i.BitDepth,
+			&i.Deband,
 			&i.OutputResolutions,
 			&i.AddedAt,
 			&i.ModifiedAt,
@@ -412,9 +434,9 @@ UPDATE encode_profiles SET
     name = ?, parent_id = ?, codec = ?, crf = ?, preset = ?, smartblur = ?,
     deinterlace = ?, deblock = ?, psy_rd = ?, psy_rdoq = ?, aq_strength = ?,
     aq_mode = ?, scale = ?, audio = ?, container = ?, x265_params = ?,
-    output_resolutions = ?, modified_at = unixepoch()
+    bit_depth = ?, deband = ?, output_resolutions = ?, modified_at = unixepoch()
 WHERE id = ? AND builtin = 0
-RETURNING id, uuid, name, builtin, parent_id, codec, crf, preset, smartblur, deinterlace, deblock, psy_rd, psy_rdoq, aq_strength, aq_mode, scale, audio, container, x265_params, output_resolutions, added_at, modified_at
+RETURNING id, uuid, name, builtin, parent_id, codec, crf, preset, smartblur, deinterlace, deblock, psy_rd, psy_rdoq, aq_strength, aq_mode, scale, audio, container, x265_params, output_resolutions, added_at, modified_at, bit_depth, deband
 `
 
 type UpdateEncodeProfileParams struct {
@@ -434,6 +456,8 @@ type UpdateEncodeProfileParams struct {
 	Audio             *string  `json:"audio"`
 	Container         *string  `json:"container"`
 	X265Params        *string  `json:"x265_params"`
+	BitDepth          *int64   `json:"bit_depth"`
+	Deband            *int64   `json:"deband"`
 	OutputResolutions *string  `json:"output_resolutions"`
 	ID                int64    `json:"id"`
 }
@@ -456,6 +480,8 @@ func (q *Queries) UpdateEncodeProfile(ctx context.Context, arg UpdateEncodeProfi
 		arg.Audio,
 		arg.Container,
 		arg.X265Params,
+		arg.BitDepth,
+		arg.Deband,
 		arg.OutputResolutions,
 		arg.ID,
 	)
@@ -483,6 +509,8 @@ func (q *Queries) UpdateEncodeProfile(ctx context.Context, arg UpdateEncodeProfi
 		&i.OutputResolutions,
 		&i.AddedAt,
 		&i.ModifiedAt,
+		&i.BitDepth,
+		&i.Deband,
 	)
 	return i, err
 }

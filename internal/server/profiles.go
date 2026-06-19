@@ -49,6 +49,11 @@ func (h *Handler) handleCreateProfile(w http.ResponseWriter, r *http.Request) {
 		v := boolToInt64(*req.Deinterlace)
 		deinterlace = &v
 	}
+	var deband *int64
+	if req.Deband != nil {
+		v := boolToInt64(*req.Deband)
+		deband = &v
+	}
 
 	profile, err := h.store.Write().CreateEncodeProfile(r.Context(), store.CreateEncodeProfileParams{
 		Uuid:              mustUUID(),
@@ -69,6 +74,8 @@ func (h *Handler) handleCreateProfile(w http.ResponseWriter, r *http.Request) {
 		Audio:             req.Audio,
 		Container:         req.Container,
 		X265Params:        req.X265Params,
+		BitDepth:          req.BitDepth,
+		Deband:            deband,
 		OutputResolutions: outRes,
 	})
 	if err != nil {
@@ -124,6 +131,8 @@ func (h *Handler) handlePatchProfile(w http.ResponseWriter, r *http.Request) {
 		Audio:             existing.Audio,
 		Container:         existing.Container,
 		X265Params:        existing.X265Params,
+		BitDepth:          existing.BitDepth,
+		Deband:            existing.Deband,
 		OutputResolutions: existing.OutputResolutions,
 	}
 	if req.Name != "" {
@@ -175,6 +184,13 @@ func (h *Handler) handlePatchProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.X265Params != nil {
 		p.X265Params = req.X265Params
+	}
+	if req.BitDepth != nil {
+		p.BitDepth = req.BitDepth
+	}
+	if req.Deband != nil {
+		v := boolToInt64(*req.Deband)
+		p.Deband = &v
 	}
 	if len(req.OutputResolutions) > 0 {
 		b, _ := json.Marshal(req.OutputResolutions)
@@ -244,6 +260,8 @@ func (h *Handler) handleGetResolvedProfile(w http.ResponseWriter, r *http.Reques
 		Audio:             res.Audio,
 		Container:         res.Container,
 		X265Params:        res.X265Params,
+		BitDepth:          res.BitDepth,
+		Deband:            res.Deband,
 		OutputResolutions: res.OutputResolutions,
 	})
 }

@@ -215,6 +215,8 @@ export interface Profile {
   audio: string | null
   container: string | null
   x265_params: string | null
+  bit_depth: number | null
+  deband: boolean | null
   output_resolutions: number[] | null
   added_at: number
   modified_at: number
@@ -235,6 +237,8 @@ export interface ResolvedProfile {
   audio: string
   container: string
   x265_params: string
+  bit_depth: number
+  deband: boolean
   output_resolutions: number[]
 }
 

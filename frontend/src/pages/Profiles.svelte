@@ -43,8 +43,10 @@
     psy_rdoq: string
     aq_strength: string
     aq_mode: string
+    bit_depth: string // stringified for select, '' = inherit
     smartblur: boolean | null
     deinterlace: boolean | null
+    deband: boolean | null
     output_resolutions: string // comma-separated
   }
 
@@ -63,8 +65,10 @@
     psy_rdoq: '',
     aq_strength: '',
     aq_mode: '',
+    bit_depth: '',
     smartblur: null,
     deinterlace: null,
+    deband: null,
     output_resolutions: '',
   })
 
@@ -98,8 +102,10 @@
       psy_rdoq: '',
       aq_strength: '',
       aq_mode: '',
+      bit_depth: '',
       smartblur: null,
       deinterlace: null,
+      deband: null,
       output_resolutions: '',
     }
   }
@@ -120,8 +126,10 @@
       psy_rdoq: p.psy_rdoq != null ? String(p.psy_rdoq) : '',
       aq_strength: p.aq_strength != null ? String(p.aq_strength) : '',
       aq_mode: p.aq_mode != null ? String(p.aq_mode) : '',
+      bit_depth: p.bit_depth != null ? String(p.bit_depth) : '',
       smartblur: p.smartblur ?? null,
       deinterlace: p.deinterlace ?? null,
+      deband: p.deband ?? null,
       output_resolutions: p.output_resolutions?.join(', ') ?? '',
     }
   }
@@ -142,8 +150,10 @@
       psy_rdoq: f.psy_rdoq ? Number(f.psy_rdoq) : null,
       aq_strength: f.aq_strength ? Number(f.aq_strength) : null,
       aq_mode: f.aq_mode ? Number(f.aq_mode) : null,
+      bit_depth: f.bit_depth ? Number(f.bit_depth) : null,
       smartblur: f.smartblur,
       deinterlace: f.deinterlace,
+      deband: f.deband,
       output_resolutions: f.output_resolutions
         ? f.output_resolutions.split(',').map(s => Number(s.trim())).filter(Boolean)
         : null,
@@ -293,8 +303,10 @@
                   {#if p.output_resolutions?.length}<span><span class="text-[var(--color-faint)]">res</span> {p.output_resolutions.join(', ')}p</span>{/if}
                   {#if p.psy_rd != null}<span><span class="text-[var(--color-faint)]">psy-rd</span> {p.psy_rd}</span>{/if}
                   {#if p.aq_mode != null}<span><span class="text-[var(--color-faint)]">aq-mode</span> {p.aq_mode}</span>{/if}
+                  {#if p.bit_depth != null}<span><span class="text-[var(--color-faint)]">bit-depth</span> {p.bit_depth}</span>{/if}
                   {#if p.smartblur}<span class="text-[var(--color-info)]">smartblur</span>{/if}
                   {#if p.deinterlace}<span class="text-[var(--color-info)]">deinterlace</span>{/if}
+                  {#if p.deband}<span class="text-[var(--color-info)]">deband</span>{/if}
                 </div>
               </div>
 
@@ -407,9 +419,23 @@
           </select>
         </div>
       </div>
-      <div>
-        <label for="prof-resolutions" class="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">Output resolutions (comma-separated)</label>
-        <input id="prof-resolutions" type="text" bind:value={form.output_resolutions} placeholder="1080, 720, 480" class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] transition-colors duration-200 focus:outline-none focus:border-[var(--accent)] focus:bg-[var(--color-surface-2)]" />
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label for="prof-bit-depth" class="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">Bit depth</label>
+          <select
+            id="prof-bit-depth"
+            bind:value={form.bit_depth}
+            class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
+          >
+            <option value="">inherit</option>
+            <option value="8">8-bit</option>
+            <option value="10">10-bit</option>
+          </select>
+        </div>
+        <div>
+          <label for="prof-resolutions" class="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">Output resolutions (comma-separated)</label>
+          <input id="prof-resolutions" type="text" bind:value={form.output_resolutions} placeholder="1080, 720, 480" class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] transition-colors duration-200 focus:outline-none focus:border-[var(--accent)] focus:bg-[var(--color-surface-2)]" />
+        </div>
       </div>
     </fieldset>
 
@@ -465,6 +491,10 @@
         <label class="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" bind:checked={form.deinterlace} class="border-[var(--color-border-strong)] accent-[var(--accent)]" />
           <span class="text-sm text-[var(--color-text)]">Deinterlace (yadif)</span>
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" bind:checked={form.deband} class="border-[var(--color-border-strong)] accent-[var(--accent)]" />
+          <span class="text-sm text-[var(--color-text)]">Deband</span>
         </label>
       </div>
     </fieldset>

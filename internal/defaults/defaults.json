@@ -13,6 +13,8 @@
     "default_aq_mode": 3,
     "default_audio": "copy",
     "default_container": "mkv",
+    "default_bit_depth": 8,
+    "default_deband": false,
     "default_output_resolutions": [1080, 720, 480],
     "smartblur_chain": "smartblur=1.5:-0.35:-3.5:0.65:0.25:2.0",
     "base_x265_params": [
@@ -44,6 +46,8 @@
       "aq_mode": 2,
       "audio": "copy",
       "container": "mkv",
+      "bit_depth": 10,
+      "deband": false,
       "output_resolutions": "[1080,720,480]"
     }
   ],

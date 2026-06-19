@@ -35,6 +35,8 @@ type ProfileResponse struct {
 	Audio             *string  `json:"audio"`
 	Container         *string  `json:"container"`
 	X265Params        *string  `json:"x265_params"`
+	BitDepth          *int64   `json:"bit_depth"`
+	Deband            *bool    `json:"deband"`
 	OutputResolutions []int    `json:"output_resolutions"`
 	AddedAt           int64    `json:"added_at"`
 	ModifiedAt        int64    `json:"modified_at"`
@@ -54,6 +56,11 @@ func toProfileResponse(p store.EncodeProfile) ProfileResponse {
 	if p.Deinterlace != nil {
 		v := *p.Deinterlace != 0
 		deinterlace = &v
+	}
+	var deband *bool
+	if p.Deband != nil {
+		v := *p.Deband != 0
+		deband = &v
 	}
 	var resolutions []int
 	if p.OutputResolutions != nil && *p.OutputResolutions != "" {
@@ -79,6 +86,8 @@ func toProfileResponse(p store.EncodeProfile) ProfileResponse {
 		Audio:             p.Audio,
 		Container:         p.Container,
 		X265Params:        p.X265Params,
+		BitDepth:          p.BitDepth,
+		Deband:            deband,
 		OutputResolutions: resolutions,
 		AddedAt:           p.AddedAt,
 		ModifiedAt:        p.ModifiedAt,
@@ -232,6 +241,8 @@ type CreateProfileRequest struct {
 	Audio             *string  `json:"audio"`
 	Container         *string  `json:"container"`
 	X265Params        *string  `json:"x265_params"`
+	BitDepth          *int64   `json:"bit_depth"`
+	Deband            *bool    `json:"deband"`
 	OutputResolutions []int    `json:"output_resolutions"`
 }
 
@@ -255,6 +266,8 @@ type ResolvedProfileResponse struct {
 	Audio             string  `json:"audio"`
 	Container         string  `json:"container"`
 	X265Params        string  `json:"x265_params"`
+	BitDepth          int     `json:"bit_depth"`
+	Deband            bool    `json:"deband"`
 	OutputResolutions []int   `json:"output_resolutions"`
 }
 

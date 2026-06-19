@@ -92,6 +92,8 @@ func (s *Store) seedBuiltinProfile(ctx context.Context, prof defaults.Profile) (
 		Audio:             p(prof.Audio),
 		Container:         p(prof.Container),
 		X265Params:        nil,
+		BitDepth:          p(prof.BitDepth),
+		Deband:            p(b2i(prof.Deband)),
 		OutputResolutions: p(prof.OutputResolutions),
 	})
 	if err != nil {

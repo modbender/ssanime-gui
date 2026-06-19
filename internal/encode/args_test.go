@@ -75,6 +75,80 @@ func TestBuildArgsEmitsEveryKnob(t *testing.T) {
 	_ = joined
 }
 
+func TestBuildArgs10BitPixFmt(t *testing.T) {
+	res := Resolved{
+		CRF: 24, Preset: "slow", Deblock: "1,1", PsyRD: 1, PsyRDOQ: 1,
+		AQStrength: 1, AQMode: 2, Audio: "copy", Container: "mkv",
+		BitDepth: 10, OutputResolutions: []int{1080},
+	}
+	args, snapshot, err := BuildArgs(res, 1080, ColorTags{}, "/in", "/out")
+	if err != nil {
+		t.Fatalf("BuildArgs: %v", err)
+	}
+	mustContainSeq(t, args, "-pix_fmt", "yuv420p10le")
+	if !strings.Contains(snapshot, `"bit_depth":10`) {
+		t.Errorf("snapshot missing bit_depth: %s", snapshot)
+	}
+}
+
+func TestBuildArgs8BitDefaultPixFmt(t *testing.T) {
+	// BitDepth 0 (unset, as existing tests build) and explicit 8 both emit 8-bit.
+	for _, bd := range []int{0, 8} {
+		res := Resolved{
+			CRF: 24, Preset: "slow", Deblock: "1,1", PsyRD: 1, PsyRDOQ: 1,
+			AQStrength: 1, AQMode: 2, Audio: "copy", Container: "mkv",
+			BitDepth: bd, OutputResolutions: []int{1080},
+		}
+		args, _, err := BuildArgs(res, 1080, ColorTags{}, "/in", "/out")
+		if err != nil {
+			t.Fatalf("BuildArgs bd=%d: %v", bd, err)
+		}
+		mustContainSeq(t, args, "-pix_fmt", "yuv420p")
+		if got := argValue(t, args, "-pix_fmt"); got != "yuv420p" {
+			t.Errorf("bd=%d: -pix_fmt = %q, want yuv420p", bd, got)
+		}
+	}
+}
+
+func TestBuildArgsDebandFilter(t *testing.T) {
+	res := Resolved{
+		CRF: 24, Preset: "slow", Deblock: "1,1", PsyRD: 1, PsyRDOQ: 1,
+		AQStrength: 1, AQMode: 2, Audio: "copy", Container: "mkv",
+		Deband: true, OutputResolutions: []int{720},
+	}
+	args, snapshot, err := BuildArgs(res, 720, ColorTags{}, "/in", "/out")
+	if err != nil {
+		t.Fatalf("BuildArgs: %v", err)
+	}
+	vf := argValue(t, args, "-vf")
+	scaleIdx := strings.Index(vf, "scale=")
+	debandIdx := strings.Index(vf, "deband")
+	if debandIdx < 0 {
+		t.Errorf("-vf missing deband: %q", vf)
+	}
+	if scaleIdx < 0 || debandIdx < scaleIdx {
+		t.Errorf("deband must come after scale: %q", vf)
+	}
+	if !strings.Contains(snapshot, `"deband":true`) {
+		t.Errorf("snapshot missing deband: %s", snapshot)
+	}
+}
+
+func TestBuildArgsNoDebandWhenOff(t *testing.T) {
+	res := Resolved{
+		CRF: 24, Preset: "slow", Deblock: "1,1", PsyRD: 1, PsyRDOQ: 1,
+		AQStrength: 1, AQMode: 2, Audio: "copy", Container: "mkv",
+		OutputResolutions: []int{720},
+	}
+	args, _, err := BuildArgs(res, 720, ColorTags{}, "/in", "/out")
+	if err != nil {
+		t.Fatalf("BuildArgs: %v", err)
+	}
+	if vf := argValue(t, args, "-vf"); strings.Contains(vf, "deband") {
+		t.Errorf("-vf must not contain deband when off: %q", vf)
+	}
+}
+
 func TestBuildArgsNoOptionalFilters(t *testing.T) {
 	res := Resolved{
 		CRF: 23, Preset: "medium", Deblock: "0,0", PsyRD: 1, PsyRDOQ: 1,

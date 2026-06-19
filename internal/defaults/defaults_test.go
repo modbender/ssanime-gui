@@ -50,6 +50,8 @@ func TestHistoricalValues(t *testing.T) {
 		{"default_aq_mode", e.DefaultAQMode, 3},
 		{"default_audio", e.DefaultAudio, "copy"},
 		{"default_container", e.DefaultContainer, "mkv"},
+		{"default_bit_depth", e.DefaultBitDepth, 8},
+		{"default_deband", e.DefaultDeband, false},
 		{"smartblur_chain", e.SmartBlurChain, "smartblur=1.5:-0.35:-3.5:0.65:0.25:2.0"},
 	}
 	for _, c := range checks {
@@ -88,6 +90,9 @@ func TestHistoricalValues(t *testing.T) {
 	}
 	if p.Audio != "copy" || p.Container != "mkv" || p.OutputResolutions != "[1080,720,480]" {
 		t.Errorf("profile audio/container/res = %q/%q/%q", p.Audio, p.Container, p.OutputResolutions)
+	}
+	if p.BitDepth != 10 || p.Deband {
+		t.Errorf("profile bit_depth/deband = %d/%v, want 10/false (10-bit fixes anime gradient banding)", p.BitDepth, p.Deband)
 	}
 
 	// Seed settings (internal/store/seed.go).

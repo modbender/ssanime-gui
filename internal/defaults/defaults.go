@@ -52,6 +52,8 @@ type Encode struct {
 	DefaultAQMode            int      `json:"default_aq_mode"`
 	DefaultAudio             string   `json:"default_audio"`
 	DefaultContainer         string   `json:"default_container"`
+	DefaultBitDepth          int      `json:"default_bit_depth"`
+	DefaultDeband            bool     `json:"default_deband"`
 	DefaultOutputResolutions []int    `json:"default_output_resolutions"`
 	SmartBlurChain           string   `json:"smartblur_chain"`
 	BaseX265Params           []string `json:"base_x265_params"`
@@ -74,6 +76,8 @@ type Profile struct {
 	AQMode            int64   `json:"aq_mode"`
 	Audio             string  `json:"audio"`
 	Container         string  `json:"container"`
+	BitDepth          int64   `json:"bit_depth"`
+	Deband            bool    `json:"deband"`
 	OutputResolutions string  `json:"output_resolutions"`
 }
 

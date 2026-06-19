@@ -68,7 +68,7 @@ func BuildArgs(res Resolved, resolution int, tags ColorTags, input, output strin
 		"-map_chapters", "0",
 		"-map_metadata", "0",
 		"-c:v", "libx265",
-		"-pix_fmt", "yuv420p",
+		"-pix_fmt", pixFmt(res.BitDepth),
 		"-crf", strconv.FormatFloat(res.CRF, 'f', -1, 64),
 		"-preset", res.Preset,
 		"-x265-params", x265,
@@ -153,9 +153,21 @@ func buildX265Params(res Resolved, tags ColorTags) string {
 	return dedupeLastWins(parts)
 }
 
+// pixFmt selects the output pixel format. 10-bit (yuv420p10le) nearly eliminates
+// x265-introduced gradient banding on flat anime backgrounds; libx265 infers
+// main10 from the 10-bit format, so no -profile:v is needed. Any other value is
+// 8-bit (current behavior).
+func pixFmt(bitDepth int) string {
+	if bitDepth == 10 {
+		return "yuv420p10le"
+	}
+	return "yuv420p"
+}
+
 // buildVideoFilters builds the -vf chain in the correct order: deinterlace
 // (yadif) before any scaling, optional smartblur, then the scale to the target
-// height (-2 width keeps the aspect ratio with an even dimension).
+// height (-2 width keeps the aspect ratio with an even dimension), then optional
+// deband (after scale so it operates at the output resolution).
 func buildVideoFilters(res Resolved, height int) string {
 	var vf []string
 	if res.Deinterlace {
@@ -165,6 +177,9 @@ func buildVideoFilters(res Resolved, height int) string {
 		vf = append(vf, smartblurChain)
 	}
 	vf = append(vf, fmt.Sprintf("scale=-2:%d:flags=spline16+accurate_rnd+full_chroma_int", height))
+	if res.Deband {
+		vf = append(vf, "deband")
+	}
 	return strings.Join(vf, ",")
 }
 
@@ -195,6 +210,8 @@ func buildSnapshot(res Resolved, resolution, height int, x265, vf string, tags C
 		"vf":          vf,
 		"smartblur":   res.SmartBlur,
 		"deinterlace": res.Deinterlace,
+		"bit_depth":   res.BitDepth,
+		"deband":      res.Deband,
 	}
 	// Record only the present color tags for reproducibility.
 	color := map[string]string{}

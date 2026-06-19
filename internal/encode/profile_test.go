@@ -68,6 +68,28 @@ func TestResolveChainDeepGrandparent(t *testing.T) {
 	}
 }
 
+func TestResolveChainBitDepthDeband(t *testing.T) {
+	// Child overrides both knobs over a parent that set the opposite values.
+	parent := chainRow{BitDepth: ptr[int64](8), Deband: ptr[int64](0)}
+	child := chainRow{BitDepth: ptr[int64](10), Deband: ptr[int64](1)}
+	got := resolveChain([]chainRow{child, parent})
+	if got.BitDepth != 10 {
+		t.Errorf("BitDepth = %d, want 10 (child override)", got.BitDepth)
+	}
+	if !got.Deband {
+		t.Errorf("Deband = false, want true (child override)")
+	}
+
+	// Empty chain falls back to package defaults (8-bit, deband off).
+	empty := resolveChain([]chainRow{{}})
+	if empty.BitDepth != defaultBitDepth || empty.BitDepth != 8 {
+		t.Errorf("BitDepth = %d, want defaultBitDepth (8)", empty.BitDepth)
+	}
+	if empty.Deband != defaultDeband || empty.Deband {
+		t.Errorf("Deband = %v, want defaultDeband (false)", empty.Deband)
+	}
+}
+
 func TestParseResolutions(t *testing.T) {
 	cases := []struct {
 		in   *string

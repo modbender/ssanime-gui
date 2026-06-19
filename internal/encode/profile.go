@@ -30,6 +30,8 @@ var (
 	defaultAQMode     = defaults.Values.Encode.DefaultAQMode
 	defaultAudio      = defaults.Values.Encode.DefaultAudio
 	defaultContainer  = defaults.Values.Encode.DefaultContainer
+	defaultBitDepth   = defaults.Values.Encode.DefaultBitDepth
+	defaultDeband     = defaults.Values.Encode.DefaultDeband
 )
 
 // defaultOutputResolutions is used when no profile in the chain declares an
@@ -55,6 +57,8 @@ type Resolved struct {
 	Audio             string
 	Container         string
 	X265Params        string // raw passthrough merged into -x265-params
+	BitDepth          int    // 8 or 10; 10 emits yuv420p10le to curb banding
+	Deband            bool
 	OutputResolutions []int
 }
 
@@ -76,6 +80,8 @@ type chainRow struct {
 	Audio             *string
 	Container         *string
 	X265Params        *string
+	BitDepth          *int64
+	Deband            *int64
 	OutputResolutions *string
 }
 
@@ -85,6 +91,7 @@ func rowFromChain(r store.ResolveProfileChainRow) chainRow {
 		Deinterlace: r.Deinterlace, Deblock: r.Deblock, PsyRd: r.PsyRd,
 		PsyRdoq: r.PsyRdoq, AqStrength: r.AqStrength, AqMode: r.AqMode,
 		Audio: r.Audio, Container: r.Container, X265Params: r.X265Params,
+		BitDepth: r.BitDepth, Deband: r.Deband,
 		OutputResolutions: r.OutputResolutions,
 	}
 }
@@ -136,13 +143,15 @@ func resolveChain(chain []chainRow) Resolved {
 		AQMode:     defaultAQMode,
 		Audio:      defaultAudio,
 		Container:  defaultContainer,
+		BitDepth:   defaultBitDepth,
+		Deband:     defaultDeband,
 	}
 
 	var (
 		codec, preset, deblock, audio, container, x265, outRes *string
 		crf, psyRD, psyRDOQ, aqStrength                        *float64
 		aqMode                                                 *int64
-		smartblur, deinterlace                                 *int64
+		smartblur, deinterlace, bitDepth, deband               *int64
 	)
 	// First non-NULL (child-first order) wins for each knob.
 	pickStr := func(dst **string, v *string) {
@@ -175,6 +184,8 @@ func resolveChain(chain []chainRow) Resolved {
 		pickI(&aqMode, row.AqMode)
 		pickI(&smartblur, row.Smartblur)
 		pickI(&deinterlace, row.Deinterlace)
+		pickI(&bitDepth, row.BitDepth)
+		pickI(&deband, row.Deband)
 	}
 
 	if codec != nil {
@@ -212,6 +223,10 @@ func resolveChain(chain []chainRow) Resolved {
 	}
 	res.SmartBlur = smartblur != nil && *smartblur == 1
 	res.Deinterlace = deinterlace != nil && *deinterlace == 1
+	if bitDepth != nil {
+		res.BitDepth = int(*bitDepth)
+	}
+	res.Deband = deband != nil && *deband == 1
 	res.OutputResolutions = parseResolutions(outRes)
 
 	return res
