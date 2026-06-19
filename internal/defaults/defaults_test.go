@@ -62,7 +62,9 @@ func TestHistoricalValues(t *testing.T) {
 	if !reflect.DeepEqual(e.DefaultOutputResolutions, []int{1080, 720, 480}) {
 		t.Errorf("encode.default_output_resolutions = %v, want [1080 720 480]", e.DefaultOutputResolutions)
 	}
-	wantBase := []string{"me=2", "rd=4", "subme=7", "rdoq-level=2", "merange=57", "bframes=8", "b-adapt=2", "limit-sao=1", "frame-threads=3", "no-info=1"}
+	// frame-threads is intentionally omitted so x265 auto-selects it from the host
+	// core count (capping it would trade speed for marginal compression gain).
+	wantBase := []string{"me=2", "rd=4", "subme=7", "rdoq-level=2", "merange=57", "bframes=8", "b-adapt=2", "limit-sao=1", "no-info=1"}
 	if !reflect.DeepEqual(e.BaseX265Params, wantBase) {
 		t.Errorf("encode.base_x265_params = %v, want %v", e.BaseX265Params, wantBase)
 	}

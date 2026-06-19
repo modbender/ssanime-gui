@@ -26,7 +26,6 @@
       "bframes=8",
       "b-adapt=2",
       "limit-sao=1",
-      "frame-threads=3",
       "no-info=1"
     ]
   },

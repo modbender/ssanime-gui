@@ -51,13 +51,17 @@ func TestBuildArgsEmitsEveryKnob(t *testing.T) {
 	x265 := argValue(t, args, "-x265-params")
 	for _, want := range []string{
 		"me=2", "rd=4", "subme=7", "rdoq-level=2", "merange=57", "bframes=8",
-		"b-adapt=2", "limit-sao=1", "frame-threads=3", "no-info=1",
+		"b-adapt=2", "limit-sao=1", "no-info=1",
 		"aq-mode=3", "aq-strength=0.9", "deblock=1,1", "psy-rd=1.25", "psy-rdoq=2",
 		"ctu=64", "rc-lookahead=40", // passthrough merged
 	} {
 		if !strings.Contains(x265, want) {
 			t.Errorf("x265-params missing %q\n got: %s", want, x265)
 		}
+	}
+	// frame-threads is deliberately absent so x265 auto-selects it per host.
+	if strings.Contains(x265, "frame-threads") {
+		t.Errorf("x265-params should not pin frame-threads (let x265 auto-select)\n got: %s", x265)
 	}
 
 	// -vf chain order: yadif (deinterlace) -> smartblur -> scale=-2:720.
