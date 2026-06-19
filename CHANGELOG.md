@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.5.0](https://github.com/modbender/ssanime-gui/compare/v0.4.0...v0.5.0) (2026-06-14)
+
+
+### Features
+
+* auto source check on series page, configurable trusted groups UI ([#56](https://github.com/modbender/ssanime-gui/issues/56)) ([506de46](https://github.com/modbender/ssanime-gui/commit/506de46eb5f3790010359ea1e3e0c6ad08852185))
+* make trusted release groups user-configurable in settings ([#55](https://github.com/modbender/ssanime-gui/issues/55)) ([2ab74d5](https://github.com/modbender/ssanime-gui/commit/2ab74d5e20c3e2a58ff390f7975ab2c791f54011))
+* poller auto-downloads new episodes via per-episode search ([#52](https://github.com/modbender/ssanime-gui/issues/52)) ([fdce7ba](https://github.com/modbender/ssanime-gui/commit/fdce7bac9ab9554646df7e7174ac0ad8e36ea4cb))
+* trusted-only selection with per-series release-group lock ([#54](https://github.com/modbender/ssanime-gui/issues/54)) ([1031727](https://github.com/modbender/ssanime-gui/commit/1031727c11f0c6194ad54735207f01e6facd8fcb))
+
+
+### Bug Fixes
+
+* headless ffmpeg on Windows + Auto download backend ([#58](https://github.com/modbender/ssanime-gui/issues/58)) ([1e504f5](https://github.com/modbender/ssanime-gui/commit/1e504f50203b7da188245bb69870436fbc9c3434))
+
 ## [0.4.0](https://github.com/modbender/ssanime-gui/compare/v0.3.0...v0.4.0) (2026-06-14)
 
 
