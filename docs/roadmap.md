@@ -225,31 +225,44 @@ makes sense once that audience is real.
 
 ## Language detection for untagged tracks + subtitle merging
 
-**Status:** deferred. Two refinements adjacent to the per-profile language-preferences item
-above; captured from a later discussion. Most of this is *not* an AI problem.
+**Status:** deferred. Refinements adjacent to the per-profile language-preferences item above.
+**Verified against a real library (ffprobe sample, 8 releases): language is a metadata read,
+not an AI problem** — the genuinely fuzzy part is subtitle *role* (Dialogue vs Signs/Songs),
+not language.
 
-### Detecting language when a track is untagged
-Audio/subtitle language is normally just the stream's `language` tag (ffprobe) — the real
-work is normalizing inconsistent tags (`Eng`/`EN`/`English`), which the language-preferences
-item already covers. The gap is *untagged* tracks:
-- **Subtitles:** run a lightweight text-language-ID library (e.g. lingua/whatlang) over the
-  subtitle text — cheap, reliable, no heavy model.
-- **Audio:** content-based detection needs Whisper-class speech ML — heavy, and rarely
-  needed since audio is almost always tagged. Edge case only; don't reach for it by default.
+### Evidence (sampled releases)
+- Nearly every embedded audio/subtitle stream carries a `language` tag — detection = read it.
+- Tags are **inconsistent in form**: ISO codes (`eng`/`jpn`/`ger`/`spa`) *and* full words
+  (`English`), sometimes both in one file (Death Note: `English` audio beside `jpn` audio).
+  → a normalization/alias table (`English`/`Eng`/`EN`/`en` → `eng`), not a model.
+- Tags can be **wrong**: a subtitle tagged `jpn` that is actually English (Gate).
+- Tracks can be **absent**: an mp4 with no embedded subtitle at all (Kakegurui — external or
+  hardsubbed).
+- Same-language multiplicity is common and only the free-text `title` disambiguates:
+  `eng` "Full Subtitles" vs `eng` "Signs/Songs" (FFF / SallySubs), `eng` "Dialogue" vs
+  "Signs & Songs" (Hyouka), `eng` "English" vs alt-style "EdoPhantom" (Monogatari),
+  `spa` "Spanish (ES)" vs "(LA)".
+
+### Detecting language when a track is untagged or mistagged
+- Normal path: read the `language` tag → normalize via an alias table. Covers ~all files. No AI.
+- Untagged or suspect tag (the Gate mistag): run a lightweight **text-language-ID library**
+  (e.g. lingua / whatlang) over the subtitle text — classic NLP, cheap, no model.
+- Untagged *audio* would need Whisper-class speech ML — heavy, and rarely needed (audio is
+  essentially always tagged). Edge case only; don't reach for it by default.
+- No embedded track (Kakegurui): nothing to detect — treat as "no subs".
 
 ### Merging Dialogue + Songs/Signs subtitles
-Some releases split a Dialogue track from a Songs/Signs track; merging them into one cleaner
-subtitle is the idea.
-- **Classification is the one genuine AI/LLM case:** track names have no reliable pattern
-  ("Signs & Songs" / "S&S" / "Full" / …), so an LLM classifying track type from the name +
-  a content sample beats regex.
-- **Question the premise first:** the full *Dialogue* track usually already includes
-  signs/songs; a separate Songs/Signs track is typically a *dub-companion* (overlay for
-  dub-watchers), so merging is often redundant, not a missing half. Only some releases
-  genuinely split them — verify before building.
-- **The merge is the hard part, not the classification:** combining two ASS tracks (styles,
-  layers, timing, style-name collisions) is real subtitle engineering and must bake a durable
-  result.
+- **The role distinction is the one genuine fuzzy/LLM case.** It lives entirely in the
+  free-text `title`, which varies by group ("Full Subtitles"/"Dialogue"/"English";
+  "Signs/Songs"/"Signs & Songs"/"S&S"; group tags like [FFF]/[SallySubs]). Every variant is
+  the *same* `eng` tag, so language can't separate them; regex covers common cases but not the
+  long tail → an LLM classifying from title (+ a content sample) is the justified use.
+- **Premise caveat, confirmed by the sample:** the "Full Subtitles" track already includes
+  signs/songs, so the separate "Signs/Songs" track is the redundant dub-overlay — merging is
+  usually unnecessary. Only releases that ship a dialogue-only track *plus* a separate songs
+  track genuinely need merging; verify per release.
+- **The merge itself is the hard engineering part:** combining two ASS tracks (styles, layers,
+  timing, style-name collisions) into one durable baked result.
 
 **Trigger to pick up:** alongside the per-profile language work — they share the ffprobe
 track-introspection + tag-normalization layer.
