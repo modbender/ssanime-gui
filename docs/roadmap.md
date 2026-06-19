@@ -123,3 +123,49 @@ The download seam is already polymorphic, but the *source* contract is not:
 (direct/HLS) links, or a concrete need for the no-viable-torrent tail is observed.
 Until a *producer* of non-torrent sources exists, this is unreachable and stays
 dormant.
+
+## Subtitle burn-in (hardsub / MP4) + per-profile language preferences
+
+**Status:** deferred. The encoder copies soft subs into mkv (`-c:s copy`) and has no
+burn-in path and no audio/subtitle track selection. An MP4 output requires burning subs
+(mp4 can't carry ASS/PGS soft subs), and doing that *well* pulls in a whole
+language-preference layer — so the MP4/hardsub profile was skipped; the MKV softsub
+profile + the encode-fidelity fixes (chapters, color, HQ scaler) shipped instead.
+
+### Why deferred — it's bigger than automin's version
+
+automin's MP4 path simply burned the **default** subtitle stream — ffmpeg's `subtitles=`
+filter did everything, with no track-selection logic. That part is small. The size comes
+from doing it properly with UI: users will expect to pick *which* language/track gets
+burned (and which audio is kept), which is a real UI + backend task.
+
+### Scope when picked up
+
+- **Builtin (non-editable) profile:** burn the *default* subtitle stream, automin-style —
+  no selection, simple.
+- **User-editable profiles:** a preferred **audio language** and **subtitle language**,
+  each with a **fallback**, chosen per profile.
+- **UI:** straightforward — preferred + fallback language dropdowns for audio and subtitles
+  on the Profiles editor.
+- **Backend (the hard part):**
+  - **Language normalization.** Stream language tags are inconsistent across releases —
+    `Eng` / `EN` / `English` / `eng`, `jpn` / `Japanese`, etc. Needs an alias→canonical
+    (ISO 639) map to match a user's preference against whatever the source tagged.
+  - **Subtitle role distinction.** Releases sometimes split **Dialogue** subs from
+    **Song/Signs** subs into separate tracks; selection must distinguish them (prefer full
+    dialogue, optionally include signs/songs), not pick by language alone.
+  - **Track selection + fallback resolution:** ffprobe the streams, match
+    preferred → fallback → default, then map the chosen audio and burn the chosen subtitle.
+- **Encoder capability:** the `subtitles=` burn-in vf step (with correct Windows
+  filtergraph path escaping — `C\:/path`), subtitle-stream exclusion for mp4 (can't
+  `-c:s copy` ASS/PGS), and chosen-audio mapping.
+
+### Open questions
+
+- Canonical language set + alias table (ISO 639 + common release spellings).
+- How to expose the dialogue-vs-signs/songs choice without overcomplicating the UI.
+- Whether audio/subtitle selection is per-profile or could vary per output resolution.
+
+**Trigger to pick up:** when an MP4/hardsub output or user-facing audio/subtitle language
+control is actually wanted. The encode-fidelity groundwork already shipped; this adds the
+track-selection + burn-in layer on top.
