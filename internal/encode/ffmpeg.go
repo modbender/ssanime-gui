@@ -133,6 +133,86 @@ func (t Tools) ProbeDuration(ctx context.Context, input string) (float64, error)
 	return dur, nil
 }
 
+// ColorTags holds a source's normalized color signaling, ready to emit. Fields
+// are ffmpeg-flag values (Range is "tv"/"pc"); each is empty when the source
+// reported it absent (unknown/reserved/blank). The x265 range mapping
+// (tv->limited, pc->full) is applied at arg-build time via x265Range.
+type ColorTags struct {
+	Range     string
+	Space     string
+	Primaries string
+	Transfer  string
+}
+
+// normalizeColorTags lowercases/trims raw ffprobe tokens, drops absent values
+// (empty / "unknown" / "reserved"), and maps color_range to the ffmpeg-flag
+// value (tv/pc). The space/primaries/transfer tokens pass through verbatim
+// because ffprobe's token IS the valid ffmpeg flag and x265 VUI value.
+func normalizeColorTags(rawRange, rawSpace, rawPrimaries, rawTransfer string) ColorTags {
+	norm := func(s string) string {
+		s = strings.ToLower(strings.TrimSpace(s))
+		if s == "" || s == "unknown" || s == "reserved" {
+			return ""
+		}
+		return s
+	}
+	r := norm(rawRange)
+	// ffprobe color_range is "tv"/"pc"; keep only those, drop anything else.
+	if r != "tv" && r != "pc" {
+		r = ""
+	}
+	return ColorTags{
+		Range:     r,
+		Space:     norm(rawSpace),
+		Primaries: norm(rawPrimaries),
+		Transfer:  norm(rawTransfer),
+	}
+}
+
+// x265Range maps an ffmpeg color_range value (tv/pc) to the x265 range VUI value
+// (limited/full). It returns "" for an empty/absent range.
+func x265Range(ffmpegRange string) string {
+	switch ffmpegRange {
+	case "tv":
+		return "limited"
+	case "pc":
+		return "full"
+	default:
+		return ""
+	}
+}
+
+// ProbeColorTags reads the first video stream's color signaling via ffprobe and
+// returns the normalized tags. key=value output (no nokey) is parsed by key so a
+// field ffprobe omits simply stays empty rather than shifting positions.
+func (t Tools) ProbeColorTags(ctx context.Context, input string) (ColorTags, error) {
+	cmd := execCommand(ctx, t.FFprobe,
+		"-v", "error",
+		"-select_streams", "v:0",
+		"-show_entries", "stream=color_range,color_space,color_primaries,color_transfer",
+		"-of", "default=noprint_wrappers=1",
+		input,
+	)
+	out, err := cmd.Output()
+	if err != nil {
+		return ColorTags{}, fmt.Errorf("ffprobe color tags: %w", err)
+	}
+	fields := map[string]string{}
+	for _, line := range strings.Split(string(out), "\n") {
+		k, v, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		fields[strings.TrimSpace(k)] = strings.TrimSpace(v)
+	}
+	return normalizeColorTags(
+		fields["color_range"],
+		fields["color_space"],
+		fields["color_primaries"],
+		fields["color_transfer"],
+	), nil
+}
+
 // ProgressFunc receives encode progress updates (0..100 percent and speed).
 type ProgressFunc func(percent float64, speed string)
 

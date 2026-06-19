@@ -53,7 +53,12 @@ func NewFFmpegEncoder(ffmpegOverride string) (*FFmpegEncoder, error) {
 // Encode builds the full ffmpeg arg list for the request and runs it with real
 // ffprobe-anchored progress.
 func (e *FFmpegEncoder) Encode(ctx context.Context, req EncodeRequest, onProgress ProgressFunc) (EncodeResult, error) {
-	args, snapshot, err := BuildArgs(req.Resolved, req.Resolution, req.Input, req.Output)
+	tags, err := e.tools.ProbeColorTags(ctx, req.Input)
+	if err != nil {
+		// Color tags fall back to none (no re-tagging); the encode still runs.
+		tags = ColorTags{}
+	}
+	args, snapshot, err := BuildArgs(req.Resolved, req.Resolution, tags, req.Input, req.Output)
 	if err != nil {
 		return EncodeResult{}, err
 	}
@@ -83,7 +88,7 @@ func (e *FFmpegEncoder) Thumbnails(ctx context.Context, input, destDir string) (
 // Command returns the ffmpeg command line that would be run for a request, used
 // for logging/verification (proving every knob is wired).
 func (e *FFmpegEncoder) Command(req EncodeRequest) (string, error) {
-	args, _, err := BuildArgs(req.Resolved, req.Resolution, req.Input, req.Output)
+	args, _, err := BuildArgs(req.Resolved, req.Resolution, ColorTags{}, req.Input, req.Output)
 	if err != nil {
 		return "", err
 	}

@@ -59,13 +59,13 @@ var baseX265Params = []string{
 // at one target resolution, plus a JSON snapshot of the effective encode params
 // for reproducibility (persisted on the encoded_outputs row). input/output are
 // absolute file paths.
-func BuildArgs(res Resolved, resolution int, input, output string) ([]string, string, error) {
+func BuildArgs(res Resolved, resolution int, tags ColorTags, input, output string) ([]string, string, error) {
 	height, ok := resolutionHeights[resolution]
 	if !ok {
 		return nil, "", fmt.Errorf("unsupported target resolution %d", resolution)
 	}
 
-	x265 := buildX265Params(res)
+	x265 := buildX265Params(res, tags)
 	vf := buildVideoFilters(res, height)
 
 	args := []string{
@@ -73,13 +73,20 @@ func BuildArgs(res Resolved, resolution int, input, output string) ([]string, st
 		"-nostdin",
 		"-i", input,
 		"-map", "0",
+		// Carry chapters and global metadata from the source into the output.
+		"-map_chapters", "0",
+		"-map_metadata", "0",
 		"-c:v", "libx265",
 		"-pix_fmt", "yuv420p",
 		"-crf", strconv.FormatFloat(res.CRF, 'f', -1, 64),
 		"-preset", res.Preset,
 		"-x265-params", x265,
-		"-vf", vf,
 	}
+	// Source color signaling: re-tag the container output so players read the
+	// correct primaries/transfer/matrix instead of guessing. Only present tags
+	// are emitted; an untagged source adds nothing.
+	args = append(args, colorFlags(tags)...)
+	args = append(args, "-vf", vf)
 	args = append(args, audioArgs(res.Audio)...)
 	// Subtitles + attachments: copy through for softsub-friendly mkv. ffmpeg
 	// ignores a copy of an absent stream type, so this is safe across sources.
@@ -89,17 +96,55 @@ func BuildArgs(res Resolved, resolution int, input, output string) ([]string, st
 	args = append(args, "-f", muxerFor(res.Container))
 	args = append(args, "-progress", "pipe:1", "-y", output)
 
-	snapshot, err := buildSnapshot(res, resolution, height, x265, vf)
+	snapshot, err := buildSnapshot(res, resolution, height, x265, vf, tags)
 	if err != nil {
 		return nil, "", err
 	}
 	return args, snapshot, nil
 }
 
+// colorFlags emits the ffmpeg output color-signaling flags for the present tags,
+// in a stable order (range, space, primaries, transfer). Absent tags emit nothing.
+func colorFlags(tags ColorTags) []string {
+	var args []string
+	if tags.Range != "" {
+		args = append(args, "-color_range", tags.Range)
+	}
+	if tags.Space != "" {
+		args = append(args, "-colorspace", tags.Space)
+	}
+	if tags.Primaries != "" {
+		args = append(args, "-color_primaries", tags.Primaries)
+	}
+	if tags.Transfer != "" {
+		args = append(args, "-color_trc", tags.Transfer)
+	}
+	return args
+}
+
+// colorX265Params returns the x265 VUI params for the present color tags, in the
+// same stable order as colorFlags. range uses the limited/full mapping.
+func colorX265Params(tags ColorTags) []string {
+	var parts []string
+	if r := x265Range(tags.Range); r != "" {
+		parts = append(parts, "range="+r)
+	}
+	if tags.Space != "" {
+		parts = append(parts, "colormatrix="+tags.Space)
+	}
+	if tags.Primaries != "" {
+		parts = append(parts, "colorprim="+tags.Primaries)
+	}
+	if tags.Transfer != "" {
+		parts = append(parts, "transfer="+tags.Transfer)
+	}
+	return parts
+}
+
 // buildX265Params merges the fixed tuned base, the per-profile inheritable knobs,
 // and the raw x265_params passthrough into one colon-joined x265-params string.
 // Passthrough keys override earlier duplicates so a profile can always win.
-func buildX265Params(res Resolved) string {
+func buildX265Params(res Resolved, tags ColorTags) string {
 	parts := append([]string(nil), baseX265Params...)
 	parts = append(parts,
 		fmt.Sprintf("aq-mode=%d", res.AQMode),
@@ -108,6 +153,9 @@ func buildX265Params(res Resolved) string {
 		"psy-rd="+formatFloat(res.PsyRD),
 		"psy-rdoq="+formatFloat(res.PsyRDOQ),
 	)
+	// Source color VUI params, merged before the profile passthrough so a
+	// profile can still override (dedupe keeps the last occurrence per key).
+	parts = append(parts, colorX265Params(tags)...)
 	if extra := splitParams(res.X265Params); len(extra) > 0 {
 		parts = append(parts, extra...)
 	}
@@ -125,7 +173,7 @@ func buildVideoFilters(res Resolved, height int) string {
 	if res.SmartBlur {
 		vf = append(vf, smartblurChain)
 	}
-	vf = append(vf, fmt.Sprintf("scale=-2:%d", height))
+	vf = append(vf, fmt.Sprintf("scale=-2:%d:flags=spline16+accurate_rnd+full_chroma_int", height))
 	return strings.Join(vf, ",")
 }
 
@@ -142,7 +190,7 @@ func audioArgs(audio string) []string {
 
 // buildSnapshot serializes the effective encode parameters to a stable JSON
 // string stored on the output row for reproducibility.
-func buildSnapshot(res Resolved, resolution, height int, x265, vf string) (string, error) {
+func buildSnapshot(res Resolved, resolution, height int, x265, vf string, tags ColorTags) (string, error) {
 	snap := map[string]any{
 		"profile_id":  res.ProfileID,
 		"codec":       res.Codec,
@@ -156,6 +204,23 @@ func buildSnapshot(res Resolved, resolution, height int, x265, vf string) (strin
 		"vf":          vf,
 		"smartblur":   res.SmartBlur,
 		"deinterlace": res.Deinterlace,
+	}
+	// Record only the present color tags for reproducibility.
+	color := map[string]string{}
+	if tags.Range != "" {
+		color["range"] = tags.Range
+	}
+	if tags.Space != "" {
+		color["space"] = tags.Space
+	}
+	if tags.Primaries != "" {
+		color["primaries"] = tags.Primaries
+	}
+	if tags.Transfer != "" {
+		color["transfer"] = tags.Transfer
+	}
+	if len(color) > 0 {
+		snap["color"] = color
 	}
 	b, err := json.Marshal(snap)
 	if err != nil {
