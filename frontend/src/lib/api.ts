@@ -217,6 +217,11 @@ export interface Profile {
   x265_params: string | null
   bit_depth: number | null
   deband: boolean | null
+  /** Derived read-only from container in the UI (MP4 ⇒ true). */
+  burn_subs: boolean | null
+  /** `null` = wildcard (All for MKV / Default track for MP4); array = specific codes. */
+  audio_languages: string[] | null
+  subtitle_languages: string[] | null
   output_resolutions: number[] | null
   added_at: number
   modified_at: number
@@ -239,6 +244,9 @@ export interface ResolvedProfile {
   x265_params: string
   bit_depth: number
   deband: boolean
+  burn_subs: boolean
+  audio_languages: string[]
+  subtitle_languages: string[]
   output_resolutions: number[]
 }
 
