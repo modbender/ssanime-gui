@@ -169,3 +169,56 @@ burned (and which audio is kept), which is a real UI + backend task.
 **Trigger to pick up:** when an MP4/hardsub output or user-facing audio/subtitle language
 control is actually wanted. The encode-fidelity groundwork already shipped; this adds the
 track-selection + burn-in layer on top.
+
+## AI upscaling (super-resolution) — Anime4K / Real-ESRGAN
+
+**Status:** deferred (exploratory). People upscale anime and re-upload it, and a "make my
+low-res library HD" option is appealing — but quality upscaling is AI super-resolution, a
+major GPU-dependent subsystem that fits awkwardly with this app's lean, GPU-agnostic,
+shrink-to-archive design. Captured here; revisit on real demand.
+
+### What it actually is
+
+- **Anime4K** is primarily a set of GLSL shaders for *real-time playback* in mpv — it
+  upscales while you watch, not to a file. By itself it is not an encode-to-archive tool.
+- The engine used to upscale *and archive* anime is **Real-ESRGAN**
+  (`realesrgan-ncnn-vulkan`, Vulkan/GPU, anime models e.g. `realesr-animevideov3`) or
+  similar (`waifu2x-ncnn-vulkan`). Topaz Video AI is the commercial GUI equivalent (not
+  integrable). A plain ffmpeg `scale`-up is *not* this — it adds no detail, just a bigger,
+  softer file.
+
+### Why it's a subsystem, not a profile
+
+- **New GPU-dependent managed tool + models.** A second external binary (tens of MB + model
+  files), Vulkan/GPU-bound — a yt-dlp-style provisioning + breakage burden, against the lean
+  single-binary posture.
+- **GPU-only and slow.** Super-res runs minutes-to-hours per episode on a GPU and is
+  impractical on CPU. The daemon commonly runs headless on a NAS/mini-PC with no capable
+  GPU, where the feature is unusable.
+- **Breaks pipeline assumptions.** Needs a frames→super-res→re-encode stage (or a
+  Vulkan-ffmpeg path), can't run concurrently with normal encodes (monopolizes the GPU), and
+  produces much *bigger* files — orthogonal to the shrink-to-archive purpose.
+- **Maintenance/quality variance.** Model updates, Vulkan driver issues, per-source quality
+  variance.
+
+### Approaches when picked up
+
+1. **Real-ESRGAN stage (the real path).** Provision `realesrgan-ncnn-vulkan` + an anime
+   model; GPU/Vulkan detection with a graceful "no GPU → feature disabled" fallback; extract
+   frames → super-res → re-encode to x265; gate it so it never runs alongside normal encodes.
+2. **ffmpeg `libplacebo` + Anime4K GLSL (lighter).** A single ffmpeg pass injecting Anime4K
+   shaders via the `libplacebo` filter — no separate binary — *if* the managed ffmpeg build
+   ships libplacebo+Vulkan (BtbN: needs verification; likely a separate/custom build) and the
+   user has a GPU. Lower quality than Real-ESRGAN, still GPU-bound, fragile.
+
+### Open questions
+
+- Engine + model choice; where models are provisioned/stored.
+- GPU/Vulkan detection + an honest no-GPU fallback (disable, don't silently CPU-grind).
+- Can the managed ffmpeg carry libplacebo+Vulkan, or does Approach 2 need a separate build?
+- Resource gating vs the normal encode queue (no concurrent GPU contention).
+- Strictly opt-in (a per-profile flag), since it inverts the shrink-to-archive default.
+
+**Trigger to pick up:** real user demand plus a GPU-equipped use case (e.g. archiving
+DVD-era SD anime to HD) — not before. On a headless no-GPU host it can't run, so it only
+makes sense once that audience is real.
