@@ -3,6 +3,7 @@
   import { APP_NAME } from '$lib/app'
   import { externalClick } from '$lib/external'
   import logoMark from '$lib/assets/logo-mark.svg?raw'
+  import { scrollScrim } from '$lib/scrollScrim'
 
   let version = $state<VersionInfo | null>(null)
   let versionLoading = $state(true)
@@ -42,9 +43,9 @@
   ]
 </script>
 
-<div class="flex h-full flex-col">
+<div class="flex h-full flex-col" use:scrollScrim>
   <!-- Page header -->
-  <div class="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-bg)]/95 px-6 py-4 backdrop-blur-md sm:px-10">
+  <div class="sticky top-0 z-10 flex items-center justify-between bg-transparent backdrop-blur-0 border-b border-transparent px-6 py-4 transition-[background-color,border-color,backdrop-filter] duration-300 sm:px-10 [.scrolled_&]:bg-[var(--color-bg)]/85 [.scrolled_&]:backdrop-blur-md [.scrolled_&]:border-[var(--color-border)]">
     <h1 class="text-[15px] font-semibold tracking-tight">About</h1>
   </div>
 

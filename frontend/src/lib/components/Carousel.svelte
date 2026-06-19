@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte'
   let {
     title,
     count = 0,
@@ -6,7 +7,7 @@
   }: {
     title: string
     count?: number
-    children?: any
+    children?: Snippet
   } = $props()
 
   let scroller = $state<HTMLDivElement | null>(null)

@@ -19,14 +19,17 @@ SELECT * FROM encode_profiles WHERE builtin = 1 ORDER BY name ASC;
 WITH RECURSIVE chain(
     id, uuid, name, builtin, parent_id, codec, crf, preset, smartblur,
     deinterlace, deblock, psy_rd, psy_rdoq, aq_strength, aq_mode, scale,
-    audio, container, x265_params, output_resolutions, added_at, modified_at, depth
+    audio, container, x265_params, bit_depth, deband, burn_subs,
+    audio_languages, subtitle_languages, output_resolutions,
+    added_at, modified_at, depth
 ) AS (
     SELECT
         ep.id, ep.uuid, ep.name, ep.builtin, ep.parent_id, ep.codec, ep.crf,
         ep.preset, ep.smartblur, ep.deinterlace, ep.deblock, ep.psy_rd,
         ep.psy_rdoq, ep.aq_strength, ep.aq_mode, ep.scale, ep.audio,
-        ep.container, ep.x265_params, ep.output_resolutions, ep.added_at,
-        ep.modified_at, 0 AS depth
+        ep.container, ep.x265_params, ep.bit_depth, ep.deband, ep.burn_subs,
+        ep.audio_languages, ep.subtitle_languages,
+        ep.output_resolutions, ep.added_at, ep.modified_at, 0 AS depth
     FROM encode_profiles ep
     WHERE ep.id = ?
     UNION ALL
@@ -34,24 +37,28 @@ WITH RECURSIVE chain(
         p.id, p.uuid, p.name, p.builtin, p.parent_id, p.codec, p.crf,
         p.preset, p.smartblur, p.deinterlace, p.deblock, p.psy_rd,
         p.psy_rdoq, p.aq_strength, p.aq_mode, p.scale, p.audio,
-        p.container, p.x265_params, p.output_resolutions, p.added_at,
-        p.modified_at, c.depth + 1
+        p.container, p.x265_params, p.bit_depth, p.deband, p.burn_subs,
+        p.audio_languages, p.subtitle_languages,
+        p.output_resolutions, p.added_at, p.modified_at, c.depth + 1
     FROM encode_profiles p
     JOIN chain c ON p.id = c.parent_id
 )
 SELECT
     id, uuid, name, builtin, parent_id, codec, crf, preset, smartblur,
     deinterlace, deblock, psy_rd, psy_rdoq, aq_strength, aq_mode, scale,
-    audio, container, x265_params, output_resolutions, added_at, modified_at
+    audio, container, x265_params, bit_depth, deband, burn_subs,
+    audio_languages, subtitle_languages, output_resolutions,
+    added_at, modified_at
 FROM chain ORDER BY depth ASC;
 
 -- name: CreateEncodeProfile :one
 INSERT INTO encode_profiles (
     uuid, name, builtin, parent_id, codec, crf, preset, smartblur,
     deinterlace, deblock, psy_rd, psy_rdoq, aq_strength, aq_mode, scale,
-    audio, container, x265_params, output_resolutions
+    audio, container, x265_params, bit_depth, deband, burn_subs,
+    audio_languages, subtitle_languages, output_resolutions
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 RETURNING *;
 
@@ -60,7 +67,8 @@ UPDATE encode_profiles SET
     name = ?, parent_id = ?, codec = ?, crf = ?, preset = ?, smartblur = ?,
     deinterlace = ?, deblock = ?, psy_rd = ?, psy_rdoq = ?, aq_strength = ?,
     aq_mode = ?, scale = ?, audio = ?, container = ?, x265_params = ?,
-    output_resolutions = ?, modified_at = unixepoch()
+    bit_depth = ?, deband = ?, burn_subs = ?, audio_languages = ?,
+    subtitle_languages = ?, output_resolutions = ?, modified_at = unixepoch()
 WHERE id = ? AND builtin = 0
 RETURNING *;
 

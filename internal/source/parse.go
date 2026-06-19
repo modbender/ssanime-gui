@@ -8,15 +8,12 @@ import (
 	"strings"
 
 	"github.com/5rahim/habari"
+	"github.com/modbender/ssanime-gui/internal/defaults"
 )
 
 // trackers are appended when building a magnet from a bare info hash (providers
 // that only expose an info hash, e.g. nyaa RSS items without a magnet element).
-var trackers = []string{
-	"udp://tracker.opentrackr.org:1337/announce",
-	"udp://open.stealth.si:80/announce",
-	"udp://exodus.desync.com:6969/announce",
-}
+var trackers = defaults.Values.Source.MagnetTrackers
 
 var (
 	// infoHashRe captures the btih value, which may be hex (40 chars) or, as
@@ -83,17 +80,6 @@ func isBatch(m *habari.Metadata) bool {
 		return true
 	}
 	return false
-}
-
-// resolutionInt converts a habari resolution string ("1080p", "1080") to an int,
-// or 0 when it can't be read. Used to populate episodes.resolution.
-func resolutionInt(res string) int {
-	digits := episodeRe.FindString(res)
-	if digits == "" {
-		return 0
-	}
-	n, _ := strconv.Atoi(digits)
-	return n
 }
 
 // buildMagnet constructs a magnet URI from an info hash and display name when a

@@ -14,13 +14,14 @@ type Type string
 // hub's own keep-alive. Add a new event by adding one const here, never a new
 // code path.
 const (
-	TypeDownloadProgress Type = "download.progress"
-	TypeEncodeProgress   Type = "encode.progress"
-	TypeEpisodeStatus    Type = "episode.status"
-	TypeFeedChecked      Type = "feed.checked"
-	TypeSeriesUpdated    Type = "series.updated"
-	TypeLog              Type = "log"
-	TypeHeartbeat        Type = "heartbeat"
+	TypeDownloadProgress  Type = "download.progress"
+	TypeEncodeProgress    Type = "encode.progress"
+	TypeEpisodeStatus     Type = "episode.status"
+	TypeFeedChecked       Type = "feed.checked"
+	TypeSeriesUpdated     Type = "series.updated"
+	TypeExtensionsUpdated Type = "extensions.updated"
+	TypeLog               Type = "log"
+	TypeHeartbeat         Type = "heartbeat"
 )
 
 // Event is the wire payload: a type discriminator plus an arbitrary JSON body.

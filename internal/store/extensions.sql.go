@@ -506,6 +506,68 @@ func (q *Queries) UpdateExtensionHealth(ctx context.Context, arg UpdateExtension
 	return err
 }
 
+const updateExtensionPayload = `-- name: UpdateExtensionPayload :one
+UPDATE extensions SET
+    name = ?,
+    version = ?,
+    source_url = ?,
+    payload = ?,
+    nsfw = ?,
+    icon = ?,
+    settings = ?,
+    modified_at = unixepoch()
+WHERE id = ?
+RETURNING id, uuid, repo_id, ext_id, name, type, lang, version, source_url, payload, enabled, is_builtin, settings, nsfw, icon, added_at, modified_at, healthy, health_error, health_checked_at
+`
+
+type UpdateExtensionPayloadParams struct {
+	Name      string  `json:"name"`
+	Version   *string `json:"version"`
+	SourceUrl *string `json:"source_url"`
+	Payload   *string `json:"payload"`
+	Nsfw      int64   `json:"nsfw"`
+	Icon      *string `json:"icon"`
+	Settings  *string `json:"settings"`
+	ID        int64   `json:"id"`
+}
+
+func (q *Queries) UpdateExtensionPayload(ctx context.Context, arg UpdateExtensionPayloadParams) (Extension, error) {
+	row := q.db.QueryRowContext(ctx, updateExtensionPayload,
+		arg.Name,
+		arg.Version,
+		arg.SourceUrl,
+		arg.Payload,
+		arg.Nsfw,
+		arg.Icon,
+		arg.Settings,
+		arg.ID,
+	)
+	var i Extension
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.RepoID,
+		&i.ExtID,
+		&i.Name,
+		&i.Type,
+		&i.Lang,
+		&i.Version,
+		&i.SourceUrl,
+		&i.Payload,
+		&i.Enabled,
+		&i.IsBuiltin,
+		&i.Settings,
+		&i.Nsfw,
+		&i.Icon,
+		&i.AddedAt,
+		&i.ModifiedAt,
+		&i.Healthy,
+		&i.HealthError,
+		&i.HealthCheckedAt,
+	)
+	return i, err
+}
+
 const updateExtensionSettings = `-- name: UpdateExtensionSettings :exec
 UPDATE extensions SET settings = ?, modified_at = unixepoch() WHERE id = ?
 `

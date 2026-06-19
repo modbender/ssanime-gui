@@ -146,6 +146,7 @@ type Querier interface {
 	UpdateDownloadClient(ctx context.Context, arg UpdateDownloadClientParams) (DownloadClient, error)
 	UpdateEncodeProfile(ctx context.Context, arg UpdateEncodeProfileParams) (EncodeProfile, error)
 	UpdateExtensionHealth(ctx context.Context, arg UpdateExtensionHealthParams) error
+	UpdateExtensionPayload(ctx context.Context, arg UpdateExtensionPayloadParams) (Extension, error)
 	UpdateExtensionSettings(ctx context.Context, arg UpdateExtensionSettingsParams) error
 	UpdateFeed(ctx context.Context, arg UpdateFeedParams) (Feed, error)
 	UpdateSeries(ctx context.Context, arg UpdateSeriesParams) (Series, error)

@@ -11,29 +11,33 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
+	"github.com/modbender/ssanime-gui/internal/defaults"
 	"github.com/modbender/ssanime-gui/internal/store"
 )
 
 // Default knob values used when neither a profile nor its parents specify one.
 // They mirror automin's tuned x265 recipe (the proven base) so an empty profile
 // still produces a sane encode.
-const (
-	defaultCodec      = "x265"
-	defaultCRF        = 24.2
-	defaultPreset     = "slow"
-	defaultDeblock    = "1,1"
-	defaultPsyRD      = 1.0
-	defaultPsyRDOQ    = 1.0
-	defaultAQStrength = 1.0
-	defaultAQMode     = 3
-	defaultAudio      = "copy"
-	defaultContainer  = "mkv"
+var (
+	defaultCodec      = defaults.Values.Encode.DefaultCodec
+	defaultCRF        = defaults.Values.Encode.DefaultCRF
+	defaultPreset     = defaults.Values.Encode.DefaultPreset
+	defaultDeblock    = defaults.Values.Encode.DefaultDeblock
+	defaultPsyRD      = defaults.Values.Encode.DefaultPsyRD
+	defaultPsyRDOQ    = defaults.Values.Encode.DefaultPsyRDOQ
+	defaultAQStrength = defaults.Values.Encode.DefaultAQStrength
+	defaultAQMode     = defaults.Values.Encode.DefaultAQMode
+	defaultAudio      = defaults.Values.Encode.DefaultAudio
+	defaultContainer  = defaults.Values.Encode.DefaultContainer
+	defaultBitDepth   = defaults.Values.Encode.DefaultBitDepth
+	defaultDeband     = defaults.Values.Encode.DefaultDeband
 )
 
 // defaultOutputResolutions is used when no profile in the chain declares an
 // output_resolutions set.
-var defaultOutputResolutions = []int{1080, 720, 480}
+var defaultOutputResolutions = defaults.Values.Encode.DefaultOutputResolutions
 
 // Resolved is the effective, fully-specified encode config produced by walking a
 // profile's parent_id chain and COALESCE-ing each nullable knob child->parent,
@@ -54,6 +58,15 @@ type Resolved struct {
 	Audio             string
 	Container         string
 	X265Params        string // raw passthrough merged into -x265-params
+	BitDepth          int    // 8 or 10; 10 emits yuv420p10le to curb banding
+	Deband            bool
+	BurnSubs          bool
+	// AudioLanguages / SubtitleLanguages are the per-track language selection.
+	// nil = the wildcard/passthrough sentinel (MKV: All; MP4: Default track). A
+	// non-nil (possibly empty) slice is Specific mode: normalized language codes
+	// in priority order.
+	AudioLanguages    []string
+	SubtitleLanguages []string
 	OutputResolutions []int
 }
 
@@ -75,6 +88,11 @@ type chainRow struct {
 	Audio             *string
 	Container         *string
 	X265Params        *string
+	BitDepth          *int64
+	Deband            *int64
+	BurnSubs          *int64
+	AudioLanguages    *string
+	SubtitleLanguages *string
 	OutputResolutions *string
 }
 
@@ -84,6 +102,8 @@ func rowFromChain(r store.ResolveProfileChainRow) chainRow {
 		Deinterlace: r.Deinterlace, Deblock: r.Deblock, PsyRd: r.PsyRd,
 		PsyRdoq: r.PsyRdoq, AqStrength: r.AqStrength, AqMode: r.AqMode,
 		Audio: r.Audio, Container: r.Container, X265Params: r.X265Params,
+		BitDepth: r.BitDepth, Deband: r.Deband, BurnSubs: r.BurnSubs,
+		AudioLanguages: r.AudioLanguages, SubtitleLanguages: r.SubtitleLanguages,
 		OutputResolutions: r.OutputResolutions,
 	}
 }
@@ -135,13 +155,16 @@ func resolveChain(chain []chainRow) Resolved {
 		AQMode:     defaultAQMode,
 		Audio:      defaultAudio,
 		Container:  defaultContainer,
+		BitDepth:   defaultBitDepth,
+		Deband:     defaultDeband,
 	}
 
 	var (
 		codec, preset, deblock, audio, container, x265, outRes *string
+		audioLangs, subLangs                                   *string
 		crf, psyRD, psyRDOQ, aqStrength                        *float64
 		aqMode                                                 *int64
-		smartblur, deinterlace                                 *int64
+		smartblur, deinterlace, bitDepth, deband, burnSubs     *int64
 	)
 	// First non-NULL (child-first order) wins for each knob.
 	pickStr := func(dst **string, v *string) {
@@ -167,6 +190,8 @@ func resolveChain(chain []chainRow) Resolved {
 		pickStr(&container, row.Container)
 		pickStr(&x265, row.X265Params)
 		pickStr(&outRes, row.OutputResolutions)
+		pickStr(&audioLangs, row.AudioLanguages)
+		pickStr(&subLangs, row.SubtitleLanguages)
 		pickF(&crf, row.Crf)
 		pickF(&psyRD, row.PsyRd)
 		pickF(&psyRDOQ, row.PsyRdoq)
@@ -174,6 +199,9 @@ func resolveChain(chain []chainRow) Resolved {
 		pickI(&aqMode, row.AqMode)
 		pickI(&smartblur, row.Smartblur)
 		pickI(&deinterlace, row.Deinterlace)
+		pickI(&bitDepth, row.BitDepth)
+		pickI(&deband, row.Deband)
+		pickI(&burnSubs, row.BurnSubs)
 	}
 
 	if codec != nil {
@@ -211,9 +239,34 @@ func resolveChain(chain []chainRow) Resolved {
 	}
 	res.SmartBlur = smartblur != nil && *smartblur == 1
 	res.Deinterlace = deinterlace != nil && *deinterlace == 1
+	if bitDepth != nil {
+		res.BitDepth = int(*bitDepth)
+	}
+	res.Deband = deband != nil && *deband == 1
+	res.BurnSubs = burnSubs != nil && *burnSubs == 1
+	// nil pointer (whole chain NULL) stays the wildcard sentinel (nil slice).
+	res.AudioLanguages = parseLanguages(audioLangs)
+	res.SubtitleLanguages = parseLanguages(subLangs)
 	res.OutputResolutions = parseResolutions(outRes)
 
 	return res
+}
+
+// parseLanguages decodes the JSON language array. A nil/blank pointer is the
+// wildcard sentinel (nil slice). An explicit array — even empty — is Specific
+// mode and returns a non-nil slice so callers distinguish "[]" from wildcard.
+func parseLanguages(raw *string) []string {
+	if raw == nil || strings.TrimSpace(*raw) == "" {
+		return nil
+	}
+	var out []string
+	if err := json.Unmarshal([]byte(*raw), &out); err != nil {
+		return nil
+	}
+	if out == nil {
+		out = []string{}
+	}
+	return out
 }
 
 // parseResolutions decodes the json int set in output_resolutions, falling back

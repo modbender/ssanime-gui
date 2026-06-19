@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api, type Profile, type ResolvedProfile } from '$lib/api'
+  import { COMMON_LANGUAGES, languageName } from '$lib/languages'
   import Badge from '$lib/components/Badge.svelte'
   import Button from '$lib/components/Button.svelte'
   import Input from '$lib/components/Input.svelte'
@@ -7,6 +8,8 @@
   import Spinner from '$lib/components/Spinner.svelte'
   import { toast } from '$lib/toast.svelte'
   import { confirm } from '$lib/confirm.svelte'
+  import { errMessage } from '$lib/utils'
+  import { scrollScrim } from '$lib/scrollScrim'
 
   let profiles = $state<Profile[]>([])
   let loading = $state(true)
@@ -18,6 +21,7 @@
   let saving = $state(false)
   let deleting = $state<number | null>(null)
   let editingId = $state<number | null>(null)
+  let formError = $state('')
 
   // Resolved preview modal
   let resolvedOpen = $state(false)
@@ -41,10 +45,20 @@
     psy_rdoq: string
     aq_strength: string
     aq_mode: string
+    bit_depth: string // stringified for select, '' = inherit
     smartblur: boolean | null
     deinterlace: boolean | null
+    deband: boolean | null
+    // Language tracks — `wildcard` ⇒ serialize null (All for MKV / Default for MP4),
+    // `specific` ⇒ serialize the codes array (MP4 holds a single element).
+    audio_lang_mode: LangMode
+    audio_langs: string[]
+    subtitle_lang_mode: LangMode
+    subtitle_langs: string[]
     output_resolutions: string // comma-separated
   }
+
+  type LangMode = 'wildcard' | 'specific'
 
   let form = $state<ProfileForm>({
     name: '',
@@ -61,8 +75,14 @@
     psy_rdoq: '',
     aq_strength: '',
     aq_mode: '',
+    bit_depth: '',
     smartblur: null,
     deinterlace: null,
+    deband: null,
+    audio_lang_mode: 'wildcard',
+    audio_langs: [],
+    subtitle_lang_mode: 'wildcard',
+    subtitle_langs: [],
     output_resolutions: '',
   })
 
@@ -71,8 +91,8 @@
     error = ''
     try {
       profiles = await api.listProfiles()
-    } catch (e: any) {
-      error = e.message
+    } catch (e: unknown) {
+      error = errMessage(e)
     } finally {
       loading = false
     }
@@ -96,8 +116,14 @@
       psy_rdoq: '',
       aq_strength: '',
       aq_mode: '',
+      bit_depth: '',
       smartblur: null,
       deinterlace: null,
+      deband: null,
+      audio_lang_mode: 'wildcard',
+      audio_langs: [],
+      subtitle_lang_mode: 'wildcard',
+      subtitle_langs: [],
       output_resolutions: '',
     }
   }
@@ -118,10 +144,23 @@
       psy_rdoq: p.psy_rdoq != null ? String(p.psy_rdoq) : '',
       aq_strength: p.aq_strength != null ? String(p.aq_strength) : '',
       aq_mode: p.aq_mode != null ? String(p.aq_mode) : '',
+      bit_depth: p.bit_depth != null ? String(p.bit_depth) : '',
       smartblur: p.smartblur ?? null,
       deinterlace: p.deinterlace ?? null,
+      deband: p.deband ?? null,
+      audio_lang_mode: p.audio_languages == null ? 'wildcard' : 'specific',
+      audio_langs: p.audio_languages ?? [],
+      subtitle_lang_mode: p.subtitle_languages == null ? 'wildcard' : 'specific',
+      subtitle_langs: p.subtitle_languages ?? [],
       output_resolutions: p.output_resolutions?.join(', ') ?? '',
     }
+  }
+
+  // Serialize a language control to the 3-state wire value: wildcard ⇒ null,
+  // specific ⇒ the codes array (MP4 ⇒ at most one, the single-track pick).
+  function langField(mode: LangMode, langs: string[], container: string): string[] | null {
+    if (mode !== 'specific') return null
+    return container === 'mp4' ? langs.slice(0, 1) : langs
   }
 
   function formToBody(f: ProfileForm): Partial<Profile> & { name: string } {
@@ -140,8 +179,17 @@
       psy_rdoq: f.psy_rdoq ? Number(f.psy_rdoq) : null,
       aq_strength: f.aq_strength ? Number(f.aq_strength) : null,
       aq_mode: f.aq_mode ? Number(f.aq_mode) : null,
+      bit_depth: f.bit_depth ? Number(f.bit_depth) : null,
       smartblur: f.smartblur,
       deinterlace: f.deinterlace,
+      deband: f.deband,
+      // burn_subs is derived from container, not a free toggle: MP4 ⇒ true,
+      // MKV ⇒ false, unset container ⇒ inherit (null).
+      burn_subs: f.container === 'mp4' ? true : f.container === 'mkv' ? false : null,
+      // Wildcard mode ⇒ null (All / Default); specific ⇒ the codes array. MP4 is a
+      // single-track pick, so clamp specific selections to one code.
+      audio_languages: langField(f.audio_lang_mode, f.audio_langs, f.container),
+      subtitle_languages: langField(f.subtitle_lang_mode, f.subtitle_langs, f.container),
       output_resolutions: f.output_resolutions
         ? f.output_resolutions.split(',').map(s => Number(s.trim())).filter(Boolean)
         : null,
@@ -152,6 +200,7 @@
     editMode = 'create'
     editingId = null
     form = emptyForm()
+    formError = ''
     editOpen = true
   }
 
@@ -159,12 +208,14 @@
     editMode = 'edit'
     editingId = p.id
     form = profileToForm(p)
+    formError = ''
     editOpen = true
   }
 
   async function save() {
     if (!form.name.trim()) return
     saving = true
+    formError = ''
     try {
       const body = formToBody(form)
       if (editMode === 'create') {
@@ -174,8 +225,9 @@
       }
       editOpen = false
       await load()
-    } catch (e: any) {
-      toast.error(e.message)
+    } catch (e: unknown) {
+      // Surface validation failures (e.g. 400 on an unknown language code) inline.
+      formError = errMessage(e)
     } finally {
       saving = false
     }
@@ -192,8 +244,8 @@
     try {
       await api.deleteProfile(id)
       profiles = profiles.filter(p => p.id !== id)
-    } catch (e: any) {
-      toast.error(e.message)
+    } catch (e: unknown) {
+      toast.error(errMessage(e))
     } finally {
       deleting = null
     }
@@ -206,8 +258,8 @@
     loadingResolved = true
     try {
       resolved = await api.getResolvedProfile(p.id)
-    } catch (e: any) {
-      toast.error(e.message)
+    } catch (e: unknown) {
+      toast.error(errMessage(e))
       resolvedOpen = false
     } finally {
       loadingResolved = false
@@ -222,11 +274,24 @@
   }
 
   const presets = ['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow', 'placebo']
+
+  const codecs = [
+    { value: 'x265', label: 'x265 (CPU)' },
+    { value: 'gpu-auto', label: 'GPU (auto)' },
+  ]
+
+  const isMp4 = $derived(form.container === 'mp4')
+
+  // Toggle a code in a multi-select (MKV specific mode).
+  function toggleLang(field: 'audio_langs' | 'subtitle_langs', code: string) {
+    const cur = form[field]
+    form[field] = cur.includes(code) ? cur.filter(c => c !== code) : [...cur, code]
+  }
 </script>
 
-<div class="flex flex-col h-full overflow-y-auto">
+<div class="flex flex-col h-full overflow-y-auto" use:scrollScrim>
   <!-- Page header -->
-  <div class="sticky top-0 z-10 flex items-center justify-between px-6 sm:px-10 py-4 border-b border-[var(--color-border)] bg-[var(--color-bg)]/95 backdrop-blur-md">
+  <div class="sticky top-0 z-10 flex items-center justify-between px-6 sm:px-10 py-4 bg-transparent backdrop-blur-0 border-b border-transparent transition-[background-color,border-color,backdrop-filter] duration-300 [.scrolled_&]:bg-[var(--color-bg)]/85 [.scrolled_&]:backdrop-blur-md [.scrolled_&]:border-[var(--color-border)]">
     <div class="flex items-baseline gap-2.5">
       <h1 class="text-[15px] font-semibold tracking-tight">Encode profiles</h1>
       {#if !loading && profiles.length > 0}
@@ -291,8 +356,13 @@
                   {#if p.output_resolutions?.length}<span><span class="text-[var(--color-faint)]">res</span> {p.output_resolutions.join(', ')}p</span>{/if}
                   {#if p.psy_rd != null}<span><span class="text-[var(--color-faint)]">psy-rd</span> {p.psy_rd}</span>{/if}
                   {#if p.aq_mode != null}<span><span class="text-[var(--color-faint)]">aq-mode</span> {p.aq_mode}</span>{/if}
+                  {#if p.bit_depth != null}<span><span class="text-[var(--color-faint)]">bit-depth</span> {p.bit_depth}</span>{/if}
+                  {#if p.audio_languages?.length}<span><span class="text-[var(--color-faint)]">audio-lang</span> {p.audio_languages.map(languageName).join(', ')}</span>{/if}
+                  {#if p.subtitle_languages?.length}<span><span class="text-[var(--color-faint)]">sub-lang</span> {p.subtitle_languages.map(languageName).join(', ')}</span>{/if}
                   {#if p.smartblur}<span class="text-[var(--color-info)]">smartblur</span>{/if}
                   {#if p.deinterlace}<span class="text-[var(--color-info)]">deinterlace</span>{/if}
+                  {#if p.deband}<span class="text-[var(--color-info)]">deband</span>{/if}
+                  {#if p.burn_subs}<span class="text-[var(--color-info)]">hardsub</span>{/if}
                 </div>
               </div>
 
@@ -337,6 +407,68 @@
     {/if}
   </div>
 </div>
+
+<!--
+  Dual-mode language control. Mode options depend on container:
+    MKV → "All languages" (wildcard) · "Specific" (multi-select chips)
+    MP4 → "Default track"  (wildcard) · "Specific language" (single-select)
+  Wildcard radio writes null; Specific writes the codes array (see langField).
+-->
+{#snippet langControl(kind: 'audio' | 'subtitle', mode: LangMode, field: 'audio_langs' | 'subtitle_langs')}
+  <div class="space-y-2.5">
+    <div class="flex flex-col gap-1.5">
+      <label class="flex items-center gap-2 cursor-pointer text-sm text-[var(--color-text)]">
+        {#if kind === 'audio'}
+          <input type="radio" value="wildcard" bind:group={form.audio_lang_mode} class="accent-[var(--accent)]" />
+        {:else}
+          <input type="radio" value="wildcard" bind:group={form.subtitle_lang_mode} class="accent-[var(--accent)]" />
+        {/if}
+        <span>{isMp4 ? 'Default track' : 'All languages'}</span>
+      </label>
+      <label class="flex items-center gap-2 cursor-pointer text-sm text-[var(--color-text)]">
+        {#if kind === 'audio'}
+          <input type="radio" value="specific" bind:group={form.audio_lang_mode} class="accent-[var(--accent)]" />
+        {:else}
+          <input type="radio" value="specific" bind:group={form.subtitle_lang_mode} class="accent-[var(--accent)]" />
+        {/if}
+        <span>{isMp4 ? 'Specific language' : 'Specific'}</span>
+      </label>
+    </div>
+
+    {#if mode === 'specific'}
+      {#if isMp4}
+        <!-- MP4: single-track pick → single-select dropdown -->
+        <select
+          value={form[field][0] ?? ''}
+          onchange={(e) => { form[field] = e.currentTarget.value ? [e.currentTarget.value] : [] }}
+          class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
+        >
+          <option value="">— select a language —</option>
+          {#each COMMON_LANGUAGES as l (l.code)}
+            <option value={l.code}>{l.name}</option>
+          {/each}
+        </select>
+      {:else}
+        <!-- MKV: multi-select chips -->
+        <div class="flex flex-wrap gap-2">
+          {#each COMMON_LANGUAGES as l (l.code)}
+            {@const selected = form[field].includes(l.code)}
+            <button
+              type="button"
+              onclick={() => toggleLang(field, l.code)}
+              aria-pressed={selected}
+              class="px-2.5 py-1 text-xs font-medium ring-1 transition-colors duration-150 {selected
+                ? 'bg-[rgb(var(--accent-rgb)/0.12)] text-[var(--color-accent)] ring-[var(--color-accent)]/40'
+                : 'bg-white/[0.03] text-[var(--color-muted)] ring-white/10 hover:text-[var(--color-text)]'}"
+            >
+              {l.name}
+            </button>
+          {/each}
+        </div>
+      {/if}
+    {/if}
+  </div>
+{/snippet}
 
 <!-- Create / Edit Profile Modal -->
 <Modal bind:open={editOpen} title={editMode === 'create' ? 'New profile' : 'Edit profile'}>
@@ -405,9 +537,23 @@
           </select>
         </div>
       </div>
-      <div>
-        <label for="prof-resolutions" class="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">Output resolutions (comma-separated)</label>
-        <input id="prof-resolutions" type="text" bind:value={form.output_resolutions} placeholder="1080, 720, 480" class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] transition-colors duration-200 focus:outline-none focus:border-[var(--accent)] focus:bg-[var(--color-surface-2)]" />
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label for="prof-bit-depth" class="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">Bit depth</label>
+          <select
+            id="prof-bit-depth"
+            bind:value={form.bit_depth}
+            class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
+          >
+            <option value="">inherit</option>
+            <option value="8">8-bit</option>
+            <option value="10">10-bit</option>
+          </select>
+        </div>
+        <div>
+          <label for="prof-resolutions" class="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">Output resolutions (comma-separated)</label>
+          <input id="prof-resolutions" type="text" bind:value={form.output_resolutions} placeholder="1080, 720, 480" class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] transition-colors duration-200 focus:outline-none focus:border-[var(--accent)] focus:bg-[var(--color-surface-2)]" />
+        </div>
       </div>
     </fieldset>
 
@@ -464,23 +610,86 @@
           <input type="checkbox" bind:checked={form.deinterlace} class="border-[var(--color-border-strong)] accent-[var(--accent)]" />
           <span class="text-sm text-[var(--color-text)]">Deinterlace (yadif)</span>
         </label>
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" bind:checked={form.deband} class="border-[var(--color-border-strong)] accent-[var(--accent)]" />
+          <span class="text-sm text-[var(--color-text)]">Deband</span>
+        </label>
       </div>
     </fieldset>
 
-    <!-- Audio & Container -->
+    <!-- Codec, Audio & Container -->
     <fieldset class="space-y-4 border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4">
-      <legend class="px-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">Audio &amp; Container</legend>
+      <legend class="px-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-muted)]">Codec, Audio &amp; Container</legend>
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label for="prof-audio" class="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">Audio</label>
-          <input id="prof-audio" type="text" bind:value={form.audio} placeholder="copy / aac / flac" class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] transition-colors duration-200 focus:outline-none focus:border-[var(--accent)] focus:bg-[var(--color-surface-2)]" />
+          <label for="prof-codec" class="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">Codec</label>
+          <select
+            id="prof-codec"
+            bind:value={form.codec}
+            class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
+          >
+            <option value="">inherit</option>
+            {#each codecs as c}
+              <option value={c.value}>{c.label}</option>
+            {/each}
+          </select>
         </div>
         <div>
           <label for="prof-container" class="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">Container</label>
-          <input id="prof-container" type="text" bind:value={form.container} placeholder="mkv / mp4" class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] transition-colors duration-200 focus:outline-none focus:border-[var(--accent)] focus:bg-[var(--color-surface-2)]" />
+          <select
+            id="prof-container"
+            bind:value={form.container}
+            class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm text-[var(--color-text)] focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
+          >
+            <option value="">inherit</option>
+            <option value="mkv">MKV</option>
+            <option value="mp4">MP4</option>
+          </select>
         </div>
       </div>
+
+      <div>
+        <label for="prof-audio" class="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">Audio codec</label>
+        <input id="prof-audio" type="text" bind:value={form.audio} placeholder="copy / aac / flac" class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] transition-colors duration-200 focus:outline-none focus:border-[var(--accent)] focus:bg-[var(--color-surface-2)]" />
+      </div>
+
+      {#if isMp4}
+        <p class="flex items-start gap-2 text-xs text-[var(--color-info)]">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" class="mt-px shrink-0">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 16v-4M12 8h.01" stroke-linecap="round"/>
+          </svg>
+          <span>Subtitles are burned in (hardsub); audio is converted to AAC.</span>
+        </p>
+        <p class="text-[11px] text-[var(--color-faint)]">Burn subtitles <span class="text-[var(--color-text-dim)]">on</span> (derived from container)</p>
+      {:else if form.container === 'mkv'}
+        <p class="text-[11px] text-[var(--color-faint)]">Burn subtitles <span class="text-[var(--color-text-dim)]">off</span> — tracks are soft-copied (derived from container)</p>
+      {/if}
+
+      <!-- Audio languages -->
+      <div class="space-y-2">
+        <span class="block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">Audio languages</span>
+        {#if form.container === ''}
+          <p class="text-xs text-[var(--color-muted)]">Select a container to configure language tracks.</p>
+        {:else}
+          {@render langControl('audio', form.audio_lang_mode, 'audio_langs')}
+        {/if}
+      </div>
+
+      <!-- Subtitle languages -->
+      <div class="space-y-2">
+        <span class="block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-muted)]">Subtitle languages</span>
+        {#if form.container === ''}
+          <p class="text-xs text-[var(--color-muted)]">Select a container to configure language tracks.</p>
+        {:else}
+          {@render langControl('subtitle', form.subtitle_lang_mode, 'subtitle_langs')}
+        {/if}
+      </div>
     </fieldset>
+
+    {#if formError}
+      <p class="text-sm text-[var(--color-error)]">{formError}</p>
+    {/if}
   </div>
 </Modal>
 

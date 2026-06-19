@@ -13,12 +13,14 @@
   import { episodeOverall, episodeStage, liveStatus } from '$lib/pipeline.svelte'
   import { isActive } from '$lib/pipeline-math'
   import {
+    errMessage,
     formatBytes,
     formatDate,
     statusColor,
     watchStatusColor,
     watchStatusLabel,
   } from '$lib/utils'
+  import { scrollScrim } from '$lib/scrollScrim'
 
   let series = $state<ActivitySeries[]>([])
   let loading = $state(true)
@@ -37,8 +39,8 @@
     try {
       const res = await api.getActivity()
       series = res.series ?? []
-    } catch (e: any) {
-      error = e.message
+    } catch (e: unknown) {
+      error = errMessage(e)
     } finally {
       loading = false
       seeded = true
@@ -122,8 +124,8 @@
     try {
       const res = await api.setSeriesStatus(s.id, status)
       series = series.map((x) => (x.id === s.id ? { ...x, ...res.series } : x))
-    } catch (e: any) {
-      toast.error(e.message)
+    } catch (e: unknown) {
+      toast.error(errMessage(e))
       await load()
     } finally {
       const done = new Set(statusBusy); done.delete(s.id); statusBusy = done
@@ -137,8 +139,8 @@
     try {
       await api.retryEpisode(ep.id)
       await load()
-    } catch (e: any) {
-      toast.error(e.message)
+    } catch (e: unknown) {
+      toast.error(errMessage(e))
     } finally {
       const done = new Set(epBusy); done.delete(ep.id); epBusy = done
     }
@@ -152,15 +154,15 @@
       const out = ep.outputs.find((o) => o.encoded_path)
       if (out) await api.revealOutput(out.id)
       else await api.revealEpisodeSource(ep.id)
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error(revealError(e))
     } finally {
       const done = new Set(epBusy); done.delete(ep.id); epBusy = done
     }
   }
 
-  function revealError(e: any): string {
-    const msg = String(e?.message ?? '')
+  function revealError(e: unknown): string {
+    const msg = errMessage(e)
     if (msg.includes('409')) return 'File was cleaned up or moved.'
     if (msg.includes('404')) return 'File path is not set yet.'
     if (msg.includes('403')) return 'File is outside the managed folders.'
@@ -181,9 +183,9 @@
   const totalActive = $derived(series.reduce((n, s) => n + activeCount(s), 0))
 </script>
 
-<div class="flex flex-col h-full overflow-y-auto">
+<div class="flex flex-col h-full overflow-y-auto" use:scrollScrim>
   <!-- Header -->
-  <div class="sticky top-0 z-10 flex items-center justify-between px-6 sm:px-10 py-4 border-b border-[var(--color-border)] bg-[var(--color-bg)]/95 backdrop-blur-md">
+  <div class="sticky top-0 z-10 flex items-center justify-between px-6 sm:px-10 py-4 bg-transparent backdrop-blur-0 border-b border-transparent transition-[background-color,border-color,backdrop-filter] duration-300 [.scrolled_&]:bg-[var(--color-bg)]/85 [.scrolled_&]:backdrop-blur-md [.scrolled_&]:border-[var(--color-border)]">
     <div class="flex items-baseline gap-2.5">
       <h1 class="text-[15px] font-semibold tracking-tight">Activity</h1>
       {#if !loading && totalActive > 0}

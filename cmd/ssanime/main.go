@@ -351,9 +351,16 @@ func startDaemon(cfg *config.Config, logger *slog.Logger, logBridge *logging.Hub
 	// Hayase-compatible extensions. ani.zip resolves over normal DNS; a plain
 	// client is fine.
 	extManager.SetResolver(anizip.New())
+	extManager.SetHub(hub)
 	if err := extManager.LoadAndRegisterAll(context.Background()); err != nil {
 		logger.Warn("extension: load failed (non-fatal)", "err", err)
 	}
+	// Source extensions break as the sites they scrape change; the background
+	// updater silently refreshes them from their repos on a fixed cadence (initial
+	// pass shortly after boot, then every autoUpdateInterval). It never blocks
+	// startup and tolerates an unreachable repo.
+	extManager.StartAutoUpdater()
+	add(extManager.StopAutoUpdater)
 
 	// --- Feed poller ---
 	feedPoller := poller.New(st, registry, hub, logger, poller.WithResolver(anizip.New()))
@@ -405,9 +412,6 @@ func startDaemon(cfg *config.Config, logger *slog.Logger, logBridge *logging.Hub
 	}
 	if _, err := binMgr.EnsureFFprobe(provCtx, logProg); err != nil {
 		logger.Warn("binaries: ffprobe unavailable", "err", err)
-	}
-	if _, err := binMgr.EnsureYtDlp(provCtx, logProg); err != nil {
-		logger.Warn("binaries: yt-dlp unavailable", "err", err)
 	}
 	provCancel()
 

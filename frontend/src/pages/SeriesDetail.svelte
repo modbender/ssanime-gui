@@ -25,6 +25,7 @@
     accentForeground,
     accentText,
     accentTextRgb,
+    errMessage,
     watchBucket,
     watchStatusColor,
     watchStatusLabel,
@@ -102,10 +103,10 @@
     detailLoading = true
     try {
       detail = await api.getAnilistDetail(anilist)
-    } catch (e: any) {
+    } catch (e: unknown) {
       // Best-effort: a tracked series still renders from its pipeline rows.
       // For an untracked preview with no other data, surface the error.
-      if (numId == null && !preview) error = e.message || 'Could not load this title.'
+      if (numId == null && !preview) error = errMessage(e) || 'Could not load this title.'
     } finally {
       detailLoading = false
     }
@@ -120,7 +121,7 @@
         api.listProfiles(),
       ])
       encodeProfileId = series?.default_profile_id ?? null
-    } catch (e: any) { error = e.message }
+    } catch (e: unknown) { error = errMessage(e) }
     finally { loading = false }
     if (series?.anilist_id != null) loadDetail(series.anilist_id)
     // Auto-run the source check so episode cards light up without a button press.
@@ -183,13 +184,13 @@
       // auto source check resolves with episodes available.
       backfillPrompt = true
       navigate(`/series/${res.series_id}`)
-    } catch (e: any) {
-      const msg = String(e?.message ?? '').toLowerCase()
+    } catch (e: unknown) {
+      const msg = errMessage(e).toLowerCase()
       if (msg.includes('already') || msg.includes('exist')) {
         markTracked(anilist)
         navigate('/library')
       } else {
-        toast.error(e.message)
+        toast.error(errMessage(e))
       }
     } finally {
       tracking = false
@@ -203,8 +204,8 @@
     try {
       await api.setSeriesStatus(numId, status)
       await loadTracked()
-    } catch (e: any) {
-      toast.error(e.message)
+    } catch (e: unknown) {
+      toast.error(errMessage(e))
     } finally {
       statusBusy = false
     }
@@ -221,8 +222,8 @@
       if (series?.anilist_id != null) markUntracked(series.anilist_id)
       unsubscribeOpen = false
       navigate('/library')
-    } catch (e: any) {
-      toast.error(e.message)
+    } catch (e: unknown) {
+      toast.error(errMessage(e))
     } finally {
       unsubscribing = false
     }
@@ -246,8 +247,8 @@
       const res = await api.getAnilistAvailable(detailAnilistId)
       available = res.episodes ?? []
       availableWarnings = res.warnings ?? []
-    } catch (e: any) {
-      toast.error(e.message || 'Source check failed.')
+    } catch (e: unknown) {
+      toast.error(errMessage(e) || 'Source check failed.')
     } finally {
       availableLoading = false
       availableChecked = true
@@ -290,8 +291,8 @@
       // Untracked → flip to the now-existing DB-backed series; tracked → refresh in place.
       if (numId == null) navigate(`/series/${res.series_id}`)
       else await loadTracked()
-    } catch (e: any) {
-      toast.error(e.message)
+    } catch (e: unknown) {
+      toast.error(errMessage(e))
     } finally {
       downloadingEp = null
     }
@@ -337,8 +338,8 @@
       selectedAvailable = new Set()
       if (numId == null && lastSeriesId != null) navigate(`/series/${lastSeriesId}`)
       else await loadTracked()
-    } catch (e: any) {
-      toast.error(e.message)
+    } catch (e: unknown) {
+      toast.error(errMessage(e))
       selectedAvailable = new Set()
     } finally {
       bulkDownloading = false
@@ -372,7 +373,7 @@
       encodeOpen = false
       selected = new Set()
       await loadTracked()
-    } catch (e: any) { toast.error(e.message) }
+    } catch (e: unknown) { toast.error(errMessage(e)) }
     finally { encoding = false }
   }
 
@@ -383,8 +384,8 @@
       await api.refreshSeries(numId)
       await loadTracked()
       if (series?.anilist_id != null) await loadDetail(series.anilist_id)
-    } catch (e: any) {
-      toast.error(e.message || 'AniList is rate-limited right now — existing metadata kept. Try again shortly.')
+    } catch (e: unknown) {
+      toast.error(errMessage(e) || 'AniList is rate-limited right now — existing metadata kept. Try again shortly.')
     } finally { refreshing = false }
   }
 
@@ -615,7 +616,7 @@
   {:else if series || preview || detail}
     <!-- ─── Cinematic header ─────────────────────────────────────── -->
     <section
-      class="relative w-full shrink-0 overflow-hidden"
+      class="relative -ml-[var(--rail)] w-[calc(100%+var(--rail))] shrink-0 overflow-hidden"
       style="--accent: {accent}; --accent-rgb: {accentRgb}; --accent-fg: {accentFg}; --accent-text: {accentTxt}; --accent-text-rgb: {accentTxtRgb};"
     >
       <!-- Banner layer -->
@@ -649,7 +650,7 @@
       ></div>
 
       <!-- Back affordance -->
-      <div class="relative px-6 sm:px-10 pt-5">
+      <div class="relative pr-6 sm:pr-10 pl-[calc(var(--rail)+1.5rem)] sm:pl-[calc(var(--rail)+2.5rem)] pt-5">
         <Button variant="ghost" size="sm" onclick={() => navigate(series ? '/library' : '/')}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
           {series ? 'Library' : 'Home'}
@@ -657,7 +658,7 @@
       </div>
 
       <!-- Content -->
-      <div class="relative px-6 sm:px-10 pt-10 pb-9 sm:pt-16 sm:pb-12">
+      <div class="relative pr-6 sm:pr-10 pl-[calc(var(--rail)+1.5rem)] sm:pl-[calc(var(--rail)+2.5rem)] pt-10 pb-9 sm:pt-16 sm:pb-12">
         <div class="flex flex-col gap-6 sm:flex-row sm:items-end sm:gap-7 animate-fade-up">
           <!-- Poster -->
           <div class="shrink-0">

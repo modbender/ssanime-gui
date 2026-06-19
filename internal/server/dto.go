@@ -35,9 +35,16 @@ type ProfileResponse struct {
 	Audio             *string  `json:"audio"`
 	Container         *string  `json:"container"`
 	X265Params        *string  `json:"x265_params"`
-	OutputResolutions []int    `json:"output_resolutions"`
-	AddedAt           int64    `json:"added_at"`
-	ModifiedAt        int64    `json:"modified_at"`
+	BitDepth          *int64   `json:"bit_depth"`
+	Deband            *bool    `json:"deband"`
+	BurnSubs          *bool    `json:"burn_subs"`
+	// AudioLanguages / SubtitleLanguages are null (wildcard: All for MKV, Default
+	// track for MP4) or a JSON array of normalized language codes (Specific).
+	AudioLanguages    *[]string `json:"audio_languages"`
+	SubtitleLanguages *[]string `json:"subtitle_languages"`
+	OutputResolutions []int     `json:"output_resolutions"`
+	AddedAt           int64     `json:"added_at"`
+	ModifiedAt        int64     `json:"modified_at"`
 }
 
 // toProfileResponse converts a store.EncodeProfile to the stable ProfileResponse
@@ -54,6 +61,16 @@ func toProfileResponse(p store.EncodeProfile) ProfileResponse {
 	if p.Deinterlace != nil {
 		v := *p.Deinterlace != 0
 		deinterlace = &v
+	}
+	var deband *bool
+	if p.Deband != nil {
+		v := *p.Deband != 0
+		deband = &v
+	}
+	var burnSubs *bool
+	if p.BurnSubs != nil {
+		v := *p.BurnSubs != 0
+		burnSubs = &v
 	}
 	var resolutions []int
 	if p.OutputResolutions != nil && *p.OutputResolutions != "" {
@@ -79,10 +96,32 @@ func toProfileResponse(p store.EncodeProfile) ProfileResponse {
 		Audio:             p.Audio,
 		Container:         p.Container,
 		X265Params:        p.X265Params,
+		BitDepth:          p.BitDepth,
+		Deband:            deband,
+		BurnSubs:          burnSubs,
+		AudioLanguages:    decodeProfileLanguages(p.AudioLanguages),
+		SubtitleLanguages: decodeProfileLanguages(p.SubtitleLanguages),
 		OutputResolutions: resolutions,
 		AddedAt:           p.AddedAt,
 		ModifiedAt:        p.ModifiedAt,
 	}
+}
+
+// decodeProfileLanguages converts the nullable JSON-array column into the wire
+// shape: a NULL column is the wildcard sentinel (nil → JSON null); a stored
+// array decodes to a non-nil slice (even "[]") so the mode round-trips.
+func decodeProfileLanguages(raw *string) *[]string {
+	if raw == nil || *raw == "" {
+		return nil
+	}
+	var langs []string
+	if err := json.Unmarshal([]byte(*raw), &langs); err != nil {
+		return nil
+	}
+	if langs == nil {
+		langs = []string{}
+	}
+	return &langs
 }
 
 // ---- Series DTOs ----
@@ -216,23 +255,32 @@ type BulkEncodeRequest struct {
 // ---- Profile DTOs ----
 
 type CreateProfileRequest struct {
-	Name              string   `json:"name"`
-	ParentID          *int64   `json:"parent_id"`
-	Codec             *string  `json:"codec"`
-	CRF               *float64 `json:"crf"`
-	Preset            *string  `json:"preset"`
-	Smartblur         *bool    `json:"smartblur"`
-	Deinterlace       *bool    `json:"deinterlace"`
-	Deblock           *string  `json:"deblock"`
-	PsyRD             *float64 `json:"psy_rd"`
-	PsyRDOQ           *float64 `json:"psy_rdoq"`
-	AQStrength        *float64 `json:"aq_strength"`
-	AQMode            *int64   `json:"aq_mode"`
-	Scale             *int64   `json:"scale"`
-	Audio             *string  `json:"audio"`
-	Container         *string  `json:"container"`
-	X265Params        *string  `json:"x265_params"`
-	OutputResolutions []int    `json:"output_resolutions"`
+	Name        string   `json:"name"`
+	ParentID    *int64   `json:"parent_id"`
+	Codec       *string  `json:"codec"`
+	CRF         *float64 `json:"crf"`
+	Preset      *string  `json:"preset"`
+	Smartblur   *bool    `json:"smartblur"`
+	Deinterlace *bool    `json:"deinterlace"`
+	Deblock     *string  `json:"deblock"`
+	PsyRD       *float64 `json:"psy_rd"`
+	PsyRDOQ     *float64 `json:"psy_rdoq"`
+	AQStrength  *float64 `json:"aq_strength"`
+	AQMode      *int64   `json:"aq_mode"`
+	Scale       *int64   `json:"scale"`
+	Audio       *string  `json:"audio"`
+	Container   *string  `json:"container"`
+	X265Params  *string  `json:"x265_params"`
+	BitDepth    *int64   `json:"bit_depth"`
+	Deband      *bool    `json:"deband"`
+	BurnSubs    *bool    `json:"burn_subs"`
+	// AudioLanguages / SubtitleLanguages use RawMessage to distinguish the three
+	// states the language control can submit: absent (no change / inherit), JSON
+	// null (wildcard: All/Default), and a JSON array (Specific). A plain *[]string
+	// can't tell absent from null.
+	AudioLanguages    json.RawMessage `json:"audio_languages"`
+	SubtitleLanguages json.RawMessage `json:"subtitle_languages"`
+	OutputResolutions []int           `json:"output_resolutions"`
 }
 
 // PatchProfileRequest shares the same fields as CreateProfileRequest; all fields
@@ -254,8 +302,13 @@ type ResolvedProfileResponse struct {
 	AQMode            int     `json:"aq_mode"`
 	Audio             string  `json:"audio"`
 	Container         string  `json:"container"`
-	X265Params        string  `json:"x265_params"`
-	OutputResolutions []int   `json:"output_resolutions"`
+	X265Params        string   `json:"x265_params"`
+	BitDepth          int      `json:"bit_depth"`
+	Deband            bool     `json:"deband"`
+	BurnSubs          bool     `json:"burn_subs"`
+	AudioLanguages    []string `json:"audio_languages"`
+	SubtitleLanguages []string `json:"subtitle_languages"`
+	OutputResolutions []int    `json:"output_resolutions"`
 }
 
 // ---- Settings ----

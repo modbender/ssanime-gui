@@ -4,6 +4,8 @@
   import Input from '$lib/components/Input.svelte'
   import Spinner from '$lib/components/Spinner.svelte'
   import LogStream from '$lib/components/LogStream.svelte'
+  import { errMessage } from '$lib/utils'
+  import { scrollScrim } from '$lib/scrollScrim'
 
   type TabId = 'general' | 'processing' | 'network' | 'binaries' | 'logs'
   const tabs: { id: TabId; label: string }[] = [
@@ -71,8 +73,8 @@
       // torrent client server-side.) Replace with a real client list when those
       // backends ship.
       form.download_backend = null
-    } catch (e: any) {
-      error = e.message
+    } catch (e: unknown) {
+      error = errMessage(e)
     } finally {
       loading = false
     }
@@ -96,8 +98,8 @@
       settings = { ...updated }
       saved = true
       setTimeout(() => { saved = false }, 2500)
-    } catch (e: any) {
-      saveError = e.message
+    } catch (e: unknown) {
+      saveError = errMessage(e)
     } finally {
       saving = false
     }
@@ -114,9 +116,9 @@
   function textNull(val: string): string | null { return val.trim() || null }
 </script>
 
-<div class="flex flex-col h-full overflow-hidden">
+<div class="flex flex-col h-full overflow-hidden" use:scrollScrim>
   <!-- Page header -->
-  <div class="sticky top-0 z-10 px-6 sm:px-10 pt-4 border-b border-[var(--color-border)] bg-[var(--color-bg)]/95 backdrop-blur-md">
+  <div class="sticky top-0 z-10 px-6 sm:px-10 pt-4 bg-transparent backdrop-blur-0 border-b border-transparent transition-[background-color,border-color,backdrop-filter] duration-300 [.scrolled_&]:bg-[var(--color-bg)]/85 [.scrolled_&]:backdrop-blur-md [.scrolled_&]:border-[var(--color-border)]">
     <div class="flex items-center justify-between">
       <h1 class="text-[15px] font-semibold tracking-tight">Settings</h1>
       {#if activeTab !== 'logs'}
@@ -317,7 +319,7 @@
                 >
                   <option value={null}>Auto (embedded torrent)</option>
                 </select>
-                <p class="text-xs text-[var(--color-muted)] mt-1">Episodes download through the built-in torrent client. External clients and yt-dlp aren't available yet.</p>
+                <p class="text-xs text-[var(--color-muted)] mt-1">Episodes download through the built-in torrent client. External clients aren't available yet.</p>
               </div>
             </section>
 
@@ -406,17 +408,6 @@
                     type="text"
                     value={nullText(form.ffmpeg_path)}
                     oninput={(e) => { form.ffmpeg_path = textNull((e.target as HTMLInputElement).value) }}
-                    placeholder="auto (managed)"
-                    class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors font-mono"
-                  />
-                </div>
-                <div>
-                  <label for="s-ytdlp" class="mb-1.5 block text-sm font-medium text-[var(--color-text)]">yt-dlp path</label>
-                  <input
-                    id="s-ytdlp"
-                    type="text"
-                    value={nullText(form.ytdlp_path)}
-                    oninput={(e) => { form.ytdlp_path = textNull((e.target as HTMLInputElement).value) }}
                     placeholder="auto (managed)"
                     class="w-full h-9 border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors font-mono"
                   />

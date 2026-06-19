@@ -7,6 +7,8 @@ package config
 import (
 	"os"
 	"path/filepath"
+
+	"github.com/modbender/ssanime-gui/internal/defaults"
 )
 
 const (
@@ -14,9 +16,10 @@ const (
 	AppName = "ssanime"
 	// DisplayName is the user-facing product name (tray label, etc.).
 	DisplayName = "SSAnime"
-	// DefaultPort is the localhost port the daemon binds by default.
-	DefaultPort = 4773
 )
+
+// DefaultPort is the localhost port the daemon binds by default.
+var DefaultPort = defaults.Values.Server.DefaultPort
 
 // Config holds boot-time configuration.
 type Config struct {

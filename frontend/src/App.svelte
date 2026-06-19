@@ -42,9 +42,9 @@
 </script>
 
 <Router>
-  <div class="flex h-screen bg-[var(--color-bg)] text-[var(--color-text)] overflow-hidden">
+  <div class="relative h-screen bg-[var(--color-bg)] text-[var(--color-text)] overflow-hidden">
     <Sidebar />
-    <main class="flex-1 overflow-hidden flex flex-col min-w-0">
+    <main class="h-full overflow-hidden flex flex-col min-w-0 pl-[var(--rail)]">
       <Route path="/">
         <Home />
       </Route>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { cn } from '$lib/utils'
-  let { class: cls = '', children }: { class?: string; children?: any } = $props()
+  import type { Snippet } from 'svelte'
+  let { class: cls = '', children }: { class?: string; children?: Snippet } = $props()
 </script>
 
 <span class={cn(

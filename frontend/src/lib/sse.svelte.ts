@@ -1,6 +1,8 @@
 // SSE client — connects to /api/events and feeds reactive state.
 // Uses Svelte 5 $state rune so components auto-update.
 
+import { toast } from './toast.svelte'
+
 export interface DownloadProgress {
   episode_id: number
   series_id: number
@@ -106,6 +108,15 @@ function connect() {
     try {
       const data: LogEvent = { ...JSON.parse(e.data), seq: logSeq++ }
       sseState.logs = [data, ...sseState.logs].slice(0, 500)
+    } catch {}
+  })
+
+  es.addEventListener('extensions.updated', (e) => {
+    try {
+      const data: { count: number } = JSON.parse(e.data)
+      if (data.count > 0) {
+        toast.info(`Updated ${data.count} extension${data.count === 1 ? '' : 's'}`)
+      }
     } catch {}
   })
 
