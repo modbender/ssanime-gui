@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/modbender/ssanime-gui/compare/v0.5.0...v0.6.0) (2026-06-19)
+
+
+### Features
+
+* floating chrome, extension auto-update, encode fidelity + centralized defaults ([#59](https://github.com/modbender/ssanime-gui/issues/59)) ([fafa8d7](https://github.com/modbender/ssanime-gui/commit/fafa8d79421ade2562156ca1476821fb161d7777))
+
 ## [0.5.0](https://github.com/modbender/ssanime-gui/compare/v0.4.0...v0.5.0) (2026-06-14)
 
 
