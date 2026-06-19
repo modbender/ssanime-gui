@@ -222,3 +222,34 @@ shrink-to-archive design. Captured here; revisit on real demand.
 **Trigger to pick up:** real user demand plus a GPU-equipped use case (e.g. archiving
 DVD-era SD anime to HD) — not before. On a headless no-GPU host it can't run, so it only
 makes sense once that audience is real.
+
+## Language detection for untagged tracks + subtitle merging
+
+**Status:** deferred. Two refinements adjacent to the per-profile language-preferences item
+above; captured from a later discussion. Most of this is *not* an AI problem.
+
+### Detecting language when a track is untagged
+Audio/subtitle language is normally just the stream's `language` tag (ffprobe) — the real
+work is normalizing inconsistent tags (`Eng`/`EN`/`English`), which the language-preferences
+item already covers. The gap is *untagged* tracks:
+- **Subtitles:** run a lightweight text-language-ID library (e.g. lingua/whatlang) over the
+  subtitle text — cheap, reliable, no heavy model.
+- **Audio:** content-based detection needs Whisper-class speech ML — heavy, and rarely
+  needed since audio is almost always tagged. Edge case only; don't reach for it by default.
+
+### Merging Dialogue + Songs/Signs subtitles
+Some releases split a Dialogue track from a Songs/Signs track; merging them into one cleaner
+subtitle is the idea.
+- **Classification is the one genuine AI/LLM case:** track names have no reliable pattern
+  ("Signs & Songs" / "S&S" / "Full" / …), so an LLM classifying track type from the name +
+  a content sample beats regex.
+- **Question the premise first:** the full *Dialogue* track usually already includes
+  signs/songs; a separate Songs/Signs track is typically a *dub-companion* (overlay for
+  dub-watchers), so merging is often redundant, not a missing half. Only some releases
+  genuinely split them — verify before building.
+- **The merge is the hard part, not the classification:** combining two ASS tracks (styles,
+  layers, timing, style-name collisions) is real subtitle engineering and must bake a durable
+  result.
+
+**Trigger to pick up:** alongside the per-profile language work — they share the ffprobe
+track-introspection + tag-normalization layer.
