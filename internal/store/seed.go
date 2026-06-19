@@ -5,25 +5,27 @@ import (
 	"path/filepath"
 
 	"github.com/modbender/ssanime-gui/internal/config"
+	"github.com/modbender/ssanime-gui/internal/defaults"
 )
 
-// Seeded constant defaults. These mirror automin's tuned x265 config and the
-// app-flow defaults; they are the immutable base the inheritance model resolves
-// against and the singleton settings the app boots with.
-const (
-	builtinProfileName = "Automin (x265)"
+// Seeded defaults. These mirror automin's tuned x265 config and the app-flow
+// defaults; they are the immutable base the inheritance model resolves against
+// and the singleton settings the app boots with. Sourced from the embedded
+// defaults.json so all shipped defaults live in one place.
+var (
+	builtinProfileName = defaults.Values.Profiles[0].Name
 
-	defaultNamingTemplate = "{series}/Season {season}/{res}/{series} - S{season}E{episode}.{ext}"
+	defaultNamingTemplate = defaults.Values.SeedSettings.NamingTemplate
 
-	defaultDownloadClientName = "Embedded (anacrolix)"
+	defaultDownloadClientName = defaults.Values.SeedSettings.DownloadClientName
 
-	defaultConcurrencyDownload = 3
-	defaultConcurrencyEncode   = 1
+	defaultConcurrencyDownload = defaults.Values.SeedSettings.ConcurrencyDownload
+	defaultConcurrencyEncode   = defaults.Values.SeedSettings.ConcurrencyEncode
 
 	// defaultTrustedReleaseGroups is the JSON-encoded trusted-group allowlist a
 	// fresh install boots with. Mirrors the column default in migration 00013 and
 	// source.TrustedReleaseGroups; an explicitly empty array disables the filter.
-	defaultTrustedReleaseGroups = `["SubsPlease","Erai-raws"]`
+	defaultTrustedReleaseGroups = defaults.Values.SeedSettings.TrustedReleaseGroupsJSON()
 )
 
 // pointer helpers keep the seed literal readable: sqlc nullable columns are *T.
@@ -33,7 +35,7 @@ func p[T any](v T) *T { return &v }
 // download client, and the singleton settings row — each idempotently, so a
 // second boot is a no-op. Runs on the single-writer pool after migrations.
 func (s *Store) seed(ctx context.Context, cfg *config.Config) error {
-	profileID, err := s.seedBuiltinProfile(ctx)
+	profileID, err := s.seedBuiltinProfiles(ctx)
 	if err != nil {
 		return err
 	}
@@ -46,39 +48,64 @@ func (s *Store) seed(ctx context.Context, cfg *config.Config) error {
 	return s.seedSettings(ctx, cfg, profileID)
 }
 
-// seedBuiltinProfile inserts the immutable "Automin (x265)" profile if absent
-// and returns its id. Values are automin's tuned defaults (crf 24.2, smartblur
-// on, deblock '1,1', psy_rd/psy_rdoq/aq_strength 1, preset slow), fully
-// specified so it can root an inheritance chain.
-func (s *Store) seedBuiltinProfile(ctx context.Context) (int64, error) {
-	if existing, err := s.write.GetEncodeProfileByName(ctx, builtinProfileName); err == nil {
+// seedBuiltinProfiles inserts every shipped builtin encode profile (each
+// idempotently via the GetEncodeProfileByName check) and returns the id of the
+// first one, which roots the default settings profile. The shipped values are
+// automin's tuned defaults (crf 24.2, smartblur on, deblock '1,1',
+// psy_rd/psy_rdoq/aq_strength 1, preset slow), fully specified so a profile can
+// root an inheritance chain. Adding a profile is a single entry in defaults.json.
+func (s *Store) seedBuiltinProfiles(ctx context.Context) (int64, error) {
+	var firstID int64
+	for i, prof := range defaults.Values.Profiles {
+		id, err := s.seedBuiltinProfile(ctx, prof)
+		if err != nil {
+			return 0, err
+		}
+		if i == 0 {
+			firstID = id
+		}
+	}
+	return firstID, nil
+}
+
+// seedBuiltinProfile inserts one builtin profile if absent and returns its id.
+func (s *Store) seedBuiltinProfile(ctx context.Context, prof defaults.Profile) (int64, error) {
+	if existing, err := s.write.GetEncodeProfileByName(ctx, prof.Name); err == nil {
 		return existing.ID, nil
 	}
-	prof, err := s.write.CreateEncodeProfile(ctx, CreateEncodeProfileParams{
+	row, err := s.write.CreateEncodeProfile(ctx, CreateEncodeProfileParams{
 		Uuid:              newUUID(),
-		Name:              builtinProfileName,
-		Builtin:           1,
+		Name:              prof.Name,
+		Builtin:           b2i(prof.Builtin),
 		ParentID:          nil,
-		Codec:             p("x265"),
-		Crf:               p(24.2),
-		Preset:            p("slow"),
-		Smartblur:         p[int64](1),
-		Deinterlace:       p[int64](0),
-		Deblock:           p("1,1"),
-		PsyRd:             p(1.0),
-		PsyRdoq:           p(1.0),
-		AqStrength:        p(1.0),
-		AqMode:            p[int64](2),
+		Codec:             p(prof.Codec),
+		Crf:               p(prof.CRF),
+		Preset:            p(prof.Preset),
+		Smartblur:         p(b2i(prof.SmartBlur)),
+		Deinterlace:       p(b2i(prof.Deinterlace)),
+		Deblock:           p(prof.Deblock),
+		PsyRd:             p(prof.PsyRD),
+		PsyRdoq:           p(prof.PsyRDOQ),
+		AqStrength:        p(prof.AQStrength),
+		AqMode:            p(prof.AQMode),
 		Scale:             nil, // per-output scale resolved from output_resolutions
-		Audio:             p("copy"),
-		Container:         p("mkv"),
+		Audio:             p(prof.Audio),
+		Container:         p(prof.Container),
 		X265Params:        nil,
-		OutputResolutions: p("[1080,720,480]"),
+		OutputResolutions: p(prof.OutputResolutions),
 	})
 	if err != nil {
 		return 0, err
 	}
-	return prof.ID, nil
+	return row.ID, nil
+}
+
+// b2i maps a bool to the int64 (0/1) the schema's boolean-as-integer columns use.
+func b2i(b bool) int64 {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // seedDefaultDownloadClient inserts the embedded anacrolix client as the default

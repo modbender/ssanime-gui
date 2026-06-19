@@ -12,28 +12,29 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/modbender/ssanime-gui/internal/defaults"
 	"github.com/modbender/ssanime-gui/internal/store"
 )
 
 // Default knob values used when neither a profile nor its parents specify one.
 // They mirror automin's tuned x265 recipe (the proven base) so an empty profile
 // still produces a sane encode.
-const (
-	defaultCodec      = "x265"
-	defaultCRF        = 24.2
-	defaultPreset     = "slow"
-	defaultDeblock    = "1,1"
-	defaultPsyRD      = 1.0
-	defaultPsyRDOQ    = 1.0
-	defaultAQStrength = 1.0
-	defaultAQMode     = 3
-	defaultAudio      = "copy"
-	defaultContainer  = "mkv"
+var (
+	defaultCodec      = defaults.Values.Encode.DefaultCodec
+	defaultCRF        = defaults.Values.Encode.DefaultCRF
+	defaultPreset     = defaults.Values.Encode.DefaultPreset
+	defaultDeblock    = defaults.Values.Encode.DefaultDeblock
+	defaultPsyRD      = defaults.Values.Encode.DefaultPsyRD
+	defaultPsyRDOQ    = defaults.Values.Encode.DefaultPsyRDOQ
+	defaultAQStrength = defaults.Values.Encode.DefaultAQStrength
+	defaultAQMode     = defaults.Values.Encode.DefaultAQMode
+	defaultAudio      = defaults.Values.Encode.DefaultAudio
+	defaultContainer  = defaults.Values.Encode.DefaultContainer
 )
 
 // defaultOutputResolutions is used when no profile in the chain declares an
 // output_resolutions set.
-var defaultOutputResolutions = []int{1080, 720, 480}
+var defaultOutputResolutions = defaults.Values.Encode.DefaultOutputResolutions
 
 // Resolved is the effective, fully-specified encode config produced by walking a
 // profile's parent_id chain and COALESCE-ing each nullable knob child->parent,

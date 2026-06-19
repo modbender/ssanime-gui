@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/modbender/ssanime-gui/internal/defaults"
 )
 
 // resolutionHeights maps a target resolution label (1080/720/480) to the output
@@ -17,7 +19,7 @@ var resolutionHeights = map[int]int{
 }
 
 // smartblurChain is automin's tuned smartblur filter string (proven values).
-const smartblurChain = "smartblur=1.5:-0.35:-3.5:0.65:0.25:2.0"
+var smartblurChain = defaults.Values.Encode.SmartBlurChain
 
 // containerMuxers maps a profile container to its ffmpeg muxer name. The muxer is
 // passed explicitly with -f so the encoder writes to a temp file whose extension
@@ -42,18 +44,7 @@ func muxerFor(container string) string {
 // that are not exposed as inheritable profile columns. Per-profile knobs
 // (aq-mode/aq-strength/deblock/psy-rd/psy-rdoq) and the raw passthrough are
 // merged on top in buildX265Params.
-var baseX265Params = []string{
-	"me=2",
-	"rd=4",
-	"subme=7",
-	"rdoq-level=2",
-	"merange=57",
-	"bframes=8",
-	"b-adapt=2",
-	"limit-sao=1",
-	"frame-threads=3",
-	"no-info=1",
-}
+var baseX265Params = defaults.Values.Encode.BaseX265Params
 
 // BuildArgs assembles the complete ffmpeg argument list for one resolved profile
 // at one target resolution, plus a JSON snapshot of the effective encode params

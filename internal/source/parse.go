@@ -8,15 +8,12 @@ import (
 	"strings"
 
 	"github.com/5rahim/habari"
+	"github.com/modbender/ssanime-gui/internal/defaults"
 )
 
 // trackers are appended when building a magnet from a bare info hash (providers
 // that only expose an info hash, e.g. nyaa RSS items without a magnet element).
-var trackers = []string{
-	"udp://tracker.opentrackr.org:1337/announce",
-	"udp://open.stealth.si:80/announce",
-	"udp://exodus.desync.com:6969/announce",
-}
+var trackers = defaults.Values.Source.MagnetTrackers
 
 var (
 	// infoHashRe captures the btih value, which may be hex (40 chars) or, as

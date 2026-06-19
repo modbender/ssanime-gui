@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/modbender/ssanime-gui/internal/anizip"
+	"github.com/modbender/ssanime-gui/internal/defaults"
 	"github.com/modbender/ssanime-gui/internal/events"
 	"github.com/modbender/ssanime-gui/internal/source"
 	"github.com/modbender/ssanime-gui/internal/store"
@@ -36,7 +37,7 @@ var errProviderNotRegistered = errors.New("poller: feed provider not registered"
 
 // defaultInterval is how often the poller wakes to look for due feeds. Each feed
 // also has its own interval_seconds; this is just the scheduler tick.
-const defaultInterval = 60 * time.Second
+var defaultInterval = defaults.Values.Poller.SchedulerTick()
 
 // Store is the subset of the store API the poller needs (kept narrow for tests).
 type Store interface {

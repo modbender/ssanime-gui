@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/modbender/ssanime-gui/internal/defaults"
 	"github.com/modbender/ssanime-gui/internal/events"
 	"github.com/modbender/ssanime-gui/internal/store"
 )
@@ -15,12 +16,12 @@ import (
 // index for newer versions of installed extensions. Source extensions break as
 // the sites they scrape change (the same churn that breaks yt-dlp), so they are
 // refreshed silently on a fixed cadence with no user action and no DB setting.
-const autoUpdateInterval = 6 * time.Hour
+var autoUpdateInterval = defaults.Values.Extensions.AutoUpdateInterval()
 
 // autoUpdateFirstDelay holds the first auto-update pass off until shortly after
 // boot so startup (migrations, extension load, binary provisioning) isn't
 // competing for the network. It never blocks startup.
-const autoUpdateFirstDelay = 60 * time.Second
+var autoUpdateFirstDelay = defaults.Values.Extensions.AutoUpdateFirstDelay()
 
 // shouldUpdateExtension decides whether an installed extension at version
 // `installed` should be replaced by the repo index's `index` version. The repo

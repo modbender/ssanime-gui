@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/modbender/ssanime-gui/internal/defaults"
 )
 
 // TrustedReleaseGroups is the DEFAULT original-source subbing-group allowlist. The
@@ -12,10 +14,7 @@ import (
 // or re-encodes from secondary groups. Ordered by preference (earlier = better).
 // Callers may override this per-call via SelectOptions.TrustedGroups (the
 // user-configured list); this var is the fallback when that is nil/empty.
-var TrustedReleaseGroups = []string{
-	"SubsPlease",
-	"Erai-raws",
-}
+var TrustedReleaseGroups = defaults.Values.Source.TrustedReleaseGroups
 
 // effectiveTrusted returns the trusted-group list to rank/filter against. A nil
 // opts.TrustedGroups means "not configured" → the package default. A non-nil slice

@@ -14,21 +14,23 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/modbender/ssanime-gui/internal/defaults"
 )
 
 // Endpoint is the public AniList GraphQL API.
 const Endpoint = "https://graphql.anilist.co"
 
-const (
-	defaultTimeout  = 15 * time.Second
-	defaultCacheCap = 512
-	maxRetries      = 3
+var (
+	defaultTimeout  = defaults.Values.AniList.RequestTimeout()
+	defaultCacheCap = defaults.Values.AniList.CacheCap
+	maxRetries      = defaults.Values.AniList.MaxRetries
 )
 
 // maxRespBytes caps the AniList response body. A single trimmed Media record is
 // a few KiB; 4 MiB bounds a hostile or runaway upstream from streaming an
 // unbounded body into the decoder.
-const maxRespBytes = 4 << 20
+var maxRespBytes = defaults.Values.AniList.MaxResponseBytes
 
 // Media is the trimmed AniList media metadata this app needs.
 type Media struct {
@@ -144,7 +146,7 @@ func (c *Client) SearchMedia(ctx context.Context, query string) ([]Media, error)
 
 // batchChunkSize is the AniList Page perPage maximum: at most 50 media per
 // request. ids beyond this are split across multiple requests.
-const batchChunkSize = 50
+var batchChunkSize = defaults.Values.AniList.BatchChunkSize
 
 // GetMediaBatch fetches multiple media by AniList id in as few requests as
 // possible (one per chunk of up to 50 ids), returning a map keyed by media id.

@@ -1,0 +1,87 @@
+{
+  "server": {
+    "default_port": 4773
+  },
+  "encode": {
+    "default_codec": "x265",
+    "default_crf": 24.2,
+    "default_preset": "slow",
+    "default_deblock": "1,1",
+    "default_psy_rd": 1.0,
+    "default_psy_rdoq": 1.0,
+    "default_aq_strength": 1.0,
+    "default_aq_mode": 3,
+    "default_audio": "copy",
+    "default_container": "mkv",
+    "default_output_resolutions": [1080, 720, 480],
+    "smartblur_chain": "smartblur=1.5:-0.35:-3.5:0.65:0.25:2.0",
+    "base_x265_params": [
+      "me=2",
+      "rd=4",
+      "subme=7",
+      "rdoq-level=2",
+      "merange=57",
+      "bframes=8",
+      "b-adapt=2",
+      "limit-sao=1",
+      "frame-threads=3",
+      "no-info=1"
+    ]
+  },
+  "profiles": [
+    {
+      "name": "Automin (x265)",
+      "builtin": true,
+      "codec": "x265",
+      "crf": 24.2,
+      "preset": "slow",
+      "smartblur": true,
+      "deinterlace": false,
+      "deblock": "1,1",
+      "psy_rd": 1.0,
+      "psy_rdoq": 1.0,
+      "aq_strength": 1.0,
+      "aq_mode": 2,
+      "audio": "copy",
+      "container": "mkv",
+      "output_resolutions": "[1080,720,480]"
+    }
+  ],
+  "seed_settings": {
+    "naming_template": "{series}/Season {season}/{res}/{series} - S{season}E{episode}.{ext}",
+    "download_client_name": "Embedded (anacrolix)",
+    "concurrency_download": 3,
+    "concurrency_encode": 1,
+    "cleanup_policy": "delete",
+    "doh_enabled": true,
+    "trusted_release_groups": ["SubsPlease", "Erai-raws"]
+  },
+  "source": {
+    "trusted_release_groups": ["SubsPlease", "Erai-raws"],
+    "magnet_trackers": [
+      "udp://tracker.opentrackr.org:1337/announce",
+      "udp://open.stealth.si:80/announce",
+      "udp://exodus.desync.com:6969/announce"
+    ]
+  },
+  "extensions": {
+    "auto_update_interval_hours": 6,
+    "auto_update_first_delay_seconds": 60
+  },
+  "poller": {
+    "scheduler_tick_seconds": 60
+  },
+  "anilist": {
+    "request_timeout_seconds": 15,
+    "cache_cap": 512,
+    "max_retries": 3,
+    "max_response_bytes": 4194304,
+    "batch_chunk_size": 50
+  },
+  "metadata": {
+    "refresh_interval_hours": 3,
+    "staleness_hours": 24,
+    "refresh_limit": 50,
+    "first_pass_delay_seconds": 90
+  }
+}

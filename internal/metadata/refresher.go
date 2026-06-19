@@ -17,22 +17,23 @@ import (
 	"time"
 
 	"github.com/modbender/ssanime-gui/internal/anilist"
+	"github.com/modbender/ssanime-gui/internal/defaults"
 	"github.com/modbender/ssanime-gui/internal/events"
 	"github.com/modbender/ssanime-gui/internal/store"
 )
 
-const (
+var (
 	// defaultInterval is how often the refresher wakes to look for stale series.
-	defaultInterval = 3 * time.Hour
+	defaultInterval = defaults.Values.Metadata.RefreshInterval()
 	// defaultStaleness is how old a series' metadata must be before it is eligible
 	// for a refresh — well above the interval so a series isn't re-fetched every tick.
-	defaultStaleness = 24 * time.Hour
+	defaultStaleness = defaults.Values.Metadata.Staleness()
 	// defaultLimit caps how many series one pass refreshes, bounding the per-pass
 	// request count (one batch request per 50 series) against the rate limit.
-	defaultLimit = 50
+	defaultLimit = defaults.Values.Metadata.RefreshLimit
 	// firstPassDelay holds the first pass off until shortly after boot so startup
 	// (migrations, seeding, binary provisioning) isn't competing for the rate limit.
-	firstPassDelay = 90 * time.Second
+	firstPassDelay = defaults.Values.Metadata.FirstPassDelay()
 )
 
 // Store is the subset of the store API the refresher needs (kept narrow for tests).
