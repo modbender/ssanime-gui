@@ -266,3 +266,58 @@ not language.
 
 **Trigger to pick up:** alongside the per-profile language work — they share the ffprobe
 track-introspection + tag-normalization layer.
+
+## Daemon startup & idle-footprint optimizations
+
+**Status:** deferred (from a read-only perf audit). Ranked by impact/effort. The first item is
+really a first-run *bug*, not a nice-to-have — prioritize it.
+
+1. **[BUG-grade] Binary provisioning blocks the HTTP listener on first run.** `startDaemon`
+   runs `EnsureFFmpeg`/`EnsureFFprobe` synchronously (`cmd/ssanime/main.go:410-416`) *before*
+   `srv.ListenAndServe()` (`main.go:450`). On a cold install `EnsureFFmpeg` does a GitHub
+   lookup + multi-hundred-MB download under a 10-min timeout, so the listener never binds —
+   the tray's `waitForListener` times out (5s), the browser opens to a dead port, and the Home
+   page polls a refused endpoint. **Fix:** bind the listener first; move provisioning + encode
+   queue start into a goroutine, gating the encode workers on provisioning-done (mind the
+   encode-queue lifecycle: accept rows as `downloaded`, swap in the encoder when ready, keep
+   `Stop` registered). Effort M, risk M.
+2. **EnsureFFprobe re-provisions the whole ffmpeg bundle on a miss** (`binaries.go:99`) — a
+   second full download even though `EnsureFFmpeg` placed ffprobe beside ffmpeg. Locate the
+   sibling first; provision only if genuinely absent. Effort S, risk low.
+3. **Discovery warm-up is serialized + delayed** (`internal/server/.../discovery.go:199`,
+   `226-302`): 5s first-pass delay, 5 feeds fetched sequentially 250ms-spaced, and the hero
+   feed blocks on up to 12 ani.zip logo lookups (4s each) before any row caches — ~10-12s to
+   first paint, which the Home page's 36s poll papers over. Cache the trending feed *before*
+   logo enrichment, shrink the delay, optionally fetch feeds concurrently (AniList tolerates a
+   5-request burst). Effort S-M, risk low-M.
+4. **Idle wakeups on low-power hosts:** the SSE heartbeat broadcasts every 15s even with zero
+   clients (`hub.go:84`) — skip when `ClientCount()==0`; and the poller ticks every 60s and
+   queries `ListFeedsDueForPoll` even with zero feeds (`poller.go:151,175`) — raise the
+   default tick or skip when the feed table is empty. Effort S, risk low.
+
+**Not worth touching (assessed):** migrations/seed/crash-recovery synchronous boot (correct,
+fast); metadata + extension-updater tickers (already delayed/batched/serve-stale); AniList and
+discovery caches (bounded, FIFO); goroutine count (~8, modest).
+
+## DB query optimizations
+
+**Status:** deferred (from a read-only perf audit). Pool routing (read vs write) and the WAL +
+`busy_timeout` + `synchronous=NORMAL` + `_txlock=immediate` setup are **correct — no change**.
+Two genuine query wins, both via new sqlc queries + regenerate (no index migration):
+
+1. **N+1 in `handleActivity`** (`internal/server/tracking.go:130-146`): per-series
+   `ListEpisodesBySeries` then per-episode `ListEncodedOutputsByEpisode` = `1 + S + S·E`
+   round-trips on the busiest read view (same shape repeats at `tracking.go:711`,
+   `series.go:194-206`, `episodes.go:99-107`). Add a batched `ListEncodedOutputsBySeries`
+   (JOIN on `episodes`, grouped in Go) or an `IN`-clause variant → collapses `S·E` → `S` (or
+   `O(1)`). The `idx_encoded_outputs_episode` index already supports the join. Effort M, risk low.
+2. **Correlated subquery per row in `ListSeriesWithProgress`** (`db/queries/series.sql:24-41`):
+   the `encoded_bytes_total` SUM subquery re-executes once per series row, and the query is hit
+   by `handleActivity`, `stats.go`, and `tracking.go:42/112/815`. Fold into a
+   `LEFT JOIN encoded_outputs … AND status='archived'` with conditional aggregation in the
+   existing `GROUP BY`. Effort M, risk M — guard the COUNT(DISTINCT)/SUM double-counting trap
+   with the `fullflow_test` assertions.
+
+**Not worth touching at personal-library scale (tens of feeds/series):** a composite poll-gate
+index (`ListFeedsDueForPoll` full-scans tens of rows in microseconds — premature), and
+`SELECT *` → column projection (narrow tables, sqlc idiom). Revisit only at thousands of rows.
