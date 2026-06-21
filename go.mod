@@ -15,7 +15,7 @@ require (
 	github.com/magefile/mage v1.17.2
 	github.com/pressly/goose/v3 v3.27.1
 	github.com/ulikunitz/xz v0.5.15
-	golang.org/x/sync v0.20.0
+	golang.org/x/sync v0.21.0
 	golang.org/x/sys v0.46.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	modernc.org/sqlite v1.52.0
